@@ -53,6 +53,12 @@ def startup_event():
                     conn.commit()
                 except Exception:
                     pass
+            # Исправляем default для wagon_comments.created_at (для существующих БД)
+            try:
+                conn.execute(text("ALTER TABLE wagon_comments ALTER COLUMN created_at SET DEFAULT now()"))
+                conn.commit()
+            except Exception:
+                pass
     except Exception:
         pass
     # Создать админа если нет ни одного
@@ -82,7 +88,12 @@ def get_active_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == True).all()
+    return (
+        db.query(models.TrackingWagon)
+        .filter(models.TrackingWagon.is_active == True)
+        .order_by(models.TrackingWagon.last_operation_date.desc().nullslast())
+        .all()
+    )
 
 
 @app.get("/wagons/archive")
@@ -90,7 +101,12 @@ def get_archive_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == False).all()
+    return (
+        db.query(models.TrackingWagon)
+        .filter(models.TrackingWagon.is_active == False)
+        .order_by(models.TrackingWagon.last_operation_date.desc().nullslast())
+        .all()
+    )
 
 
 @app.get("/wagons/{tracking_id}/comments")
@@ -102,7 +118,12 @@ def get_comments(
     wagon = db.query(models.TrackingWagon).filter(models.TrackingWagon.id == tracking_id).first()
     if not wagon:
         raise HTTPException(status_code=404, detail="Вагон не найден")
-    return wagon.comments
+    return (
+        db.query(models.WagonComment)
+        .filter(models.WagonComment.tracking_id == wagon.id)
+        .order_by(models.WagonComment.created_at.asc())
+        .all()
+    )
 
 
 from pydantic import BaseModel
@@ -159,3 +180,10 @@ def create_user(
     db.add(new_user)
     db.commit()
     return {"status": "user created"}
+
+
+@app.post("/admin/rebuild-tracking")
+def admin_rebuild_tracking(
+    current_user: models.User = Depends(require_role("admin")),
+):
+    return scheduler.rebuild_tracking_from_dislocation()

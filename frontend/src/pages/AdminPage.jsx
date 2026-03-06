@@ -7,6 +7,8 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('user');
   const [error, setError] = useState('');
+  const [rebuildInfo, setRebuildInfo] = useState(null);
+  const [rebuildLoading, setRebuildLoading] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -43,9 +45,34 @@ export default function AdminPage() {
     }
   };
 
+  const handleRebuild = async () => {
+    setRebuildLoading(true);
+    setError('');
+    setRebuildInfo(null);
+    try {
+      const res = await api.post('/admin/rebuild-tracking');
+      setRebuildInfo(res.data);
+    } catch (e) {
+      console.error(e);
+      setError('Не удалось выполнить пересборку витрины tracking_wagons');
+    } finally {
+      setRebuildLoading(false);
+    }
+  };
+
   return (
     <div className="admin-section">
       <h2>Управление пользователями</h2>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <button type="button" className="save-btn" onClick={handleRebuild} disabled={rebuildLoading}>
+          {rebuildLoading ? 'Пересборка...' : 'Пересобрать tracking_wagons'}
+        </button>
+        {rebuildInfo && (
+          <span style={{ color: '#475569', fontSize: 14 }}>
+            created: {rebuildInfo.created}, active: {rebuildInfo.active}, archived: {rebuildInfo.archived}, errors: {rebuildInfo.errors}
+          </span>
+        )}
+      </div>
       <form className="add-user-form" onSubmit={handleCreateUser}>
         <input
           value={newLogin}

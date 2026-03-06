@@ -6,18 +6,33 @@ import { api } from '../api';
 export default function WagonsPage() {
   const [tab, setTab] = useState('active');
   const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWagon, setSelectedWagon] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
 
+  const formatDateTime = (v) => (v ? new Date(v).toLocaleString() : '-');
+  const formatDateOnly = (v) => (v ? new Date(v).toLocaleDateString() : '-');
+
   const fetchData = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       const endpoint = tab === 'active' ? '/wagons/active' : '/wagons/archive';
       const res = await api.get(endpoint);
       setData(res.data);
     } catch (e) {
       console.error(e);
+      setData([]);
+      if (tab === 'archive') {
+        setLoadError('Не удалось загрузить архив');
+      } else {
+        setLoadError('Не удалось загрузить данные');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -57,14 +72,19 @@ export default function WagonsPage() {
 
   const wagonColumns = [
     { header: 'Номер вагона', accessorKey: 'railway_carriage_number' },
+    {
+      header: 'Дата рейса',
+      accessorKey: 'flight_start_date',
+      cell: (info) => formatDateOnly(info.getValue()),
+    },
     { header: 'Станция', accessorKey: 'current_station_name' },
     { header: 'Операция', accessorKey: 'current_operation_name' },
     {
-      header: 'Дата',
+      header: 'Дата операции',
       accessorKey: 'last_operation_date',
       cell: (info) => {
         const v = info.getValue();
-        return v ? new Date(v).toLocaleString() : '-';
+        return formatDateTime(v);
       },
     },
     {
@@ -105,26 +125,33 @@ export default function WagonsPage() {
           Архив
         </button>
       </div>
-      <table className="excel-table">
-        <thead>
-          {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id}>
-              {hg.headers.map((h) => (
-                <th key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loadError && <p className="page-error">{loadError}</p>}
+      {loading ? (
+        <p>Загрузка...</p>
+      ) : tab === 'archive' && data.length === 0 && !loadError ? (
+        <p className="empty-state">Архивных вагонов пока нет</p>
+      ) : (
+        <table className="excel-table">
+          <thead>
+            {table.getHeaderGroups().map((hg) => (
+              <tr key={hg.id}>
+                {hg.headers.map((h) => (
+                  <th key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => (
+              <tr key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {isModalOpen && selectedWagon && (
         <div className="modal-overlay" role="dialog">
@@ -136,7 +163,7 @@ export default function WagonsPage() {
                   <strong>{c.author_name || '—'}</strong>: {c.comment_text}
                   {c.created_at && (
                     <span className="comment-date">
-                      {new Date(c.created_at).toLocaleString()}
+                      {formatDateTime(c.created_at)}
                     </span>
                   )}
                 </div>

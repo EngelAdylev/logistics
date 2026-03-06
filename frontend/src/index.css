@@ -82,3 +82,6 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .admin-error { color: #dc2626; margin: 0 0 12px 0; }
 
 .loading-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+.empty-state { color: #475569; margin: 10px 0; }
+.page-error { color: #dc2626; margin: 10px 0; }

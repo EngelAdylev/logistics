@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -32,11 +33,11 @@ class UserSession(Base):
 class Dislocation(Base):
     __tablename__ = "dislocation"
     _id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    railway_carriage_number = Column(Text)
-    flight_start_date = Column(DateTime(timezone=True))
+    railway_carriage_number = Column(Text, index=True)
+    flight_start_date = Column(DateTime(timezone=True), index=True)
     operation_code_railway_carriage = Column(Text)
     station_code_performing_operation = Column(Text)
-    date_time_of_operation = Column(DateTime(timezone=True))
+    date_time_of_operation = Column(DateTime(timezone=True), index=True)
 
 class OperationCode(Base):
     __tablename__ = "operation_code"
@@ -57,8 +58,8 @@ class TrackingWagon(Base):
     flight_start_date = Column(DateTime(timezone=True), nullable=False)
     current_station_name = Column(Text)
     current_operation_name = Column(Text)
-    last_operation_date = Column(DateTime(timezone=True))
-    is_active = Column(Boolean, default=True)
+    last_operation_date = Column(DateTime(timezone=True), index=True)
+    is_active = Column(Boolean, default=True, index=True)
 
     __table_args__ = (UniqueConstraint('railway_carriage_number', 'flight_start_date', name='_wagon_flight_uc'),)
     comments = relationship("WagonComment", back_populates="wagon")
@@ -66,8 +67,16 @@ class TrackingWagon(Base):
 class WagonComment(Base):
     __tablename__ = "wagon_comments"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tracking_id = Column(UUID(as_uuid=True), ForeignKey("tracking_wagons.id"))
+    tracking_id = Column(UUID(as_uuid=True), ForeignKey("tracking_wagons.id", ondelete="CASCADE"))
     author_name = Column(Text)
     comment_text = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default="now()")
+    # Не используем строковый server_default="now()" (может стать константой в DDL).
+    # Ставим timestamp в Python при создании, плюс дефолт на стороне БД.
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        index=True,
+    )
     wagon = relationship("TrackingWagon", back_populates="comments")
