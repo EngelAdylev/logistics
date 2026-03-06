@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+apscheduler
+passlib[bcrypt]
+bcrypt==4.1.3
+python-jose[cryptography]
+pydantic-settings
