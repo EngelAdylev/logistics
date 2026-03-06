@@ -159,3 +159,55 @@ def create_user(
     db.add(new_user)
     db.commit()
     return {"status": "user created"}
+
+
+# --- Ручное обновление данных (sync) и полная пересборка (rebuild) ---
+
+import threading
+import logging
+from datetime import datetime, timezone
+
+_sync_lock = threading.Lock()
+_sync_in_progress = False
+_logger = logging.getLogger(__name__)
+
+
+@app.post("/wagons/sync")
+def manual_sync(current_user: models.User = Depends(get_current_user)):
+    """
+    Ручное обновление данных из dislocation (та же логика, что у scheduler).
+    Доступно любому авторизованному пользователю. Один запрос в момент времени.
+    """
+    global _sync_in_progress
+    if not _sync_lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail={"error": "SYNC_IN_PROGRESS", "message": "Обновление уже выполняется. Подождите."})
+    try:
+        _sync_in_progress = True
+        _logger.info("manual_sync: started by user_id=%s login=%s", current_user.id, current_user.login)
+        stats = scheduler.sync_dislocation_to_tracking()
+        _logger.info("manual_sync: done by login=%s stats=%s", current_user.login, stats)
+        return {
+            "success": True,
+            "message": "Данные обновлены",
+            "created": stats.get("created", 0),
+            "updated": stats.get("updated", 0),
+            "archived": stats.get("archived", 0),
+            "errors": stats.get("errors", 0),
+            "last_events": stats.get("last_events", 0),
+            "at": datetime.now(timezone.utc).isoformat(),
+        }
+    finally:
+        _sync_in_progress = False
+        _sync_lock.release()
+
+
+@app.post("/admin/rebuild-tracking")
+def admin_rebuild_tracking(current_user: models.User = Depends(require_role("admin"))):
+    """
+    Полная пересборка витрины по данным из dislocation. Не удаляет комментарии.
+    Только для администратора. Использовать при смене логики архива или исправлении данных.
+    """
+    _logger.info("admin_rebuild_tracking: started by login=%s", current_user.login)
+    result = scheduler.rebuild_tracking_from_dislocation_merge()
+    _logger.info("admin_rebuild_tracking: done by login=%s result=%s", current_user.login, result)
+    return result

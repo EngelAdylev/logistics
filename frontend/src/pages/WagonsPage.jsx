@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useReactTable, getCoreRowModel, flexRender } from '@tanstack/react-table';
-import { MessageSquarePlus } from 'lucide-react';
+import { MessageSquarePlus, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 
 export default function WagonsPage() {
   const [tab, setTab] = useState('active');
   const [data, setData] = useState([]);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedWagon, setSelectedWagon] = useState(null);
   const [commentText, setCommentText] = useState('');
@@ -34,6 +36,28 @@ export default function WagonsPage() {
   useEffect(() => {
     fetchData();
   }, [tab]);
+
+  const handleSync = async () => {
+    setSyncLoading(true);
+    setSyncMessage('');
+    try {
+      const res = await api.post('/wagons/sync');
+      const d = res.data;
+      setSyncMessage(
+        `Обновлено: создано ${d.created || 0}, обновлено ${d.updated || 0}${d.errors ? `, ошибок: ${d.errors}` : ''}.`
+      );
+      await fetchData();
+    } catch (e) {
+      const detail = e.response?.data?.detail;
+      if (typeof detail === 'object' && detail?.error === 'SYNC_IN_PROGRESS') {
+        setSyncMessage(detail.message || 'Обновление уже выполняется.');
+      } else {
+        setSyncMessage('Не удалось обновить данные.');
+      }
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   const openModal = (wagon) => {
     setSelectedWagon(wagon);
@@ -89,21 +113,36 @@ export default function WagonsPage() {
 
   return (
     <>
-      <div className="tabs">
-        <button
-          type="button"
-          onClick={() => setTab('active')}
-          className={tab === 'active' ? 'active' : ''}
-        >
-          Активные
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('archive')}
-          className={tab === 'archive' ? 'active' : ''}
-        >
-          Архив
-        </button>
+      <div className="tabs-row">
+        <div className="tabs">
+          <button
+            type="button"
+            onClick={() => setTab('active')}
+            className={tab === 'active' ? 'active' : ''}
+          >
+            Активные
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('archive')}
+            className={tab === 'archive' ? 'active' : ''}
+          >
+            Архив
+          </button>
+        </div>
+        <div className="sync-block">
+          <button
+            type="button"
+            className="sync-btn"
+            onClick={handleSync}
+            disabled={syncLoading}
+            title="Подтянуть последние данные из источника"
+          >
+            <RefreshCw size={18} className={syncLoading ? 'spin' : ''} />
+            {syncLoading ? 'Обновление…' : 'Обновить данные'}
+          </button>
+          {syncMessage && <span className="sync-message">{syncMessage}</span>}
+        </div>
       </div>
       <table className="excel-table">
         <thead>
