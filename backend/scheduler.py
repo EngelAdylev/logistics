@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import SessionLocal
-from models import TrackingWagon, WagonComment
+from models import TrackingWagon
 import logging
 
 logger = logging.getLogger(__name__)
@@ -116,42 +116,78 @@ def sync_dislocation_to_tracking():
         db.close()
 
 
-def rebuild_tracking_from_dislocation():
+def rebuild_tracking_from_dislocation_merge():
+    """
+    Полная пересборка витрины tracking_wagons без удаления комментариев.
+    Для каждой пары (railway_carriage_number, flight_start_date) из последних событий:
+    - если запись есть — обновляем её;
+    - если нет — создаём. Существующие id не меняются, комментарии остаются привязанными.
+    """
     db = SessionLocal()
     try:
-        logger.info("rebuild_tracking_from_dislocation: started")
-        # Служебная пересборка: чистим витрину. Комментарии привязаны FK к tracking_wagons,
-        # поэтому удаляем их первыми, чтобы не упасть на constraint.
-        deleted_comments = db.query(WagonComment).delete()
-        deleted = db.query(TrackingWagon).delete()
+        logger.info("rebuild_tracking_from_dislocation_merge: started")
+        results = _fetch_last_events(db)
+        created = 0
+        updated = 0
+        for row in results:
+            try:
+                op_code = row.get("operation_code_railway_carriage")
+                archived = is_archive_operation(op_code)
+                should_be_active = not archived
+                row_dt = row.get("date_time_of_operation")
+
+                track_entry = (
+                    db.query(TrackingWagon)
+                    .filter(
+                        TrackingWagon.railway_carriage_number == row["railway_carriage_number"],
+                        TrackingWagon.flight_start_date == row["flight_start_date"],
+                    )
+                    .first()
+                )
+
+                if not track_entry:
+                    db.add(
+                        TrackingWagon(
+                            railway_carriage_number=row["railway_carriage_number"],
+                            flight_start_date=row["flight_start_date"],
+                            current_station_name=row.get("st_name"),
+                            current_operation_name=row.get("op_name"),
+                            last_operation_date=row_dt,
+                            is_active=should_be_active,
+                        )
+                    )
+                    created += 1
+                else:
+                    track_entry.current_station_name = row.get("st_name")
+                    track_entry.current_operation_name = row.get("op_name")
+                    track_entry.last_operation_date = row_dt
+                    track_entry.is_active = should_be_active
+                    updated += 1
+            except Exception:
+                logger.exception("rebuild_tracking_from_dislocation_merge: row error")
         db.commit()
-        logger.info(
-            "rebuild_tracking_from_dislocation: cleared deleted_tracking=%s deleted_comments=%s",
-            deleted,
-            deleted_comments,
-        )
     finally:
         db.close()
 
-    stats = sync_dislocation_to_tracking()
     active = 0
     archived = 0
-    db = SessionLocal()
+    db2 = SessionLocal()
     try:
-        active = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()
-        archived = db.query(TrackingWagon).filter(TrackingWagon.is_active == False).count()
+        active = db2.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()
+        archived = db2.query(TrackingWagon).filter(TrackingWagon.is_active == False).count()
     finally:
-        db.close()
+        db2.close()
 
+    logger.info(
+        "rebuild_tracking_from_dislocation_merge: done created=%s updated=%s active=%s archived=%s",
+        created, updated, active, archived,
+    )
     return {
-        "deleted": deleted,
-        "deleted_comments": deleted_comments,
-        "created": stats.get("created", 0),
-        "updated": stats.get("updated", 0),
+        "created": created,
+        "updated": updated,
         "active": active,
         "archived": archived,
-        "errors": stats.get("errors", 0),
-        "last_events": stats.get("last_events", 0),
+        "last_events": len(results),
     }
 
 def start_scheduler():

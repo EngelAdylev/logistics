@@ -160,7 +160,7 @@ export default function WagonsPage() {
             <div className="comments-list">
               {comments.map((c) => (
                 <div key={c.id} className="comment-item">
-                  <strong>{c.author_name || '—'}</strong>: {c.comment_text}
+                  <strong>{c.author_login || c.author_name || 'Без автора'}</strong>: {c.comment_text}
                   {c.created_at && (
                     <span className="comment-date">
                       {formatDateTime(c.created_at)}

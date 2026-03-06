@@ -67,11 +67,10 @@ class TrackingWagon(Base):
 class WagonComment(Base):
     __tablename__ = "wagon_comments"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tracking_id = Column(UUID(as_uuid=True), ForeignKey("tracking_wagons.id", ondelete="CASCADE"))
-    author_name = Column(Text)
+    tracking_id = Column(UUID(as_uuid=True), ForeignKey("tracking_wagons.id", ondelete="CASCADE"), nullable=False)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    author_name = Column(Text)  # денормализованное поле для отображения / legacy
     comment_text = Column(Text, nullable=False)
-    # Не используем строковый server_default="now()" (может стать константой в DDL).
-    # Ставим timestamp в Python при создании, плюс дефолт на стороне БД.
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -80,3 +79,4 @@ class WagonComment(Base):
         index=True,
     )
     wagon = relationship("TrackingWagon", back_populates="comments")
+    author = relationship("User", backref="comments")

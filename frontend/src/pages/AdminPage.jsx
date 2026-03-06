@@ -69,7 +69,7 @@ export default function AdminPage() {
         </button>
         {rebuildInfo && (
           <span style={{ color: '#475569', fontSize: 14 }}>
-            created: {rebuildInfo.created}, active: {rebuildInfo.active}, archived: {rebuildInfo.archived}, errors: {rebuildInfo.errors}
+            создано: {rebuildInfo.created}, обновлено: {rebuildInfo.updated}, активных: {rebuildInfo.active}, в архиве: {rebuildInfo.archived}
           </span>
         )}
       </div>
