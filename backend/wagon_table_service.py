@@ -11,7 +11,7 @@ from schemas import TrackingWagonTableRowOut
 
 logger = logging.getLogger(__name__)
 
-# Запрос с number_train, train_index, current_station_name из railway_station (сравнение по первым 5 цифрам)
+# Запрос с расширенными полями из dislocation
 QUERY_FULL = text("""
     WITH LastEvents AS (
         SELECT
@@ -20,12 +20,35 @@ QUERY_FULL = text("""
             d.number_train,
             d.train_index,
             rs.name as station_name,
+            rs_dest.name as destination_station_name,
+            rs_dep.name as departure_station_name,
+            d.waybill_number,
+            d.type_railway_carriage,
+            d.owners_administration,
+            d.remaining_mileage,
+            d.remaining_distance,
+            TRIM(BOTH ', ' FROM CONCAT_WS(', ',
+                NULLIF(TRIM(COALESCE(d.container_number1,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number2,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number3,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number4,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number5,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number6,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number7,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number8,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number9,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number10,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number11,'')),''),
+                NULLIF(TRIM(COALESCE(d.container_number12,'')),'')
+            )) as container_numbers,
             ROW_NUMBER() OVER (
                 PARTITION BY d.railway_carriage_number, d.flight_start_date
                 ORDER BY d.date_time_of_operation DESC NULLS LAST
             ) as rn
         FROM dislocation d
         LEFT JOIN railway_station rs ON d.station_code_performing_operation::text = rs.esr_code
+        LEFT JOIN railway_station rs_dest ON d.destination_station_code::text = rs_dest.esr_code
+        LEFT JOIN railway_station rs_dep ON d.flight_start_station_code::text = rs_dep.esr_code
     ),
     LastComments AS (
         SELECT
@@ -44,10 +67,20 @@ QUERY_FULL = text("""
         tw.is_active,
         le.number_train,
         le.train_index,
-        lc.last_comment_text
+        lc.last_comment_text,
+        le.remaining_distance,
+        le.remaining_mileage,
+        le.waybill_number,
+        le.type_railway_carriage,
+        le.owners_administration,
+        le.container_numbers,
+        le.destination_station_name,
+        le.departure_station_name
     FROM tracking_wagons tw
     LEFT JOIN (
-        SELECT railway_carriage_number, flight_start_date, number_train, train_index, station_name
+        SELECT railway_carriage_number, flight_start_date, number_train, train_index, station_name,
+            destination_station_name, departure_station_name, waybill_number, type_railway_carriage,
+            owners_administration, remaining_mileage, remaining_distance, container_numbers
         FROM LastEvents WHERE rn = 1
     ) le ON tw.railway_carriage_number = le.railway_carriage_number
         AND tw.flight_start_date IS NOT DISTINCT FROM le.flight_start_date::timestamptz
@@ -98,11 +131,8 @@ def get_table_wagons(db: Session, is_active: bool) -> List[TrackingWagonTableRow
         rows = db.execute(QUERY_FULL, {"is_active": is_active}).mappings().all()
     except ProgrammingError as e:
         db.rollback()
-        if "number_train" in str(e) or "train_index" in str(e) or "column" in str(e).lower():
-            logger.info("dislocation lacks number_train/train_index, using fallback query")
-            rows = db.execute(QUERY_FALLBACK, {"is_active": is_active}).mappings().all()
-        else:
-            raise
+        logger.info("dislocation query failed (%s), using fallback", str(e)[:100])
+        rows = db.execute(QUERY_FALLBACK, {"is_active": is_active}).mappings().all()
 
     return [
         TrackingWagonTableRowOut(
@@ -116,6 +146,14 @@ def get_table_wagons(db: Session, is_active: bool) -> List[TrackingWagonTableRow
             number_train=row["number_train"],
             train_index=row["train_index"],
             last_comment_text=row["last_comment_text"],
+            remaining_distance=row.get("remaining_distance"),
+            remaining_mileage=row.get("remaining_mileage"),
+            waybill_number=row.get("waybill_number"),
+            type_railway_carriage=row.get("type_railway_carriage"),
+            owners_administration=row.get("owners_administration"),
+            container_numbers=row.get("container_numbers"),
+            destination_station_name=row.get("destination_station_name"),
+            departure_station_name=row.get("departure_station_name"),
         )
         for row in rows
     ]

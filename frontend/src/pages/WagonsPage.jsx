@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import WagonsTable from '../table/WagonsTable';
+import { TABLE_COLUMNS, TABLE_KEY } from '../table/tableColumnsConfig';
 
 export default function WagonsPage() {
   const [tab, setTab] = useState('active');
@@ -13,6 +14,8 @@ export default function WagonsPage() {
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
+  const [visibleColumnIds, setVisibleColumnIds] = useState(null);
+  const [settingsError, setSettingsError] = useState('');
 
   const fetchData = async () => {
     try {
@@ -37,6 +40,32 @@ export default function WagonsPage() {
   useEffect(() => {
     fetchData();
   }, [tab]);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await api.get(`/table-settings/${TABLE_KEY}`);
+        if (res.data?.visible_columns?.length) {
+          setVisibleColumnIds(res.data.visible_columns);
+        } else {
+          setVisibleColumnIds(TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id));
+        }
+      } catch {
+        setVisibleColumnIds(TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id));
+      }
+    };
+    loadSettings();
+  }, []);
+
+  const handleVisibilityChange = async (newVisibleIds) => {
+    setVisibleColumnIds(newVisibleIds);
+    setSettingsError('');
+    try {
+      await api.put(`/table-settings/${TABLE_KEY}`, { visible_columns: newVisibleIds });
+    } catch (e) {
+      setSettingsError('Не удалось сохранить настройки колонок');
+    }
+  };
 
   const handleSync = async () => {
     setSyncLoading(true);
@@ -123,12 +152,15 @@ export default function WagonsPage() {
         </div>
       </div>
 
+      {settingsError && <div className="settings-error">{settingsError}</div>}
       <WagonsTable
         data={data}
         columnFilters={columnFilters}
         onFilterChange={handleFilterChange}
         onResetFilters={() => setColumnFilters({})}
         onOpenComment={openModal}
+        visibleColumnIds={visibleColumnIds}
+        onVisibilityChange={handleVisibilityChange}
       />
 
       {isModalOpen && selectedWagon && (

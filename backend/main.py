@@ -8,6 +8,7 @@ from database import SessionLocal, engine, get_db
 from config import get_settings
 from auth import get_current_user, require_role, hash_password
 from routers.auth_router import router as auth_router
+from routers.table_settings_router import router as table_settings_router
 from schemas import CreateUserRequest, TrackingWagonTableRowOut
 from wagon_table_service import get_table_wagons
 
@@ -27,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(table_settings_router)
 
 
 @app.on_event("startup")
@@ -50,6 +52,25 @@ def startup_event():
                 ("token_version", "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0"),
                 ("number_train", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_train TEXT"),
                 ("train_index", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS train_index TEXT"),
+                ("waybill_number", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS waybill_number TEXT"),
+                ("type_railway_carriage", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS type_railway_carriage TEXT"),
+                ("owners_administration", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS owners_administration TEXT"),
+                ("remaining_mileage", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS remaining_mileage TEXT"),
+                ("remaining_distance", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS remaining_distance TEXT"),
+                ("destination_station_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS destination_station_code TEXT"),
+                ("flight_start_station_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS flight_start_station_code TEXT"),
+                ("container_number1", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number1 TEXT"),
+                ("container_number2", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number2 TEXT"),
+                ("container_number3", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number3 TEXT"),
+                ("container_number4", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number4 TEXT"),
+                ("container_number5", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number5 TEXT"),
+                ("container_number6", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number6 TEXT"),
+                ("container_number7", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number7 TEXT"),
+                ("container_number8", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number8 TEXT"),
+                ("container_number9", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number9 TEXT"),
+                ("container_number10", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number10 TEXT"),
+                ("container_number11", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number11 TEXT"),
+                ("container_number12", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number12 TEXT"),
             ]:
                 try:
                     conn.execute(text(sql))

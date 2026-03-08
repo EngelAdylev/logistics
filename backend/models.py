@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -63,6 +63,18 @@ class TrackingWagon(Base):
 
     __table_args__ = (UniqueConstraint('railway_carriage_number', 'flight_start_date', name='_wagon_flight_uc'),)
     comments = relationship("WagonComment", back_populates="wagon")
+
+class UserTablePreference(Base):
+    __tablename__ = "user_table_preferences"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    table_key = Column(Text, nullable=False, index=True)
+    visible_columns = Column(JSONB, nullable=False)  # array of column ids
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("user_id", "table_key", name="_user_table_pref_uc"),)
+
 
 class WagonComment(Base):
     __tablename__ = "wagon_comments"

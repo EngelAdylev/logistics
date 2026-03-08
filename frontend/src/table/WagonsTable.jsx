@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { MessageSquarePlus, ChevronDown, ChevronRight, Layers, FilterX } from 'lucide-react';
+import ColumnVisibilityPanel from './ColumnVisibilityPanel';
 import { TABLE_COLUMNS } from './tableColumnsConfig';
 import { applyFilters, groupByTrain, getTrainGroupKey, EMPTY_TRAIN_LABEL } from './tableUtils';
 import ColumnFilter from './ColumnFilter';
@@ -19,7 +20,7 @@ function LastCommentCell({ value }) {
   );
 }
 
-export default function WagonsTable({ data, columnFilters, onFilterChange, onResetFilters, onOpenComment }) {
+export default function WagonsTable({ data, columnFilters, onFilterChange, onResetFilters, onOpenComment, visibleColumnIds, onVisibilityChange }) {
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
 
@@ -35,12 +36,16 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
     });
   };
 
-  const visibleCols = TABLE_COLUMNS.filter((c) => c.visible);
+  const visibleCols = visibleColumnIds?.length
+    ? TABLE_COLUMNS.filter((c) => visibleColumnIds.includes(c.id))
+    : TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false);
   const filterableCols = visibleCols.filter((c) => c.filterable);
 
   const renderCell = (row, col) => {
     if (col.id === 'last_operation_date') return formatDate(row[col.accessorKey]);
-    if (col.id === 'last_comment_text') return <LastCommentCell value={row[col.accessorKey]} />;
+    if (col.id === 'last_comment_text' || col.id === 'container_numbers') {
+      return <LastCommentCell value={row[col.accessorKey]} />;
+    }
     if (col.id === 'chat') {
       return (
         <button
@@ -88,6 +93,10 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
           <FilterX size={18} />
           Сбросить фильтры
         </button>
+        <ColumnVisibilityPanel
+          visibleColumnIds={visibleColumnIds}
+          onVisibilityChange={onVisibilityChange}
+        />
       </div>
 
       <div className="table-scroll">

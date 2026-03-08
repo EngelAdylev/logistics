@@ -1,3 +1,4 @@
+from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import SessionLocal
@@ -5,6 +6,22 @@ from models import TrackingWagon
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_dt(v):
+    """Приводит дату к timestamp для сравнения (dislocation — varchar, tracking — timestamptz)."""
+    if v is None:
+        return None
+    if hasattr(v, "timestamp"):
+        return v.timestamp()
+    s = str(v).strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return None
 
 
 def sync_dislocation_to_tracking():
@@ -15,17 +32,29 @@ def sync_dislocation_to_tracking():
         query = text("""
             WITH LastEvents AS (
                 SELECT d.railway_carriage_number, d.flight_start_date, d.date_time_of_operation,
-                       d.operation_code_railway_carriage, rs.name as st_name, oc.name as op_name,
+                       d.operation_code_railway_carriage, d.flight_start_station_code,
+                       d.destination_station_code, d.remaining_distance,
+                       rs.name as st_name, oc.name as op_name,
                        ROW_NUMBER() OVER (PARTITION BY d.railway_carriage_number, d.flight_start_date
                            ORDER BY d.date_time_of_operation DESC NULLS LAST) as rn
                 FROM dislocation d
                 LEFT JOIN railway_station rs ON d.station_code_performing_operation = rs.code
                 LEFT JOIN operation_code oc ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
             )
-            SELECT * FROM LastEvents WHERE rn = 1
+            SELECT * FROM LastEvents
+            WHERE rn = 1
+              AND (
+                flight_start_station_code::text = '648400'
+                OR destination_station_code::text = '648400'
+              )
+              AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text, '')), '') AS NUMERIC), 0) > 0
         """)
         results = db.execute(query).mappings().all()
         stats["last_events"] = len(results)
+        qualifying_keys = {
+            (str(row["railway_carriage_number"]), _normalize_dt(row["flight_start_date"]))
+            for row in results
+        }
 
         for row in results:
             try:
@@ -61,8 +90,15 @@ def sync_dislocation_to_tracking():
             except Exception:
                 stats["errors"] += 1
                 logger.exception("sync_dislocation_to_tracking: row error")
+        archived_out = 0
+        for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
+            key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
+            if key not in qualifying_keys:
+                tw.is_active = False
+                archived_out += 1
+        stats["archived"] += archived_out
         db.commit()
-        logger.info("sync_dislocation_to_tracking: done created=%s updated=%s archived=%s errors=%s", stats["created"], stats["updated"], stats["archived"], stats["errors"])
+        logger.info("sync_dislocation_to_tracking: done created=%s updated=%s archived=%s errors=%s archived_out=%s", stats["created"], stats["updated"], stats["archived"], stats["errors"], archived_out)
     except Exception:
         logger.exception("sync_dislocation_to_tracking: failed")
         stats["errors"] += 1
@@ -79,16 +115,28 @@ def rebuild_tracking_from_dislocation_merge():
         query = text("""
             WITH LastEvents AS (
                 SELECT d.railway_carriage_number, d.flight_start_date, d.date_time_of_operation,
-                       d.operation_code_railway_carriage, rs.name as st_name, oc.name as op_name,
+                       d.operation_code_railway_carriage, d.flight_start_station_code,
+                       d.destination_station_code, d.remaining_distance,
+                       rs.name as st_name, oc.name as op_name,
                        ROW_NUMBER() OVER (PARTITION BY d.railway_carriage_number, d.flight_start_date
                            ORDER BY d.date_time_of_operation DESC NULLS LAST) as rn
                 FROM dislocation d
                 LEFT JOIN railway_station rs ON d.station_code_performing_operation = rs.code
                 LEFT JOIN operation_code oc ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
             )
-            SELECT * FROM LastEvents WHERE rn = 1
+            SELECT * FROM LastEvents
+            WHERE rn = 1
+              AND (
+                flight_start_station_code::text = '648400'
+                OR destination_station_code::text = '648400'
+              )
+              AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text, '')), '') AS NUMERIC), 0) > 0
         """)
         results = db.execute(query).mappings().all()
+        qualifying_keys = {
+            (str(row["railway_carriage_number"]), _normalize_dt(row["flight_start_date"]))
+            for row in results
+        }
         created, updated = 0, 0
         for row in results:
             try:
@@ -116,6 +164,10 @@ def rebuild_tracking_from_dislocation_merge():
                     updated += 1
             except Exception:
                 logger.exception("rebuild_tracking_from_dislocation_merge: row error")
+        for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
+            key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
+            if key not in qualifying_keys:
+                tw.is_active = False
         db.commit()
         active = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()
         archived = db.query(TrackingWagon).filter(TrackingWagon.is_active == False).count()

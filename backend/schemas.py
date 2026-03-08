@@ -50,6 +50,20 @@ class ErrorResponse(BaseModel):
 from datetime import datetime
 
 
+# --- Настройки видимости колонок таблицы ---
+from typing import List
+
+
+class TableSettingsOut(BaseModel):
+    table_key: str
+    visible_columns: List[str]
+
+
+class TableSettingsUpdateRequest(BaseModel):
+    visible_columns: List[str] = Field(..., min_length=1)
+
+
+# --- Схема строки таблицы вагонов ---
 class TrackingWagonTableRowOut(BaseModel):
     """Response schema для строк таблицы активных/архивных вагонов."""
     id: UUID
@@ -62,6 +76,15 @@ class TrackingWagonTableRowOut(BaseModel):
     number_train: Optional[str] = None
     train_index: Optional[str] = None
     last_comment_text: Optional[str] = None
+    # Расширенные поля из dislocation
+    remaining_distance: Optional[str] = None
+    remaining_mileage: Optional[str] = None
+    waybill_number: Optional[str] = None
+    type_railway_carriage: Optional[str] = None
+    owners_administration: Optional[str] = None
+    container_numbers: Optional[str] = None
+    destination_station_name: Optional[str] = None
+    departure_station_name: Optional[str] = None
 
     class Config:
         from_attributes = True
