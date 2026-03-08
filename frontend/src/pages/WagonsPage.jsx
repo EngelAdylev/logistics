@@ -7,6 +7,8 @@ import { TABLE_COLUMNS, TABLE_KEY } from '../table/tableColumnsConfig';
 export default function WagonsPage() {
   const [tab, setTab] = useState('active');
   const [data, setData] = useState([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState(null);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -18,12 +20,24 @@ export default function WagonsPage() {
   const [settingsError, setSettingsError] = useState('');
 
   const fetchData = async () => {
+    setDataError(null);
+    setDataLoading(true);
     try {
       const endpoint = tab === 'active' ? '/wagons/active' : '/wagons/archive';
       const res = await api.get(endpoint);
       setData(res.data || []);
     } catch (e) {
       console.error(e);
+      const status = e.response?.status;
+      const msg = status === 401
+        ? 'Сессия истекла. Войдите снова.'
+        : status >= 500
+          ? 'Ошибка сервера. Попробуйте позже.'
+          : 'Не удалось загрузить данные.';
+      setDataError(msg);
+      setData([]);
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -153,6 +167,16 @@ export default function WagonsPage() {
       </div>
 
       {settingsError && <div className="settings-error">{settingsError}</div>}
+      {dataError && (
+        <div className="data-error">
+          {dataError}
+          <button type="button" className="retry-btn" onClick={() => fetchData()}>
+            Повторить
+          </button>
+        </div>
+      )}
+      {dataLoading && <div className="data-loading">Загрузка таблицы…</div>}
+      {!dataLoading && (
       <WagonsTable
         data={data}
         columnFilters={columnFilters}
@@ -162,6 +186,7 @@ export default function WagonsPage() {
         visibleColumnIds={visibleColumnIds}
         onVisibilityChange={handleVisibilityChange}
       />
+      )}
 
       {isModalOpen && selectedWagon && (
         <div className="modal-overlay" role="dialog">

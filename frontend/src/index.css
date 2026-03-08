@@ -185,3 +185,11 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .column-visibility-label { display: flex; align-items: center; gap: 6px; }
 .required-badge { font-size: 0.75rem; color: #64748b; }
 .settings-error { font-size: 0.875rem; color: #dc2626; margin-bottom: 8px; }
+.data-error {
+  display: flex; align-items: center; gap: 12px; padding: 16px;
+  background: #fef2f2; color: #dc2626; border-radius: 8px; margin: 16px 0;
+  font-size: 0.95rem;
+}
+.retry-btn { padding: 6px 14px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+.retry-btn:hover { background: #b91c1c; }
+.data-loading { padding: 24px; text-align: center; color: #64748b; font-size: 1rem; }

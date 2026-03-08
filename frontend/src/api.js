@@ -30,28 +30,32 @@ api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config;
-    if (err.response?.status === 401 && !original._retry && !original.url?.includes('/auth/refresh') && !original.url?.includes('/auth/login')) {
+    const isAuthEndpoint = original?.url?.includes('/auth/refresh') || original?.url?.includes('/auth/login');
+    if (err.response?.status === 401 && !original._retry && !isAuthEndpoint) {
       original._retry = true;
       if (!refreshPromise) {
-        refreshPromise = api.post('/auth/refresh').then((r) => {
-          const tok = r.data?.access_token;
-          if (tok) setAccessToken(tok);
-          refreshPromise = null;
-          return tok;
-        }).catch((e) => {
-          refreshPromise = null;
-          clearAccessToken();
-          throw e;
-        });
+        refreshPromise = api.post('/auth/refresh')
+          .then((r) => {
+            const tok = r.data?.access_token;
+            if (tok) setAccessToken(tok);
+            refreshPromise = null;
+            return tok;
+          })
+          .catch((e) => {
+            refreshPromise = null;
+            clearAccessToken();
+            window.dispatchEvent(new CustomEvent('auth:logout'));
+            throw e;
+          });
       }
       try {
         const tok = await refreshPromise;
         if (tok) {
-          original.headers.Authorization = `Bearer ${tok}`;
+          original.headers = { ...original.headers, Authorization: `Bearer ${tok}` };
           return api(original);
         }
       } catch {
-        window.dispatchEvent(new CustomEvent('auth:logout'));
+        return Promise.reject(err);
       }
     }
     return Promise.reject(err);

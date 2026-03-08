@@ -40,8 +40,9 @@ export function AuthProvider({ children }) {
         const tok = res.config?.headers?.Authorization?.replace('Bearer ', '');
         if (tok) setAccessToken(tok);
         setUser(res.data);
-      } catch {
+      } catch (e) {
         setUser(null);
+        clearAccessToken();
       } finally {
         setLoading(false);
       }
