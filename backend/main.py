@@ -8,7 +8,8 @@ from database import SessionLocal, engine, get_db
 from config import get_settings
 from auth import get_current_user, require_role, hash_password
 from routers.auth_router import router as auth_router
-from schemas import CreateUserRequest
+from schemas import CreateUserRequest, TrackingWagonTableRowOut
+from wagon_table_service import get_table_wagons
 
 # Автоматическое создание таблиц
 models.Base.metadata.create_all(bind=engine)
@@ -47,6 +48,8 @@ def startup_event():
                 ("created_at", "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()"),
                 ("updated_at", "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()"),
                 ("token_version", "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER DEFAULT 0"),
+                ("number_train", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_train TEXT"),
+                ("train_index", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS train_index TEXT"),
             ]:
                 try:
                     conn.execute(text(sql))
@@ -77,20 +80,20 @@ def startup_event():
 # --- ЭНДПОИНТЫ ДЛЯ ВАГОНОВ (требуют авторизации user/admin) ---
 
 
-@app.get("/wagons/active")
+@app.get("/wagons/active", response_model=list[TrackingWagonTableRowOut])
 def get_active_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == True).all()
+    return get_table_wagons(db, is_active=True)
 
 
-@app.get("/wagons/archive")
+@app.get("/wagons/archive", response_model=list[TrackingWagonTableRowOut])
 def get_archive_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == False).all()
+    return get_table_wagons(db, is_active=False)
 
 
 @app.get("/wagons/{tracking_id}/comments")

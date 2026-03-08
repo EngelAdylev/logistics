@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useReactTable, getCoreRowModel, flexRender } from '@tanstack/react-table';
-import { MessageSquarePlus, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { api } from '../api';
+import WagonsTable from '../table/WagonsTable';
 
 export default function WagonsPage() {
   const [tab, setTab] = useState('active');
@@ -12,12 +12,13 @@ export default function WagonsPage() {
   const [selectedWagon, setSelectedWagon] = useState(null);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
+  const [columnFilters, setColumnFilters] = useState({});
 
   const fetchData = async () => {
     try {
       const endpoint = tab === 'active' ? '/wagons/active' : '/wagons/archive';
       const res = await api.get(endpoint);
-      setData(res.data);
+      setData(res.data || []);
     } catch (e) {
       console.error(e);
     }
@@ -79,37 +80,14 @@ export default function WagonsPage() {
     }
   };
 
-  const wagonColumns = [
-    { header: 'Номер вагона', accessorKey: 'railway_carriage_number' },
-    { header: 'Станция', accessorKey: 'current_station_name' },
-    { header: 'Операция', accessorKey: 'current_operation_name' },
-    {
-      header: 'Дата',
-      accessorKey: 'last_operation_date',
-      cell: (info) => {
-        const v = info.getValue();
-        return v ? new Date(v).toLocaleString() : '-';
-      },
-    },
-    {
-      header: 'Чат',
-      cell: ({ row }) => (
-        <button
-          className="comment-btn"
-          onClick={() => openModal(row.original)}
-          type="button"
-        >
-          <MessageSquarePlus size={16} />
-        </button>
-      ),
-    },
-  ];
-
-  const table = useReactTable({
-    data,
-    columns: wagonColumns,
-    getCoreRowModel: getCoreRowModel(),
-  });
+  const handleFilterChange = (columnId, values) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (!values?.length) delete next[columnId];
+      else next[columnId] = values;
+      return next;
+    });
+  };
 
   return (
     <>
@@ -144,26 +122,14 @@ export default function WagonsPage() {
           {syncMessage && <span className="sync-message">{syncMessage}</span>}
         </div>
       </div>
-      <table className="excel-table">
-        <thead>
-          {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id}>
-              {hg.headers.map((h) => (
-                <th key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+
+      <WagonsTable
+        data={data}
+        columnFilters={columnFilters}
+        onFilterChange={handleFilterChange}
+        onResetFilters={() => setColumnFilters({})}
+        onOpenComment={openModal}
+      />
 
       {isModalOpen && selectedWagon && (
         <div className="modal-overlay" role="dialog">

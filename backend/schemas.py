@@ -44,3 +44,24 @@ class PatchUserRequest(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     message: str
+
+
+# --- Схема строки таблицы вагонов для API ---
+from datetime import datetime
+
+
+class TrackingWagonTableRowOut(BaseModel):
+    """Response schema для строк таблицы активных/архивных вагонов."""
+    id: UUID
+    railway_carriage_number: str
+    flight_start_date: Optional[datetime] = None
+    current_station_name: Optional[str] = None
+    current_operation_name: Optional[str] = None
+    last_operation_date: Optional[datetime] = None
+    is_active: bool
+    number_train: Optional[str] = None
+    train_index: Optional[str] = None
+    last_comment_text: Optional[str] = None
+
+    class Config:
+        from_attributes = True

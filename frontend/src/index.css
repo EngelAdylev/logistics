@@ -103,3 +103,61 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .rebuild-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 .rebuild-result { font-size: 0.875rem; color: #475569; }
 .rebuild-confirm .rebuild-warning { margin: 12px 0; padding: 12px; background: #fef9c3; border-radius: 8px; font-size: 0.9rem; color: #713f12; }
+
+/* --- Таблица вагонов: группировка и фильтры --- */
+.wagons-table-wrapper { margin-top: 12px; }
+.table-toolbar { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.group-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; background: #f1f5f9; border: 1px solid var(--border-color);
+  border-radius: 8px; font-size: 0.9rem; cursor: pointer;
+}
+.group-toggle:hover { background: #e2e8f0; }
+.group-toggle.active { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+.reset-filters-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; background: #f1f5f9; border: 1px solid var(--border-color);
+  border-radius: 8px; font-size: 0.9rem; cursor: pointer;
+}
+.reset-filters-btn:hover:not(:disabled) { background: #e2e8f0; }
+.reset-filters-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.reset-filters-btn.active { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.table-scroll { overflow-x: auto; }
+.excel-table .group-col { width: 36px; padding: 8px; vertical-align: middle; }
+.excel-table .group-header-row {
+  background: #f8fafc; cursor: pointer; font-weight: 600; color: #475569;
+}
+.excel-table .group-header-row:hover { background: #f1f5f9; }
+.group-caret { display: inline-flex; color: #64748b; }
+.group-title { font-size: 0.95rem; }
+
+.th-with-filter { white-space: nowrap; }
+.th-with-filter .th-label { margin-right: 6px; }
+.column-filter { position: relative; display: inline-block; }
+.filter-trigger {
+  position: relative; background: transparent; border: none; padding: 4px; cursor: pointer;
+  color: #64748b; border-radius: 4px; display: inline-flex; align-items: center;
+}
+.filter-trigger:hover { color: var(--active-blue); background: #f1f5f9; }
+.filter-trigger.active { color: var(--active-blue); }
+.filter-badge {
+  position: absolute; top: -4px; right: -4px; background: var(--active-blue);
+  color: white; font-size: 0.7rem; min-width: 16px; height: 16px;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+.filter-popup {
+  position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 50;
+  background: white; border: 1px solid var(--border-color); border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 180px; max-height: 280px;
+  display: flex; flex-direction: column;
+}
+.filter-title { padding: 10px 12px; font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+.filter-options { padding: 8px; overflow-y: auto; max-height: 180px; }
+.filter-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; font-size: 0.9rem; }
+.filter-option:hover { background: #f8fafc; }
+.filter-option input { cursor: pointer; }
+.filter-option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-actions { padding: 8px 12px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end; }
+.filter-clear-btn { padding: 6px 12px; background: #f1f5f9; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
+.filter-apply-btn { padding: 6px 12px; background: var(--active-blue); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
