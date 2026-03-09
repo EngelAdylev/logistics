@@ -1,15 +1,17 @@
 """
 Сервис подготовки данных таблицы вагонов.
 Получает данные с number_train, train_index, last_comment_text без N+1.
+Использует railway_station.esr_code для JOIN (код ЕСР станции).
 """
 import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
-from typing import List
+from typing import List, Tuple
 from schemas import TrackingWagonTableRowOut
 
 logger = logging.getLogger(__name__)
+
 
 # Запрос с расширенными полями из dislocation
 QUERY_FULL = text("""
@@ -122,38 +124,49 @@ QUERY_FALLBACK = text("""
 """)
 
 
-def get_table_wagons(db: Session, is_active: bool) -> List[TrackingWagonTableRowOut]:
+def get_table_wagons(db: Session, is_active: bool) -> Tuple[List[TrackingWagonTableRowOut], str | None]:
     """
-    Возвращает строки таблицы вагонов с number_train, train_index, last_comment_text.
-    Один запрос, без N+1. Использует fallback, если в dislocation нет number_train/train_index.
+    Возвращает (список строк, error_message).
+    error_message is None при успехе; при ошибке — текст для пользователя, исключение не глотается.
     """
     try:
-        rows = db.execute(QUERY_FULL, {"is_active": is_active}).mappings().all()
-    except ProgrammingError as e:
-        db.rollback()
-        logger.info("dislocation query failed (%s), using fallback", str(e)[:100])
-        rows = db.execute(QUERY_FALLBACK, {"is_active": is_active}).mappings().all()
+        try:
+            rows = db.execute(QUERY_FULL, {"is_active": is_active}).mappings().all()
+        except ProgrammingError as e:
+            db.rollback()
+            logger.info("get_table_wagons: full query failed (%s), using fallback", str(e)[:150])
+            rows = db.execute(QUERY_FALLBACK, {"is_active": is_active}).mappings().all()
 
-    return [
-        TrackingWagonTableRowOut(
-            id=row["id"],
-            railway_carriage_number=row["railway_carriage_number"],
-            flight_start_date=row["flight_start_date"],
-            current_station_name=row["current_station_name"],
-            current_operation_name=row["current_operation_name"],
-            last_operation_date=row["last_operation_date"],
-            is_active=row["is_active"],
-            number_train=row["number_train"],
-            train_index=row["train_index"],
-            last_comment_text=row["last_comment_text"],
-            remaining_distance=row.get("remaining_distance"),
-            remaining_mileage=row.get("remaining_mileage"),
-            waybill_number=row.get("waybill_number"),
-            type_railway_carriage=row.get("type_railway_carriage"),
-            owners_administration=row.get("owners_administration"),
-            container_numbers=row.get("container_numbers"),
-            destination_station_name=row.get("destination_station_name"),
-            departure_station_name=row.get("departure_station_name"),
+        return (
+            [
+                TrackingWagonTableRowOut(
+                    id=row["id"],
+                    railway_carriage_number=row["railway_carriage_number"],
+                    flight_start_date=row["flight_start_date"],
+                    current_station_name=row["current_station_name"],
+                    current_operation_name=row["current_operation_name"],
+                    last_operation_date=row["last_operation_date"],
+                    is_active=row["is_active"],
+                    number_train=row.get("number_train"),
+                    train_index=row.get("train_index"),
+                    last_comment_text=row.get("last_comment_text"),
+                    remaining_distance=row.get("remaining_distance"),
+                    remaining_mileage=row.get("remaining_mileage"),
+                    waybill_number=row.get("waybill_number"),
+                    type_railway_carriage=row.get("type_railway_carriage"),
+                    owners_administration=row.get("owners_administration"),
+                    container_numbers=row.get("container_numbers"),
+                    destination_station_name=row.get("destination_station_name"),
+                    departure_station_name=row.get("departure_station_name"),
+                )
+                for row in rows
+            ],
+            None,
         )
-        for row in rows
-    ]
+    except Exception as e:
+        logger.exception("get_table_wagons failed: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return ([], f"Ошибка загрузки таблицы: {e!s}")

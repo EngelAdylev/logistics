@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 import WagonsTable from '../table/WagonsTable';
 import { TABLE_COLUMNS, TABLE_KEY } from '../table/tableColumnsConfig';
 
+const DEFAULT_VISIBLE_COLUMN_IDS = TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
+
 export default function WagonsPage() {
+  const { loading: authLoading } = useAuth();
   const [tab, setTab] = useState('active');
   const [data, setData] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
@@ -16,16 +20,17 @@ export default function WagonsPage() {
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
-  const [visibleColumnIds, setVisibleColumnIds] = useState(null);
+  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_COLUMN_IDS);
   const [settingsError, setSettingsError] = useState('');
 
-  const fetchData = async () => {
+  const fetchData = async (keepDataOnError = false) => {
     setDataError(null);
     setDataLoading(true);
     try {
       const endpoint = tab === 'active' ? '/wagons/active' : '/wagons/archive';
       const res = await api.get(endpoint);
-      setData(res.data || []);
+      setData(Array.isArray(res.data) ? res.data : []);
+      return true;
     } catch (e) {
       console.error(e);
       const status = e.response?.status;
@@ -35,7 +40,8 @@ export default function WagonsPage() {
           ? 'Ошибка сервера. Попробуйте позже.'
           : 'Не удалось загрузить данные.';
       setDataError(msg);
-      setData([]);
+      if (!keepDataOnError) setData([]);
+      return false;
     } finally {
       setDataLoading(false);
     }
@@ -52,24 +58,24 @@ export default function WagonsPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     fetchData();
-  }, [tab]);
+  }, [tab, authLoading]);
 
   useEffect(() => {
+    if (authLoading) return;
     const loadSettings = async () => {
       try {
         const res = await api.get(`/table-settings/${TABLE_KEY}`);
         if (res.data?.visible_columns?.length) {
           setVisibleColumnIds(res.data.visible_columns);
-        } else {
-          setVisibleColumnIds(TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id));
         }
       } catch {
-        setVisibleColumnIds(TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id));
+        // остаёмся на DEFAULT_VISIBLE_COLUMN_IDS
       }
     };
     loadSettings();
-  }, []);
+  }, [authLoading]);
 
   const handleVisibilityChange = async (newVisibleIds) => {
     setVisibleColumnIds(newVisibleIds);
@@ -87,16 +93,25 @@ export default function WagonsPage() {
     try {
       const res = await api.post('/wagons/sync');
       const d = res.data;
+      const status = d.sync_status || (d.success ? 'success' : 'failure');
+      const statusMsg = status === 'success'
+        ? 'Данные обновлены.'
+        : status === 'partial_failure'
+          ? 'Синхронизация завершена с ошибками. Часть данных обновлена.'
+          : 'Синхронизация завершилась с ошибкой.';
       setSyncMessage(
-        `Обновлено: создано ${d.created || 0}, обновлено ${d.updated || 0}${d.errors ? `, ошибок: ${d.errors}` : ''}.`
+        `${statusMsg} Создано: ${d.created ?? 0}, обновлено: ${d.updated ?? 0}${d.errors ? `, ошибок: ${d.errors}` : ''}.`
       );
-      await fetchData();
+      const ok = await fetchData(true);
+      if (!ok) {
+        setDataError('Не удалось обновить таблицу. Показаны предыдущие данные.');
+      }
     } catch (e) {
       const detail = e.response?.data?.detail;
       if (typeof detail === 'object' && detail?.error === 'SYNC_IN_PROGRESS') {
         setSyncMessage(detail.message || 'Обновление уже выполняется.');
       } else {
-        setSyncMessage('Не удалось обновить данные.');
+        setSyncMessage('Не удалось запустить обновление данных.');
       }
     } finally {
       setSyncLoading(false);
@@ -175,8 +190,9 @@ export default function WagonsPage() {
           </button>
         </div>
       )}
-      {dataLoading && <div className="data-loading">Загрузка таблицы…</div>}
-      {!dataLoading && (
+      {authLoading && <div className="data-loading">Проверка авторизации…</div>}
+      {!authLoading && dataLoading && <div className="data-loading">Загрузка таблицы…</div>}
+      {!authLoading && !dataLoading && (
       <WagonsTable
         data={data}
         columnFilters={columnFilters}

@@ -106,7 +106,10 @@ def get_active_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return get_table_wagons(db, is_active=True)
+    rows, err = get_table_wagons(db, is_active=True)
+    if err:
+        raise HTTPException(status_code=500, detail={"error": "TABLE_LOAD_ERROR", "message": err})
+    return rows
 
 
 @app.get("/wagons/archive", response_model=list[TrackingWagonTableRowOut])
@@ -114,7 +117,10 @@ def get_archive_wagons(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return get_table_wagons(db, is_active=False)
+    rows, err = get_table_wagons(db, is_active=False)
+    if err:
+        raise HTTPException(status_code=500, detail={"error": "TABLE_LOAD_ERROR", "message": err})
+    return rows
 
 
 @app.get("/wagons/{tracking_id}/comments")
@@ -210,9 +216,13 @@ def manual_sync(current_user: models.User = Depends(get_current_user)):
         _logger.info("manual_sync: started by user_id=%s login=%s", current_user.id, current_user.login)
         stats = scheduler.sync_dislocation_to_tracking()
         _logger.info("manual_sync: done by login=%s stats=%s", current_user.login, stats)
+        sync_status = stats.get("status", "failure")
         return {
-            "success": True,
-            "message": "Данные обновлены",
+            "success": sync_status == "success",
+            "sync_status": sync_status,
+            "message": "Данные обновлены" if sync_status == "success" else (
+                "Синхронизация завершена с ошибками" if sync_status == "partial_failure" else "Синхронизация завершилась с ошибкой"
+            ),
             "created": stats.get("created", 0),
             "updated": stats.get("updated", 0),
             "archived": stats.get("archived", 0),
@@ -225,6 +235,41 @@ def manual_sync(current_user: models.User = Depends(get_current_user)):
         _sync_lock.release()
 
 
+@app.get("/admin/diagnostic")
+def admin_diagnostic(
+    current_user: models.User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """Диагностика: количество строк, примеры данных, результат qualifying-запроса."""
+    from sqlalchemy import text
+    info = {}
+    try:
+        info["dislocation_count"] = db.execute(text("SELECT COUNT(*) FROM dislocation")).scalar()
+        info["tracking_active"] = db.execute(text("SELECT COUNT(*) FROM tracking_wagons WHERE is_active = true")).scalar()
+        info["tracking_archived"] = db.execute(text("SELECT COUNT(*) FROM tracking_wagons WHERE is_active = false")).scalar()
+        rows = scheduler._fetch_qualifying_rows(db)
+        info["qualifying_rows"] = len(rows)
+        if rows:
+            r = rows[0]
+            info["sample"] = {
+                "railway_carriage_number": r.get("railway_carriage_number"),
+                "flight_start_date": str(r.get("flight_start_date")),
+                "flight_start_station_code": r.get("flight_start_station_code"),
+                "destination_station_code": r.get("destination_station_code"),
+                "remaining_distance": r.get("remaining_distance"),
+                "operation_code": r.get("operation_code_railway_carriage"),
+            }
+        else:
+            try:
+                sample = db.execute(text("SELECT railway_carriage_number, flight_start_date, flight_start_station_code, destination_station_code, remaining_distance FROM dislocation LIMIT 1")).mappings().first()
+                info["dislocation_sample"] = dict(sample) if sample else None
+            except Exception as e:
+                info["dislocation_sample_error"] = str(e)
+    except Exception as e:
+        info["error"] = str(e)
+    return info
+
+
 @app.post("/admin/rebuild-tracking")
 def admin_rebuild_tracking(current_user: models.User = Depends(require_role("admin"))):
     """
@@ -232,6 +277,10 @@ def admin_rebuild_tracking(current_user: models.User = Depends(require_role("adm
     Только для администратора. Использовать при смене логики архива или исправлении данных.
     """
     _logger.info("admin_rebuild_tracking: started by login=%s", current_user.login)
-    result = scheduler.rebuild_tracking_from_dislocation_merge()
-    _logger.info("admin_rebuild_tracking: done by login=%s result=%s", current_user.login, result)
-    return result
+    try:
+        result = scheduler.rebuild_tracking_from_dislocation_merge()
+        _logger.info("admin_rebuild_tracking: done by login=%s result=%s", current_user.login, result)
+        return result
+    except Exception as e:
+        _logger.exception("admin_rebuild_tracking failed: %s", e)
+        raise HTTPException(status_code=500, detail={"error": "REBUILD_FAILED", "message": str(e)})

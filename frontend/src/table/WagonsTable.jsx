@@ -122,6 +122,13 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
             </tr>
           </thead>
           <tbody>
+            {rowsToRender.length === 0 && (
+              <tr>
+                <td colSpan={visibleCols.length + (groupByTrainEnabled ? 1 : 0)} className="empty-table-message">
+                  Нет данных
+                </td>
+              </tr>
+            )}
             {rowsToRender.map((item, idx) => {
               if (item.isGroup) {
                 const { trainKey, rows, collapsed } = item;

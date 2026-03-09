@@ -37,7 +37,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>LOGISTICS</h1>
+        <h1>Дислокация</h1>
         <p className="login-subtitle">Вход в систему</p>
         <form onSubmit={handleSubmit}>
           <input

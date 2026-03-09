@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 
 const REBUILD_WARNING =
   'Использовать только при необходимости пересчёта витрины после изменений логики или исправления данных. Комментарии не удаляются.';
 
 export default function AdminPage() {
+  const { loading: authLoading } = useAuth();
   const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [usersError, setUsersError] = useState(null);
   const [newLogin, setNewLogin] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('user');
@@ -15,17 +19,27 @@ export default function AdminPage() {
   const [rebuildResult, setRebuildResult] = useState(null);
 
   const fetchUsers = async () => {
+    setUsersError(null);
+    setUsersLoading(true);
     try {
       const res = await api.get('/users');
-      setUsers(res.data);
+      setUsers(res.data || []);
     } catch (e) {
       console.error(e);
+      const status = e.response?.status;
+      setUsersError(
+        status === 401 ? 'Сессия истекла. Войдите снова.' : 'Не удалось загрузить список пользователей.'
+      );
+      setUsers([]);
+    } finally {
+      setUsersLoading(false);
     }
   };
 
   useEffect(() => {
+    if (authLoading) return;
     fetchUsers();
-  }, []);
+  }, [authLoading]);
 
   const handleRebuild = async () => {
     setRebuildConfirmOpen(false);
@@ -63,6 +77,14 @@ export default function AdminPage() {
       }
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="admin-section">
+        <div className="data-loading">Проверка авторизации…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-section">
@@ -123,24 +145,39 @@ export default function AdminPage() {
         </button>
       </form>
       {error && <p className="admin-error">{error}</p>}
-      <table className="excel-table">
-        <thead>
-          <tr>
-            <th>Логин</th>
-            <th>Роль</th>
-            <th>Активен</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u.id}>
-              <td>{u.login}</td>
-              <td>{u.role}</td>
-              <td>{u.is_active !== false ? 'Да' : 'Нет'}</td>
+      {usersError && (
+        <div className="data-error">
+          {usersError}
+          <button type="button" className="retry-btn" onClick={() => fetchUsers()}>
+            Повторить
+          </button>
+        </div>
+      )}
+      {usersLoading && <div className="data-loading">Загрузка списка пользователей…</div>}
+      {!usersLoading && (
+        <table className="excel-table">
+          <thead>
+            <tr>
+              <th>Логин</th>
+              <th>Роль</th>
+              <th>Активен</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.length === 0 && !usersError ? (
+              <tr><td colSpan={3}>Нет пользователей</td></tr>
+            ) : (
+              users.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.login}</td>
+                  <td>{u.role}</td>
+                  <td>{u.is_active !== false ? 'Да' : 'Нет'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

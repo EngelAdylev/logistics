@@ -49,6 +49,7 @@ class RailwayStation(Base):
     __tablename__ = "railway_station"
     id = Column(String(50), primary_key=True)
     code = Column(String(50))
+    esr_code = Column(String(50))  # код ЕСР для JOIN с dislocation (station_code_*)
     name = Column(String(50))
 
 class TrackingWagon(Base):

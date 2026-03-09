@@ -59,8 +59,20 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:logout', onLogout);
   }, []);
 
+  const authReady = !loading;
+  const authFailed = !loading && !user;
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, fetchMe }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      authLoading: loading,
+      authReady,
+      authFailed,
+      login,
+      logout,
+      fetchMe,
+    }}>
       {children}
     </AuthContext.Provider>
   );
