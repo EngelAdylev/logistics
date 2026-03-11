@@ -177,7 +177,7 @@ def list_operations(
             LEFT JOIN railway_station rs
                 ON d.station_code_performing_operation::text = rs.esr_code
             WHERE d.flight_id = :tid
-            ORDER BY d.date_time_of_operation DESC
+            ORDER BY d.date_time_of_operation::timestamptz DESC
             OFFSET :offset LIMIT :limit
         """),
         {"tid": trip_id, "offset": (page - 1) * limit, "limit": limit},

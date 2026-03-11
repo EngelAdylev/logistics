@@ -180,10 +180,11 @@ def sync_new_model(db: Session) -> dict:
         """))
 
         # Шаг 5. Batch UPDATE: денормализованные поля последней операции + is_active
+        # date_time_of_operation в dislocation — character varying, нужен явный каст
         db.execute(text("""
             UPDATE wagon_trips wt
             SET
-                last_operation_date   = last_op.date_time_of_operation,
+                last_operation_date   = last_op.dto::timestamptz,
                 last_operation_code   = last_op.op_code,
                 last_operation_name   = last_op.op_name,
                 last_station_name     = last_op.stn_name,
@@ -196,21 +197,21 @@ def sync_new_model(db: Session) -> dict:
             FROM (
                 SELECT DISTINCT ON (d.flight_id)
                     d.flight_id,
-                    d.date_time_of_operation,
-                    d.operation_code_railway_carriage   AS op_code,
-                    d.destination_station_code          AS dst_code,
+                    d.date_time_of_operation           AS dto,
+                    d.operation_code_railway_carriage  AS op_code,
+                    d.destination_station_code         AS dst_code,
                     d.number_train,
                     d.train_index,
-                    oc.name                             AS op_name,
-                    rs_op.name                          AS stn_name,
-                    rs_dst.name                         AS dst_name
+                    oc.name                            AS op_name,
+                    rs_op.name                         AS stn_name,
+                    rs_dst.name                        AS dst_name
                 FROM dislocation d
                 LEFT JOIN operation_code oc
                     ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
                 LEFT JOIN railway_station rs_op
-                    ON d.station_code_performing_operation::text = rs_op.esr_code
+                    ON d.station_code_performing_operation = rs_op.esr_code
                 LEFT JOIN railway_station rs_dst
-                    ON d.destination_station_code::text = rs_dst.esr_code
+                    ON d.destination_station_code = rs_dst.esr_code
                 WHERE d.flight_id IS NOT NULL
                 ORDER BY d.flight_id, d.date_time_of_operation DESC
             ) last_op
