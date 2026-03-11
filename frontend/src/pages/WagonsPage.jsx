@@ -4,12 +4,14 @@ import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import WagonsTable from '../table/WagonsTable';
 import { TABLE_COLUMNS, TABLE_KEY } from '../table/tableColumnsConfig';
+import HierarchyView from '../components/hierarchy/HierarchyView';
 
 const DEFAULT_VISIBLE_COLUMN_IDS = TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
 export default function WagonsPage() {
   const { loading: authLoading } = useAuth();
   const [tab, setTab] = useState('active');
+  const [hierarchyFilter, setHierarchyFilter] = useState('active'); // 'active' | 'archive'
   const [data, setData] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState(null);
@@ -165,6 +167,13 @@ export default function WagonsPage() {
           >
             Архив
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('hierarchy')}
+            className={tab === 'hierarchy' ? 'active' : ''}
+          >
+            Матрёшка
+          </button>
         </div>
         <div className="sync-block">
           <button
@@ -181,27 +190,68 @@ export default function WagonsPage() {
         </div>
       </div>
 
-      {settingsError && <div className="settings-error">{settingsError}</div>}
-      {dataError && (
-        <div className="data-error">
-          {dataError}
-          <button type="button" className="retry-btn" onClick={() => fetchData()}>
-            Повторить
-          </button>
+      {tab === 'hierarchy' ? (
+        /* ── Вкладка Матрёшка ── */
+        <div>
+          <div className="h-filter-toggle">
+            <button
+              type="button"
+              className={hierarchyFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setHierarchyFilter('active')}
+            >
+              Активные
+            </button>
+            <button
+              type="button"
+              className={hierarchyFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setHierarchyFilter('archive')}
+            >
+              Архивные
+            </button>
+            <button
+              type="button"
+              className={hierarchyFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setHierarchyFilter('all')}
+            >
+              Все
+            </button>
+          </div>
+          {!authLoading && (
+            <HierarchyView
+              isActive={
+                hierarchyFilter === 'active' ? true
+                  : hierarchyFilter === 'archive' ? false
+                    : undefined
+              }
+            />
+          )}
         </div>
-      )}
-      {authLoading && <div className="data-loading">Проверка авторизации…</div>}
-      {!authLoading && dataLoading && <div className="data-loading">Загрузка таблицы…</div>}
-      {!authLoading && !dataLoading && (
-      <WagonsTable
-        data={data}
-        columnFilters={columnFilters}
-        onFilterChange={handleFilterChange}
-        onResetFilters={() => setColumnFilters({})}
-        onOpenComment={openModal}
-        visibleColumnIds={visibleColumnIds}
-        onVisibilityChange={handleVisibilityChange}
-      />
+      ) : (
+        /* ── Вкладки Активные / Архив ── */
+        <>
+          {settingsError && <div className="settings-error">{settingsError}</div>}
+          {dataError && (
+            <div className="data-error">
+              {dataError}
+              <button type="button" className="retry-btn" onClick={() => fetchData()}>
+                Повторить
+              </button>
+            </div>
+          )}
+          {authLoading && <div className="data-loading">Проверка авторизации…</div>}
+          {!authLoading && dataLoading && <div className="data-loading">Загрузка таблицы…</div>}
+          {!authLoading && !dataLoading && (
+            <WagonsTable
+              data={data}
+              columnFilters={columnFilters}
+              onFilterChange={handleFilterChange}
+              onResetFilters={() => setColumnFilters({})}
+              onOpenComment={openModal}
+              visibleColumnIds={visibleColumnIds}
+              onVisibilityChange={handleVisibilityChange}
+            />
+          )}
+        </>
       )}
 
       {isModalOpen && selectedWagon && (
