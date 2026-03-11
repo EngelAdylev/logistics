@@ -159,9 +159,9 @@ def list_operations(
     rows = db.execute(
         text(f"""
             SELECT
-                d._id                                      AS id,
+                d._id::uuid                                AS id,
                 d.flight_id                                AS trip_id,
-                d.date_time_of_operation                   AS operation_datetime,
+                d.date_time_of_operation::timestamptz      AS operation_datetime,
                 d.operation_code_railway_carriage          AS operation_code,
                 oc.name                                    AS operation_name,
                 d.station_code_performing_operation        AS station_code,
