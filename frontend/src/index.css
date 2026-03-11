@@ -147,6 +147,9 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .rebuild-btn:hover:not(:disabled) { background: #fde68a; }
 .rebuild-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 .rebuild-result { font-size: 0.875rem; color: #475569; }
+.rebuild-result--error { color: #dc2626; }
+.rebuild-btn--v2 { background: #ede9fe; color: #4c1d95; border-color: #c4b5fd; }
+.rebuild-btn--v2:hover:not(:disabled) { background: #ddd6fe; }
 .rebuild-confirm .rebuild-warning { margin: 12px 0; padding: 12px; background: #fef9c3; border-radius: 8px; font-size: 0.9rem; color: #713f12; }
 
 /* --- Таблица вагонов: группировка и фильтры --- */

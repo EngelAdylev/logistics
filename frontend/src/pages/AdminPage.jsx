@@ -5,6 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 const REBUILD_WARNING =
   'Использовать только при необходимости пересчёта витрины после изменений логики или исправления данных. Комментарии не удаляются.';
 
+const SYNC_V2_WARNING =
+  'Запустит полную синхронизацию иерархической модели (Матрёшка): свяжет строки dislocation с рейсами, обновит денормализованные поля и статусы. Операция идемпотентна — безопасно запускать повторно.';
+
 export default function AdminPage() {
   const { loading: authLoading } = useAuth();
   const [users, setUsers] = useState([]);
@@ -17,6 +20,10 @@ export default function AdminPage() {
   const [rebuildConfirmOpen, setRebuildConfirmOpen] = useState(false);
   const [rebuildLoading, setRebuildLoading] = useState(false);
   const [rebuildResult, setRebuildResult] = useState(null);
+  const [syncV2ConfirmOpen, setSyncV2ConfirmOpen] = useState(false);
+  const [syncV2Loading, setSyncV2Loading] = useState(false);
+  const [syncV2Result, setSyncV2Result] = useState(null);
+  const [syncV2Error, setSyncV2Error] = useState(null);
 
   const fetchUsers = async () => {
     setUsersError(null);
@@ -53,6 +60,21 @@ export default function AdminPage() {
       setError('Не удалось выполнить полную пересборку.');
     } finally {
       setRebuildLoading(false);
+    }
+  };
+
+  const handleSyncV2 = async () => {
+    setSyncV2ConfirmOpen(false);
+    setSyncV2Loading(true);
+    setSyncV2Result(null);
+    setSyncV2Error(null);
+    try {
+      const res = await api.post('/v2/sync');
+      setSyncV2Result(res.data);
+    } catch (e) {
+      setSyncV2Error('Не удалось выполнить синхронизацию Матрёшки.');
+    } finally {
+      setSyncV2Loading(false);
     }
   };
 
@@ -105,6 +127,24 @@ export default function AdminPage() {
           </span>
         )}
       </div>
+
+      <div className="admin-toolbar">
+        <button
+          type="button"
+          className="rebuild-btn rebuild-btn--v2"
+          onClick={() => setSyncV2ConfirmOpen(true)}
+          disabled={syncV2Loading}
+        >
+          {syncV2Loading ? 'Синхронизация…' : 'Синхронизация Матрёшки (/v2/sync)'}
+        </button>
+        {syncV2Result && (
+          <span className="rebuild-result">
+            Вагонов: +{syncV2Result.wagons_created} / ~{syncV2Result.wagons_updated} · Рейсов: +{syncV2Result.trips_created} / ~{syncV2Result.trips_updated} · Операций привязано: {syncV2Result.operations_inserted} · Статус: {syncV2Result.status}
+          </span>
+        )}
+        {syncV2Error && <span className="rebuild-result rebuild-result--error">{syncV2Error}</span>}
+      </div>
+
       {rebuildConfirmOpen && (
         <div className="modal-overlay" onClick={() => setRebuildConfirmOpen(false)} role="dialog">
           <div className="modal-content rebuild-confirm" onClick={(e) => e.stopPropagation()}>
@@ -116,6 +156,23 @@ export default function AdminPage() {
               </button>
               <button type="button" className="save-btn" onClick={handleRebuild} disabled={rebuildLoading}>
                 Выполнить пересборку
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {syncV2ConfirmOpen && (
+        <div className="modal-overlay" onClick={() => setSyncV2ConfirmOpen(false)} role="dialog">
+          <div className="modal-content rebuild-confirm" onClick={(e) => e.stopPropagation()}>
+            <h3>Синхронизация Матрёшки</h3>
+            <p className="rebuild-warning">{SYNC_V2_WARNING}</p>
+            <div className="modal-actions">
+              <button type="button" className="cancel-btn" onClick={() => setSyncV2ConfirmOpen(false)}>
+                Отмена
+              </button>
+              <button type="button" className="save-btn" onClick={handleSyncV2} disabled={syncV2Loading}>
+                Запустить синхронизацию
               </button>
             </div>
           </div>
