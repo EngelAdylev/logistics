@@ -99,6 +99,16 @@ def sync_new_model(db: Session) -> dict:
     }
 
     try:
+        # Диагностика: проверяем тип колонки dislocation.flight_start_date
+        try:
+            col_type = db.execute(text("""
+                SELECT data_type FROM information_schema.columns
+                WHERE table_name = 'dislocation' AND column_name = 'flight_start_date'
+            """)).scalar()
+            logger.info("sync_new_model: dislocation.flight_start_date type=%s", col_type)
+        except Exception as diag_e:
+            logger.warning("sync_new_model: could not check column type: %s", diag_e)
+
         # Шаг 1. Получаем qualifying пары
         qualifying_pairs = _fetch_qualifying_pairs(db)
         if not qualifying_pairs:
@@ -134,14 +144,16 @@ def sync_new_model(db: Session) -> dict:
         db.flush()
 
         # Шаг 3. Batch UPDATE: проставляем dislocation.flight_id для всех необработанных строк
-        # Это ключевой шаг по ТЗ — вместо копирования данных в отдельную таблицу
+        # Явный каст через ::timestamptz решает проблему несовместимости типов:
+        # dislocation.flight_start_date может быть TEXT/TIMESTAMP/TIMESTAMPTZ,
+        # wagon_trips.flight_start_date — всегда TIMESTAMPTZ.
         link_result = db.execute(text("""
             UPDATE dislocation d
             SET flight_id = wt.id
             FROM wagon_trips wt
             JOIN wagons w ON wt.wagon_id = w.id
             WHERE d.railway_carriage_number = w.railway_carriage_number
-              AND d.flight_start_date IS NOT DISTINCT FROM wt.flight_start_date
+              AND d.flight_start_date::timestamptz IS NOT DISTINCT FROM wt.flight_start_date
               AND d.flight_id IS NULL
         """))
         stats["operations_inserted"] = link_result.rowcount
