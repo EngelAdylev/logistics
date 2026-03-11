@@ -76,6 +76,7 @@ export default function WagonRow({
                 <thead>
                   <tr>
                     <th style={{ width: 32 }} />
+                    <th style={{ width: 70 }}>№ рейса</th>
                     <th>Дата рейса</th>
                     <th>Маршрут</th>
                     <th>Поезд</th>

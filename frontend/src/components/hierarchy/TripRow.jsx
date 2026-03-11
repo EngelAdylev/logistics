@@ -41,6 +41,13 @@ export default function TripRow({ trip, operations, operationsLoading, onExpand,
           </button>
         </td>
 
+        {/* Номер рейса */}
+        <td className="h-trip-number">
+          {trip.flight_number != null
+            ? <span className="h-flight-number">№{trip.flight_number}</span>
+            : <span className="h-flight-number h-flight-number--empty">—</span>}
+        </td>
+
         {/* Дата старта рейса */}
         <td className="h-trip-date">{formatDate(trip.flight_start_date)}</td>
 
@@ -88,7 +95,7 @@ export default function TripRow({ trip, operations, operationsLoading, onExpand,
       {isExpanded && (
         <tr className="h-ops-row">
           <td />
-          <td colSpan={6} className="h-ops-cell">
+          <td colSpan={7} className="h-ops-cell">
             <OperationsTable operations={operations} loading={operationsLoading} />
           </td>
         </tr>

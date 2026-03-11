@@ -296,6 +296,18 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-trip-row--expanded > td { background: #fefce8; }
 .h-trip-row:hover > td { background: #f8fafc; }
 .h-trip-indent { width: 32px; text-align: center; }
+.h-trip-number { white-space: nowrap; }
+.h-flight-number {
+  display: inline-block;
+  background: #1e40af;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.3px;
+}
+.h-flight-number--empty { background: #cbd5e1; color: #64748b; }
 .h-trip-date { white-space: nowrap; color: #374151; }
 .h-trip-route { min-width: 160px; }
 .h-route-arrow { color: #9ca3af; }
