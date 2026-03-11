@@ -9,6 +9,7 @@ from config import get_settings
 from auth import get_current_user, require_role, hash_password
 from routers.auth_router import router as auth_router
 from routers.table_settings_router import router as table_settings_router
+from routers.hierarchy_router import router as hierarchy_router
 from schemas import CreateUserRequest, TrackingWagonTableRowOut
 from wagon_table_service import get_table_wagons
 
@@ -29,6 +30,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(table_settings_router)
+app.include_router(hierarchy_router)
 
 
 @app.on_event("startup")
@@ -71,6 +73,16 @@ def startup_event():
                 ("container_number10", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number10 TEXT"),
                 ("container_number11", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number11 TEXT"),
                 ("container_number12", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number12 TEXT"),
+                # Иерархическая модель v2 — прямая ссылка на рейс
+                ("flight_id_col", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS flight_id UUID"),
+                ("flight_id_idx", "CREATE INDEX IF NOT EXISTS idx_dislocation_flight_id ON dislocation(flight_id, date_time_of_operation DESC)"),
+                # Мастер-данные вагона
+                ("wagons_owner", "ALTER TABLE wagons ADD COLUMN IF NOT EXISTS owner TEXT"),
+                ("wagons_type", "ALTER TABLE wagons ADD COLUMN IF NOT EXISTS type TEXT"),
+                ("wagons_last_repair_date", "ALTER TABLE wagons ADD COLUMN IF NOT EXISTS last_repair_date TIMESTAMPTZ"),
+                ("wagons_next_repair_date", "ALTER TABLE wagons ADD COLUMN IF NOT EXISTS next_repair_date TIMESTAMPTZ"),
+                # Порядковый номер рейса
+                ("wagon_trips_flight_number", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS flight_number INTEGER"),
             ]:
                 try:
                     conn.execute(text(sql))

@@ -238,3 +238,128 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .retry-btn { padding: 6px 14px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
 .retry-btn:hover { background: #b91c1c; }
 .data-loading { padding: 24px; text-align: center; color: #64748b; font-size: 1rem; }
+
+/* ─── Иерархический вид "Матрёшка" ──────────────────────────────────────── */
+
+/* Верхний уровень — таблица вагонов */
+.h-view-wrapper { margin-top: 8px; }
+.h-view-meta { font-size: 0.85rem; color: #64748b; margin-bottom: 10px; }
+
+.h-wagon-table { width: 100%; }
+.h-wagon-row { background: #fff; }
+.h-wagon-row--expanded > td { background: #f0f9ff; }
+.h-wagon-row:hover > td { background: #f8fafc; }
+.h-wagon-row--expanded:hover > td { background: #e0f2fe; }
+
+.h-wagon-expand { width: 32px; padding: 8px 4px; text-align: center; }
+.h-wagon-number { padding: 10px 12px; font-size: 0.95rem; }
+.h-wagon-status { padding: 8px 12px; }
+.h-wagon-trips { padding: 8px 12px; font-size: 0.875rem; color: #475569; }
+.h-wagon-active-trips { color: #16a34a; font-size: 0.8rem; }
+.h-wagon-actions { padding: 6px 12px; }
+
+/* Кнопка expand */
+.h-expand-btn {
+  background: none; border: 1px solid transparent; padding: 3px 4px;
+  cursor: pointer; color: #64748b; border-radius: 4px;
+  display: inline-flex; align-items: center;
+}
+.h-expand-btn:hover { background: #e2e8f0; border-color: #cbd5e1; color: #1e293b; }
+.h-expand-btn--wagon { padding: 4px 5px; }
+
+/* Кнопка комментариев */
+.h-comment-icon-btn {
+  background: #f1f5f9; border: 1px solid var(--border-color); padding: 4px 6px;
+  cursor: pointer; color: #475569; border-radius: 4px; display: inline-flex;
+}
+.h-comment-icon-btn:hover { background: #e2e8f0; color: #1e293b; }
+
+/* Статус-бейдж */
+.h-status-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.78rem; font-weight: 600;
+}
+.h-status-active { background: #dcfce7; color: #16a34a; }
+.h-status-archived { background: #f1f5f9; color: #64748b; }
+
+/* Второй уровень — рейсы (вложенная таблица) */
+.h-trips-row > td { padding: 0; }
+.h-trips-cell { padding: 0 0 0 40px !important; background: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+.h-trips-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.h-trips-table th {
+  padding: 7px 10px; background: #f1f5f9; color: #64748b; font-weight: 600;
+  border-bottom: 1px solid var(--border-color); text-align: left;
+}
+.h-trips-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.h-trips-table tr:last-child td { border-bottom: none; }
+
+.h-trip-row { background: #fff; }
+.h-trip-row--expanded > td { background: #fefce8; }
+.h-trip-row:hover > td { background: #f8fafc; }
+.h-trip-indent { width: 32px; text-align: center; }
+.h-trip-date { white-space: nowrap; color: #374151; }
+.h-trip-route { min-width: 160px; }
+.h-route-arrow { color: #9ca3af; }
+.h-trip-train { white-space: nowrap; }
+.h-train-index { color: #6b7280; font-size: 0.8em; }
+.h-trip-lastop { min-width: 140px; }
+.h-lastop-station { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
+.h-trip-lastdt { white-space: nowrap; font-size: 0.85rem; color: #374151; }
+.h-trip-status { white-space: nowrap; }
+
+/* Третий уровень — операции */
+.h-ops-row > td { padding: 0; }
+.h-ops-cell { padding: 0 0 0 80px !important; background: #fafaf9; border-bottom: 1px solid #e5e7eb; }
+.h-ops-wrapper { overflow-x: auto; }
+.h-ops-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.h-ops-table th {
+  padding: 6px 10px; background: #f9fafb; color: #6b7280; font-weight: 600;
+  border-bottom: 1px solid #e5e7eb; text-align: left; white-space: nowrap;
+}
+.h-ops-table td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+.h-ops-table tr:last-child td { border-bottom: none; }
+.h-ops-date { white-space: nowrap; color: #374151; }
+.h-ops-code { color: #9ca3af; font-size: 0.8em; }
+.h-ops-loading, .h-ops-empty { padding: 12px; color: #9ca3af; font-size: 0.875rem; text-align: center; }
+
+/* Пагинация */
+.h-pagination { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.h-page-btn {
+  padding: 7px 14px; background: #f1f5f9; border: 1px solid var(--border-color);
+  border-radius: 8px; cursor: pointer; font-size: 0.875rem;
+}
+.h-page-btn:hover:not(:disabled) { background: #e2e8f0; }
+.h-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.h-page-info { font-size: 0.875rem; color: #475569; }
+
+/* Комментарии */
+.h-comments-modal { max-width: 560px; }
+.h-trip-label { font-size: 0.875rem; color: #475569; margin-bottom: 12px; }
+.h-comments-empty { font-size: 0.875rem; color: #9ca3af; padding: 8px 0; text-align: center; }
+.h-comment-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.h-comment-actions { display: flex; gap: 4px; }
+.h-comment-btn {
+  background: none; border: 1px solid transparent; padding: 2px 4px; cursor: pointer;
+  font-size: 0.85rem; border-radius: 4px; color: #64748b;
+}
+.h-comment-btn:hover, .h-comment-btn.active { background: #f1f5f9; border-color: #cbd5e1; }
+.h-comment-edit textarea { width: 100%; min-height: 60px; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; box-sizing: border-box; }
+.h-comment-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* История изменений */
+.h-history-block { margin-top: 8px; padding: 8px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+.h-history-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f1f5f9; font-size: 0.8rem; }
+.h-history-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.h-history-meta { color: #64748b; display: block; margin-bottom: 4px; }
+.h-history-diff { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.h-history-old { color: #dc2626; text-decoration: line-through; font-size: 0.8em; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.h-history-new { color: #16a34a; }
+
+/* Фильтр активные/архивные/все в иерархии */
+.h-filter-toggle { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; width: fit-content; }
+.h-filter-btn {
+  padding: 7px 18px; background: #f8fafc; border: none; cursor: pointer;
+  font-size: 0.875rem; color: #475569; border-right: 1px solid var(--border-color);
+}
+.h-filter-btn:last-child { border-right: none; }
+.h-filter-btn:hover:not(.h-filter-btn--active) { background: #f1f5f9; }
+.h-filter-btn--active { background: var(--active-blue); color: white; font-weight: 600; }

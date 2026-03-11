@@ -312,7 +312,23 @@ def rebuild_tracking_from_dislocation_merge():
         db.close()
     return result
 
+def sync_all():
+    """Запускает синхронизацию старой (tracking_wagons) и новой (wagons/trips/operations) моделей."""
+    sync_dislocation_to_tracking()
+    try:
+        from database import SessionLocal as _SessionLocal
+        from services.sync_service_v2 import sync_new_model_incremental
+        _db = _SessionLocal()
+        try:
+            stats = sync_new_model_incremental(_db)
+            logger.info("sync_new_model_incremental: %s", stats)
+        finally:
+            _db.close()
+    except Exception as e:
+        logger.warning("sync_new_model_incremental failed (non-critical): %s", e)
+
+
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(sync_dislocation_to_tracking, 'interval', minutes=10)
+    scheduler.add_job(sync_all, 'interval', minutes=10)
     scheduler.start()
