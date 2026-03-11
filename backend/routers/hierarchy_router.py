@@ -151,14 +151,14 @@ def list_operations(
     if not trip:
         raise HTTPException(status_code=404, detail={"error": "TRIP_NOT_FOUND", "message": "Рейс не найден"})
 
-    total = db.execute(
-        text("SELECT COUNT(*) FROM dislocation WHERE flight_id = :tid"),
-        {"tid": trip_id},
-    ).scalar() or 0
-
-    rows = db.execute(
-        text(f"""
-            SELECT
+    # Дедупликация по (дата, код операции, станция) — в dislocation могут быть дубли
+    _DEDUP_CTE = f"""
+        WITH deduped AS (
+            SELECT DISTINCT ON (
+                d.date_time_of_operation,
+                d.operation_code_railway_carriage,
+                d.station_code_performing_operation
+            )
                 d._id::uuid                                AS id,
                 d.flight_id                                AS trip_id,
                 d.date_time_of_operation::timestamptz      AS operation_datetime,
@@ -177,7 +177,22 @@ def list_operations(
             LEFT JOIN railway_station rs
                 ON d.station_code_performing_operation::text = rs.esr_code
             WHERE d.flight_id = :tid
-            ORDER BY d.date_time_of_operation::timestamptz DESC
+            ORDER BY
+                d.date_time_of_operation,
+                d.operation_code_railway_carriage,
+                d.station_code_performing_operation
+        )
+    """
+
+    total = db.execute(
+        text(_DEDUP_CTE + "SELECT COUNT(*) FROM deduped"),
+        {"tid": trip_id},
+    ).scalar() or 0
+
+    rows = db.execute(
+        text(_DEDUP_CTE + """
+            SELECT * FROM deduped
+            ORDER BY operation_datetime DESC
             OFFSET :offset LIMIT :limit
         """),
         {"tid": trip_id, "offset": (page - 1) * limit, "limit": limit},
