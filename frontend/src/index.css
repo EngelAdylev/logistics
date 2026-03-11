@@ -103,7 +103,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .comment-btn { background: #f1f5f9; border: 1px solid var(--border-color); padding: 5px; cursor: pointer; border-radius: 4px; }
 
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1200;
 }
 
 .modal-content {
@@ -378,3 +378,72 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-filter-btn:last-child { border-right: none; }
 .h-filter-btn:hover:not(.h-filter-btn--active) { background: #f1f5f9; }
 .h-filter-btn--active { background: var(--active-blue); color: white; font-weight: 600; }
+
+/* ─── Модальные окна матрёшки ────────────────────────────────────────────── */
+
+/* Оверлей первого уровня (рейсы) */
+.h-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+
+/* Оверлей второго уровня (операции) — перекрывает первый */
+.h-modal-overlay--ops {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1100;
+}
+
+/* Тело модального окна */
+.h-modal {
+  background: white; border-radius: 12px;
+  display: flex; flex-direction: column;
+  max-height: 85vh; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.h-trips-modal { width: 92%; max-width: 960px; }
+.h-ops-modal   { width: 92%; max-width: 880px; }
+
+/* Шапка модального окна */
+.h-modal-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;
+  gap: 12px;
+}
+.h-modal-title     { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+.h-modal-subtitle  { font-size: 0.83rem; color: #64748b; margin-top: 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h-modal-tripcount { color: #64748b; }
+.h-modal-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* Кнопка закрытия */
+.h-modal-close {
+  background: none; border: none; cursor: pointer; color: #64748b; padding: 4px;
+  border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+}
+.h-modal-close:hover { background: #f1f5f9; color: #1e293b; }
+
+/* Тело с прокруткой */
+.h-modal-body { overflow-y: auto; padding: 0; flex: 1; }
+
+/* Таблица внутри модального окна */
+.h-modal-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.h-modal-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: #f8fafc; padding: 9px 12px; text-align: left;
+  border-bottom: 2px solid var(--border-color);
+  font-weight: 600; color: #374151; white-space: nowrap;
+}
+.h-modal-table tbody td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.h-modal-table tbody tr:last-child td { border-bottom: none; }
+
+/* Кликабельная строка рейса */
+.h-modal-trip-row { cursor: pointer; transition: background 0.1s; }
+.h-modal-trip-row:hover td { background: #eff6ff; }
+
+/* Кликабельная строка вагона */
+.h-wagon-clickrow { cursor: pointer; }
+.h-wagon-clickrow:hover td { background: #eff6ff; }
+
+/* Ops table внутри модального окна: sticky заголовок */
+.h-modal-body .h-ops-table th {
+  position: sticky; top: 0; z-index: 1; background: #f9fafb;
+}

@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
+import WagonTripsModal from './WagonTripsModal';
 
 export default function HierarchyView({ isActive }) {
   const [wagons, setWagons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // page state
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const LIMIT = 50;
 
-  // expanded state
-  const [expandedWagonIds, setExpandedWagonIds] = useState(new Set());
-  const [tripsByWagonId, setTripsByWagonId] = useState(new Map());
-  const [tripsLoading, setTripsLoading] = useState(new Map());
-  const [expandedTripIds, setExpandedTripIds] = useState(new Set());
-  const [operationsByTripId, setOperationsByTripId] = useState(new Map());
-  const [opsLoading, setOpsLoading] = useState(new Map());
+  // Выбранный вагон → открывает модалку рейсов
+  const [selectedWagon, setSelectedWagon] = useState(null);
 
   const fetchWagons = useCallback(async (p = 1) => {
     setLoading(true);
@@ -32,10 +27,7 @@ export default function HierarchyView({ isActive }) {
       setTotal(res.data.total || 0);
       setTotalPages(res.data.pages || 1);
       setPage(p);
-      // Сбрасываем раскрытые элементы при смене страницы
-      setExpandedWagonIds(new Set());
-      setExpandedTripIds(new Set());
-    } catch (e) {
+    } catch {
       setError('Не удалось загрузить список вагонов.');
       setWagons([]);
     } finally {
@@ -47,54 +39,6 @@ export default function HierarchyView({ isActive }) {
     setPage(1);
     fetchWagons(1);
   }, [isActive]);
-
-  // --- Раскрытие вагона: загружаем рейсы ---
-  const handleWagonExpand = async (wagonId) => {
-    const next = new Set(expandedWagonIds);
-    if (next.has(wagonId)) {
-      next.delete(wagonId);
-      setExpandedWagonIds(next);
-      return;
-    }
-    next.add(wagonId);
-    setExpandedWagonIds(next);
-
-    if (tripsByWagonId.has(wagonId)) return; // уже загружены
-
-    setTripsLoading((prev) => new Map(prev).set(wagonId, true));
-    try {
-      const res = await api.get(`/v2/wagons/${wagonId}/trips?include_archived=true&limit=200`);
-      setTripsByWagonId((prev) => new Map(prev).set(wagonId, res.data.items || []));
-    } catch {
-      setTripsByWagonId((prev) => new Map(prev).set(wagonId, []));
-    } finally {
-      setTripsLoading((prev) => { const m = new Map(prev); m.delete(wagonId); return m; });
-    }
-  };
-
-  // --- Раскрытие рейса: загружаем операции ---
-  const handleTripExpand = async (tripId) => {
-    const next = new Set(expandedTripIds);
-    if (next.has(tripId)) {
-      next.delete(tripId);
-      setExpandedTripIds(next);
-      return;
-    }
-    next.add(tripId);
-    setExpandedTripIds(next);
-
-    if (operationsByTripId.has(tripId)) return; // уже загружены
-
-    setOpsLoading((prev) => new Map(prev).set(tripId, true));
-    try {
-      const res = await api.get(`/v2/trips/${tripId}/operations?limit=500`);
-      setOperationsByTripId((prev) => new Map(prev).set(tripId, res.data.items || []));
-    } catch {
-      setOperationsByTripId((prev) => new Map(prev).set(tripId, []));
-    } finally {
-      setOpsLoading((prev) => { const m = new Map(prev); m.delete(tripId); return m; });
-    }
-  };
 
   if (loading) return <div className="data-loading">Загрузка вагонов…</div>;
 
@@ -118,17 +62,18 @@ export default function HierarchyView({ isActive }) {
       <div className="h-view-meta">
         Вагонов: {total}
         {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
+        <span style={{ marginLeft: 12, color: '#94a3b8', fontSize: '0.8rem' }}>
+          Нажмите на вагон для просмотра рейсов
+        </span>
       </div>
 
       <div className="table-scroll">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
-              <th style={{ width: 32 }} />
               <th>Номер вагона</th>
               <th>Статус</th>
               <th>Рейсы</th>
-              <th style={{ width: 48 }} />
             </tr>
           </thead>
           <tbody>
@@ -136,14 +81,7 @@ export default function HierarchyView({ isActive }) {
               <WagonRow
                 key={wagon.id}
                 wagon={wagon}
-                trips={tripsByWagonId.get(wagon.id)}
-                tripsLoading={tripsLoading.has(wagon.id)}
-                operations={operationsByTripId}
-                opsLoading={opsLoading}
-                expandedTripIds={expandedTripIds}
-                isExpanded={expandedWagonIds.has(wagon.id)}
-                onWagonExpand={handleWagonExpand}
-                onTripExpand={handleTripExpand}
+                onSelect={setSelectedWagon}
               />
             ))}
           </tbody>
@@ -171,6 +109,14 @@ export default function HierarchyView({ isActive }) {
             Вперёд →
           </button>
         </div>
+      )}
+
+      {/* Модалка рейсов */}
+      {selectedWagon && (
+        <WagonTripsModal
+          wagon={selectedWagon}
+          onClose={() => setSelectedWagon(null)}
+        />
       )}
     </div>
   );
