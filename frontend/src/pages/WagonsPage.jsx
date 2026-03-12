@@ -24,6 +24,7 @@ export default function WagonsPage() {
   const [columnFilters, setColumnFilters] = useState({});
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_COLUMN_IDS);
   const [settingsError, setSettingsError] = useState('');
+  const [wagonCounts, setWagonCounts] = useState({ active: null, archived: null });
 
   const fetchData = async (keepDataOnError = false) => {
     setDataError(null);
@@ -63,6 +64,19 @@ export default function WagonsPage() {
     if (authLoading) return;
     fetchData();
   }, [tab, authLoading]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    const loadSummary = async () => {
+      try {
+        const res = await api.get('/wagons/summary');
+        setWagonCounts(res.data);
+      } catch {
+        // не критично
+      }
+    };
+    loadSummary();
+  }, [authLoading]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -249,6 +263,7 @@ export default function WagonsPage() {
               onOpenComment={openModal}
               visibleColumnIds={visibleColumnIds}
               onVisibilityChange={handleVisibilityChange}
+              wagonCounts={wagonCounts}
             />
           )}
         </>

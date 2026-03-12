@@ -20,7 +20,7 @@ function LastCommentCell({ value }) {
   );
 }
 
-export default function WagonsTable({ data, columnFilters, onFilterChange, onResetFilters, onOpenComment, visibleColumnIds, onVisibilityChange }) {
+export default function WagonsTable({ data, columnFilters, onFilterChange, onResetFilters, onOpenComment, visibleColumnIds, onVisibilityChange, wagonCounts }) {
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
 
@@ -97,6 +97,16 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
           visibleColumnIds={visibleColumnIds}
           onVisibilityChange={onVisibilityChange}
         />
+        {wagonCounts && (
+          <div className="wagon-counts">
+            <span className="wagon-count wagon-count--active" title="Активных вагонов">
+              Активных: {wagonCounts.active ?? '…'}
+            </span>
+            <span className="wagon-count wagon-count--archived" title="Архивных вагонов">
+              Архивных: {wagonCounts.archived ?? '…'}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="table-scroll">

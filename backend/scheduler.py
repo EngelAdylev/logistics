@@ -167,22 +167,25 @@ def sync_dislocation_to_tracking():
                 ).first()
                 row_dt = row.get("date_time_of_operation")
 
+                row_ts = _normalize_dt(row_dt)
+                entry_ts = _normalize_dt(track_entry.last_operation_date if track_entry else None)
+                parsed_row_dt = _parse_flight_start_date(row_dt)
                 if not track_entry:
                     db.add(TrackingWagon(
                         railway_carriage_number=row["railway_carriage_number"],
                         flight_start_date=flight_dt,
                         current_station_name=row.get("st_name"),
                         current_operation_name=row.get("op_name"),
-                        last_operation_date=row_dt,
+                        last_operation_date=parsed_row_dt,
                         is_active=not is_unloaded,
                     ))
                     stats["created"] += 1
                     if is_unloaded:
                         stats["archived"] += 1
-                elif track_entry.last_operation_date is None or (row_dt and row_dt > track_entry.last_operation_date):
+                elif entry_ts is None or (row_ts is not None and row_ts > entry_ts):
                     track_entry.current_station_name = row.get("st_name")
                     track_entry.current_operation_name = row.get("op_name")
-                    track_entry.last_operation_date = row_dt
+                    track_entry.last_operation_date = parsed_row_dt
                     track_entry.is_active = not is_unloaded
                     stats["updated"] += 1
                     if is_unloaded:

@@ -113,6 +113,16 @@ def startup_event():
 # --- ЭНДПОИНТЫ ДЛЯ ВАГОНОВ (требуют авторизации user/admin) ---
 
 
+@app.get("/wagons/summary")
+def get_wagons_summary(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    active = db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == True).count()
+    archived = db.query(models.TrackingWagon).filter(models.TrackingWagon.is_active == False).count()
+    return {"active": active, "archived": archived}
+
+
 @app.get("/wagons/active", response_model=list[TrackingWagonTableRowOut])
 def get_active_wagons(
     db: Session = Depends(get_db),

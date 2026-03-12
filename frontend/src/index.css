@@ -155,6 +155,13 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 /* --- Таблица вагонов: группировка и фильтры --- */
 .wagons-table-wrapper { margin-top: 12px; }
 .table-toolbar { margin-bottom: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.wagon-counts { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.wagon-count {
+  font-size: 0.82rem; font-weight: 600; padding: 4px 10px;
+  border-radius: 12px; border: 1px solid transparent;
+}
+.wagon-count--active   { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.wagon-count--archived { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
 .group-toggle {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 14px; background: #f1f5f9; border: 1px solid var(--border-color);
