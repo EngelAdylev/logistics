@@ -59,6 +59,7 @@ class TrackingWagon(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     railway_carriage_number = Column(Text, nullable=False, index=True)
     flight_start_date = Column(DateTime(timezone=True), nullable=False)
+    departure_station_code = Column(Text)  # для нормализованного ключа (вагон, дата, станция)
     current_station_name = Column(Text)
     current_operation_name = Column(Text)
     last_operation_date = Column(DateTime(timezone=True))

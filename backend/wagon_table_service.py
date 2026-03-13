@@ -13,11 +13,13 @@ from schemas import TrackingWagonTableRowOut
 logger = logging.getLogger(__name__)
 
 
-# Запрос с расширенными полями из dislocation
+# Запрос с расширенными полями из dislocation. Ключ: (вагон, дата, станция)
 QUERY_FULL = text("""
     WITH LastEvents AS (
         SELECT
             d.railway_carriage_number,
+            ((d.flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+            TRIM(COALESCE(d.flight_start_station_code::text, '')) AS dep_st,
             d.flight_start_date,
             d.number_train,
             d.train_index,
@@ -44,7 +46,9 @@ QUERY_FULL = text("""
                 NULLIF(TRIM(COALESCE(d.container_number12,'')),'')
             )) as container_numbers,
             ROW_NUMBER() OVER (
-                PARTITION BY d.railway_carriage_number, d.flight_start_date::timestamptz
+                PARTITION BY d.railway_carriage_number,
+                    ((d.flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                    TRIM(COALESCE(d.flight_start_station_code::text, ''))
                 ORDER BY d.date_time_of_operation::timestamptz DESC NULLS LAST
             ) as rn
         FROM dislocation d
@@ -80,13 +84,14 @@ QUERY_FULL = text("""
         le.departure_station_name
     FROM tracking_wagons tw
     LEFT JOIN (
-        SELECT railway_carriage_number, flight_start_date::timestamptz AS fs_ts,
+        SELECT railway_carriage_number, bus_date, dep_st,
             number_train, train_index, station_name,
             destination_station_name, departure_station_name, waybill_number, type_railway_carriage,
             owners_administration, remaining_mileage, remaining_distance, container_numbers
         FROM LastEvents WHERE rn = 1
     ) le ON tw.railway_carriage_number = le.railway_carriage_number
-        AND tw.flight_start_date IS NOT DISTINCT FROM le.fs_ts
+        AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
+        AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
     LEFT JOIN (
         SELECT tracking_id, last_comment_text
         FROM LastComments WHERE rn = 1

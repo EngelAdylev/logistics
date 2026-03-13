@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import re
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
@@ -36,6 +36,30 @@ def _normalize_dt(v):
         return datetime.fromisoformat(_fix_dt_str(s)).timestamp()
     except (ValueError, TypeError):
         return None
+
+
+def _business_date(dt) -> date | None:
+    """Календарная дата в МСК (UTC+3) для нормализованного ключа: день/месяц/год."""
+    if dt is None:
+        return None
+    if hasattr(dt, "date"):
+        d = dt
+    else:
+        d = _parse_flight_start_date(dt)
+    if d is None:
+        return None
+    if getattr(d, "tzinfo", None) is None:
+        d = d.replace(tzinfo=timezone.utc)
+    else:
+        d = d.astimezone(timezone.utc)
+    return (d + timedelta(hours=3)).date()
+
+
+def _norm_station(v) -> str:
+    """Нормализация кода станции (trim, пустая строка для NULL)."""
+    if v is None:
+        return ""
+    return str(v).strip()
 
 
 def _parse_flight_start_date(v):
@@ -143,58 +167,130 @@ def _fetch_qualifying_rows(db):
     return results
 
 
+def _fetch_qualifying_rows_tracking(db):
+    """
+    Для старой модели: одна строка на (вагон, дата, станция) — последняя операция в группе.
+    Ключ: railway_carriage_number, дата без времени, flight_start_station_code.
+    """
+    part = """
+        ROW_NUMBER() OVER (
+            PARTITION BY d.railway_carriage_number,
+                ((d.flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                TRIM(COALESCE(d.flight_start_station_code::text, ''))
+            ORDER BY d.date_time_of_operation::timestamptz DESC NULLS LAST
+        ) AS rn
+    """
+    base_cte_minimal = f"""
+        WITH LastEvents AS (
+            SELECT d.railway_carriage_number, d.flight_start_date, d.date_time_of_operation,
+                   d.operation_code_railway_carriage, d.flight_start_station_code,
+                   d.destination_station_code, d.remaining_distance,
+                   NULL::text as st_name, NULL::text as op_name, {part}
+            FROM dislocation d
+        )
+    """
+    base_cte_full = f"""
+        WITH LastEvents AS (
+            SELECT d.railway_carriage_number, d.flight_start_date, d.date_time_of_operation,
+                   d.operation_code_railway_carriage, d.flight_start_station_code,
+                   d.destination_station_code, d.remaining_distance,
+                   rs.name as st_name, oc.name as op_name, {part}
+            FROM dislocation d
+            LEFT JOIN railway_station rs ON d.station_code_performing_operation::text = rs.esr_code
+            LEFT JOIN operation_code oc ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
+        )
+    """
+    def _run(base_cte):
+        for q in [
+            base_cte + """
+                SELECT * FROM LastEvents WHERE rn = 1
+                  AND (TRIM(COALESCE(flight_start_station_code::text,'')) = '648400'
+                    OR TRIM(COALESCE(destination_station_code::text,'')) = '648400'
+                    OR TRIM(COALESCE(flight_start_station_code::text,'')) LIKE '%648400'
+                    OR TRIM(COALESCE(destination_station_code::text,'')) LIKE '%648400')
+                  AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) > 0
+            """,
+            base_cte + """
+                SELECT * FROM LastEvents WHERE rn = 1
+                  AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) > 0
+            """,
+            base_cte + " SELECT * FROM LastEvents WHERE rn = 1",
+        ]:
+            try:
+                r = db.execute(text(q)).mappings().all()
+                if r:
+                    return r
+            except Exception:
+                pass
+        return []
+
+    for base_cte in (base_cte_full, base_cte_minimal):
+        try:
+            r = _run(base_cte)
+            if r:
+                return r
+        except Exception as e:
+            logger.warning("_fetch_qualifying_rows_tracking: %s", e)
+    return []
+
+
 def sync_dislocation_to_tracking():
-    """Обычная синхронизация: подтягивает последние события из dislocation в tracking_wagons. Не удаляет данные."""
+    """Обычная синхронизация. Ключ записи: (вагон, дата без времени, станция отправления)."""
     stats = {"last_events": 0, "created": 0, "updated": 0, "archived": 0, "errors": 0}
     db = SessionLocal()
     try:
-        results = _fetch_qualifying_rows(db)
+        results = _fetch_qualifying_rows_tracking(db)
         qualifying_rows = len(results)
         stats["last_events"] = qualifying_rows
 
         active_before = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()
 
-        # Строим to_archive_keys ДО sync loop через ::timestamptz нормализацию в SQL.
-        # Берём ПОСЛЕДНЮЮ операцию per (wagon, normalized_trip_UTC). Если remaining=0 — в архив.
-        arch_epoch_rows = db.execute(text("""
+        # to_archive_keys: (вагон, дата, станция) с remaining=0
+        arch_rows = db.execute(text("""
             WITH nt AS (
                 SELECT railway_carriage_number,
-                       flight_start_date::timestamptz AS fs_ts,
-                       COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
-                       ) AS NUMERIC), 0) AS rem,
+                       ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                       TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                       COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) AS rem,
                        ROW_NUMBER() OVER (
-                           PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                           PARTITION BY railway_carriage_number,
+                               ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                               TRIM(COALESCE(flight_start_station_code::text, ''))
                            ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
                        ) AS rn
                 FROM dislocation
             )
-            SELECT railway_carriage_number, EXTRACT(EPOCH FROM fs_ts) AS fs_epoch
-            FROM nt WHERE rn = 1 AND rem <= 0
+            SELECT railway_carriage_number, bus_date, dep_st FROM nt WHERE rn = 1 AND rem <= 0
         """)).mappings().all()
-        to_archive_keys = {(str(r["railway_carriage_number"]), float(r["fs_epoch"])) for r in arch_epoch_rows if r["fs_epoch"] is not None}
+        to_archive_keys = {(str(r["railway_carriage_number"]), r["bus_date"], r["dep_st"] or "") for r in arch_rows}
 
-        # qualifying_keys для авто-архива (чтобы не архивировать вагоны которые ещё едут)
         qualifying_keys = set()
         for row in results:
-            ts = _normalize_dt(row.get("flight_start_date"))
-            if ts is not None:
-                qualifying_keys.add((str(row["railway_carriage_number"]), ts))
+            bus_d = _business_date(row.get("flight_start_date"))
+            if bus_d is not None:
+                qualifying_keys.add((str(row["railway_carriage_number"]), bus_d, _norm_station(row.get("flight_start_station_code"))))
 
-        # Sync loop: обновляем данные из qualifying_rows, ставим is_active=True.
-        # Пропускаем вагоны в to_archive_keys — они уже прибыли (remaining=0 по свежей операции).
+        def _find_track(wn, bd, dep):
+            tid = db.execute(text("""
+                SELECT id FROM tracking_wagons
+                WHERE railway_carriage_number = :wn
+                  AND ((flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = :bd
+                  AND TRIM(COALESCE(departure_station_code, '')) = :dep
+                ORDER BY flight_start_date ASC LIMIT 1
+            """), {"wn": wn, "bd": bd, "dep": dep}).scalar()
+            return db.query(TrackingWagon).filter(TrackingWagon.id == tid).first() if tid else None
+
         for row in results:
             try:
                 flight_dt = _parse_flight_start_date(row.get("flight_start_date"))
                 if flight_dt is None:
                     stats["errors"] += 1
                     continue
-                fs_ts = _normalize_dt(row.get("flight_start_date"))
-                if (str(row["railway_carriage_number"]), fs_ts) in to_archive_keys:
-                    continue  # рейс закрыт (remaining=0), не активируем
-                track_entry = db.query(TrackingWagon).filter(
-                    TrackingWagon.railway_carriage_number == row["railway_carriage_number"],
-                    TrackingWagon.flight_start_date == flight_dt,
-                ).first()
+                bus_d = _business_date(flight_dt)
+                dep_st = _norm_station(row.get("flight_start_station_code"))
+                if (str(row["railway_carriage_number"]), bus_d, dep_st) in to_archive_keys:
+                    continue
+                track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 row_dt_raw = row.get("date_time_of_operation")
                 row_dt = _parse_flight_start_date(row_dt_raw)
                 row_ts = _normalize_dt(row_dt_raw)
@@ -203,6 +299,7 @@ def sync_dislocation_to_tracking():
                     db.add(TrackingWagon(
                         railway_carriage_number=row["railway_carriage_number"],
                         flight_start_date=flight_dt,
+                        departure_station_code=dep_st if dep_st else None,
                         current_station_name=row.get("st_name"),
                         current_operation_name=row.get("op_name"),
                         last_operation_date=row_dt,
@@ -226,7 +323,7 @@ def sync_dislocation_to_tracking():
 
         db.flush()
 
-        # Условие 1: remaining_distance = 0 → архив (SQL, нормализует все varchar-форматы через ::timestamptz)
+        # Условие 1: remaining_distance = 0 → архив (по вагон, дата, станция)
         archived_rem = db.execute(text("""
             UPDATE tracking_wagons tw
             SET is_active = false
@@ -234,24 +331,26 @@ def sync_dislocation_to_tracking():
               AND EXISTS (
                   SELECT 1 FROM (
                       SELECT railway_carriage_number,
-                             flight_start_date::timestamptz AS fs_ts,
-                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
-                             ) AS NUMERIC), 0) AS rem,
+                             ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                             TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) AS rem,
                              ROW_NUMBER() OVER (
-                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 PARTITION BY railway_carriage_number,
+                                     ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                                     TRIM(COALESCE(flight_start_station_code::text, ''))
                                  ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
                              ) AS rn
                       FROM dislocation
                   ) le
-                  WHERE le.rn = 1
-                    AND le.rem <= 0
+                  WHERE le.rn = 1 AND le.rem <= 0
                     AND le.railway_carriage_number = tw.railway_carriage_number
-                    AND le.fs_ts = tw.flight_start_date
+                    AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
+                    AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
               )
         """)).rowcount
         stats["archived"] += archived_rem
 
-        # Восстанавливаем ошибочно заархивированные: remaining>0 И нет записи с remaining=0 для того же рейса
+        # Восстанавливаем ошибочно заархивированные: remaining>0 (по вагон, дата, станция)
         restored = db.execute(text("""
             UPDATE tracking_wagons tw
             SET is_active = true
@@ -259,36 +358,40 @@ def sync_dislocation_to_tracking():
               AND EXISTS (
                   SELECT 1 FROM (
                       SELECT railway_carriage_number,
-                             flight_start_date::timestamptz AS fs_ts,
-                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
-                             ) AS NUMERIC), 0) AS rem,
+                             ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                             TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) AS rem,
                              ROW_NUMBER() OVER (
-                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 PARTITION BY railway_carriage_number,
+                                     ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                                     TRIM(COALESCE(flight_start_station_code::text, ''))
                                  ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
                              ) AS rn
                       FROM dislocation
                   ) le
-                  WHERE le.rn = 1
-                    AND le.rem > 0
+                  WHERE le.rn = 1 AND le.rem > 0
                     AND le.railway_carriage_number = tw.railway_carriage_number
-                    AND le.fs_ts = tw.flight_start_date
+                    AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
+                    AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
               )
               AND NOT EXISTS (
                   SELECT 1 FROM (
                       SELECT railway_carriage_number,
-                             flight_start_date::timestamptz AS fs_ts,
-                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
-                             ) AS NUMERIC), 0) AS rem,
+                             ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                             TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) AS rem,
                              ROW_NUMBER() OVER (
-                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 PARTITION BY railway_carriage_number,
+                                     ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                                     TRIM(COALESCE(flight_start_station_code::text, ''))
                                  ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
                              ) AS rn
                       FROM dislocation
                   ) le2
-                  WHERE le2.rn = 1
-                    AND le2.rem <= 0
+                  WHERE le2.rn = 1 AND le2.rem <= 0
                     AND le2.railway_carriage_number = tw.railway_carriage_number
-                    AND le2.fs_ts = tw.flight_start_date
+                    AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le2.bus_date
+                    AND TRIM(COALESCE(tw.departure_station_code, '')) = le2.dep_st
               )
         """)).rowcount
         if restored:
@@ -299,8 +402,10 @@ def sync_dislocation_to_tracking():
         cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=20)).timestamp()
         auto_archived = 0
         for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
-            key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
-            if key in qualifying_keys:
+            bus_d = _business_date(tw.flight_start_date)
+            dep_st = _norm_station(tw.departure_station_code)
+            key = (str(tw.railway_carriage_number), bus_d, dep_st)
+            if bus_d is not None and key in qualifying_keys:
                 continue  # вагон в дислокации, не трогаем
             op_ts = _normalize_dt(tw.last_operation_date)
             if op_ts is not None and op_ts < cutoff_ts:
@@ -341,32 +446,43 @@ def sync_dislocation_to_tracking():
 
 
 def rebuild_tracking_from_dislocation_merge():
-    """Полная пересборка витрины без удаления комментариев. Только для админа при смене логики/ремонте данных."""
+    """Полная пересборка витрины. Ключ: (вагон, дата, станция)."""
     result = {"created": 0, "updated": 0, "active": 0, "archived": 0, "last_events": 0}
     db = SessionLocal()
     try:
-        results = _fetch_qualifying_rows(db)
+        db.execute(text("TRUNCATE TABLE tracking_wagons CASCADE"))
+        db.flush()
+        results = _fetch_qualifying_rows_tracking(db)
         qualifying_keys = set()
         for row in results:
-            ts = _normalize_dt(row.get("flight_start_date"))
-            if ts is not None:
-                qualifying_keys.add((str(row["railway_carriage_number"]), ts))
+            bus_d = _business_date(row.get("flight_start_date"))
+            if bus_d is not None:
+                qualifying_keys.add((str(row["railway_carriage_number"]), bus_d, _norm_station(row.get("flight_start_station_code"))))
+        def _find_track(wn, bd, dep):
+            tid = db.execute(text("""
+                SELECT id FROM tracking_wagons
+                WHERE railway_carriage_number = :wn
+                  AND ((flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = :bd
+                  AND TRIM(COALESCE(departure_station_code, '')) = :dep
+                ORDER BY flight_start_date ASC LIMIT 1
+            """), {"wn": wn, "bd": bd, "dep": dep}).scalar()
+            return db.query(TrackingWagon).filter(TrackingWagon.id == tid).first() if tid else None
         created, updated = 0, 0
         for row in results:
             try:
                 flight_dt = _parse_flight_start_date(row.get("flight_start_date"))
                 if flight_dt is None:
                     continue
+                bus_d = _business_date(flight_dt)
+                dep_st = _norm_station(row.get("flight_start_station_code"))
                 is_unloaded = row.get("operation_code_railway_carriage") == "20"
                 row_dt = _parse_flight_start_date(row.get("date_time_of_operation"))
-                track_entry = db.query(TrackingWagon).filter(
-                    TrackingWagon.railway_carriage_number == row["railway_carriage_number"],
-                    TrackingWagon.flight_start_date == flight_dt,
-                ).first()
+                track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 if not track_entry:
                     db.add(TrackingWagon(
                         railway_carriage_number=row["railway_carriage_number"],
                         flight_start_date=flight_dt,
+                        departure_station_code=dep_st if dep_st else None,
                         current_station_name=row.get("st_name"),
                         current_operation_name=row.get("op_name"),
                         last_operation_date=row_dt,
@@ -389,8 +505,10 @@ def rebuild_tracking_from_dislocation_merge():
                 )
         if qualifying_keys:
             for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
-                key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
-                if key[1] is not None and key not in qualifying_keys:
+                bus_d = _business_date(tw.flight_start_date)
+                dep_st = _norm_station(tw.departure_station_code)
+                key = (str(tw.railway_carriage_number), bus_d, dep_st)
+                if bus_d is not None and key not in qualifying_keys:
                     tw.is_active = False
         db.commit()
         active = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()

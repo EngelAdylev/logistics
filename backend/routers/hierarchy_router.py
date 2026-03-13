@@ -445,19 +445,21 @@ def get_trip_comment_history(
 
 @router.post("/sync", response_model=SyncV2Result)
 def sync_v2(
+    force_rebind: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
     """
     Полная пересборка иерархической модели из dislocation.
     Только для администратора.
+    force_rebind: сбросить привязки dislocation.flight_id и выполнить перепривязку заново.
     """
     import logging
     _logger = logging.getLogger(__name__)
-    _logger.info("sync_v2: started by login=%s", current_user.login)
+    _logger.info("sync_v2: started by login=%s force_rebind=%s", current_user.login, force_rebind)
     try:
         from services.sync_service_v2 import sync_new_model
-        stats = sync_new_model(db)
+        stats = sync_new_model(db, force_rebind=force_rebind)
         _logger.info("sync_v2: done stats=%s", stats)
         return SyncV2Result(**stats)
     except Exception as e:

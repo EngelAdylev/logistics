@@ -17,14 +17,6 @@ function formatDateTime(val) {
   });
 }
 
-// Колонки с фильтрами
-const FILTER_COLS = [
-  { id: 'railway_carriage_number', label: 'Вагон' },
-  { id: 'number_train',            label: 'Поезд' },
-  { id: 'departure_station_name',  label: 'Откуда' },
-  { id: 'destination_station_name',label: 'Куда' },
-];
-
 export default function TripsView({ isActive }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,9 +27,6 @@ export default function TripsView({ isActive }) {
   const [total, setTotal] = useState(0);
   const LIMIT = 50;
 
-  const [wagonSearchInput, setWagonSearchInput] = useState('');
-  const [wagonSearch, setWagonSearch] = useState('');
-
   const [columnFilters, setColumnFilters] = useState({});
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
@@ -45,13 +34,12 @@ export default function TripsView({ isActive }) {
   const [opsLoading, setOpsLoading] = useState(new Map());
   const [commentTrip, setCommentTrip] = useState(null);
 
-  const fetchTrips = useCallback(async (p = 1, search = wagonSearch) => {
+  const fetchTrips = useCallback(async (p = 1) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
       if (isActive !== undefined) params.append('is_active', isActive);
-      if (search.trim()) params.append('wagon_number', search.trim());
       const res = await api.get(`/v2/trips?${params}`);
       setTrips(res.data.items || []);
       setTotal(res.data.total || 0);
@@ -65,27 +53,12 @@ export default function TripsView({ isActive }) {
     } finally {
       setLoading(false);
     }
-  }, [isActive, wagonSearch]);
+  }, [isActive]);
 
   useEffect(() => {
     setPage(1);
-    setWagonSearch('');
-    setWagonSearchInput('');
-    fetchTrips(1, '');
+    fetchTrips(1);
   }, [isActive]);
-
-  const handleSearch = () => {
-    setWagonSearch(wagonSearchInput);
-    setPage(1);
-    fetchTrips(1, wagonSearchInput);
-  };
-  const handleSearchKeyDown = (e) => { if (e.key === 'Enter') handleSearch(); };
-  const handleSearchClear = () => {
-    setWagonSearchInput('');
-    setWagonSearch('');
-    setPage(1);
-    fetchTrips(1, '');
-  };
 
   const handleFilterChange = (colId, values) => {
     setColumnFilters((prev) => {
@@ -116,38 +89,22 @@ export default function TripsView({ isActive }) {
     }
   };
 
-  const searchBar = (
+  const toolbar = (
     <div className="h-view-toolbar">
-      <div className="h-search-box">
-        <input
-          type="text"
-          className="h-search-input"
-          placeholder="Поиск по номеру вагона…"
-          value={wagonSearchInput}
-          onChange={(e) => setWagonSearchInput(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-        />
-        {wagonSearchInput && (
-          <button type="button" className="h-search-clear" onClick={handleSearchClear} title="Сбросить">✕</button>
-        )}
-        <button type="button" className="h-search-btn" onClick={handleSearch}>Найти</button>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {hasActiveFilters && (
-          <button
-            type="button"
-            className="reset-filters-btn active"
-            onClick={() => setColumnFilters({})}
-            title="Сбросить фильтры столбцов"
-          >
-            <FilterX size={16} /> Сбросить фильтры
-          </button>
-        )}
-        <div className="h-view-meta">
-          Рейсов: {total}
-          {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
-          {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
-        </div>
+      {hasActiveFilters && (
+        <button
+          type="button"
+          className="reset-filters-btn active"
+          onClick={() => setColumnFilters({})}
+          title="Сбросить фильтры столбцов"
+        >
+          <FilterX size={16} /> Сбросить фильтры
+        </button>
+      )}
+      <div className="h-view-meta">
+        Рейсов: {total}
+        {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
+        {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
       </div>
     </div>
   );
@@ -166,7 +123,7 @@ export default function TripsView({ isActive }) {
   if (trips.length === 0) {
     return (
       <div className="h-view-wrapper">
-        {searchBar}
+        {toolbar}
         <div className="data-loading">Рейсов не найдено</div>
       </div>
     );
@@ -174,7 +131,7 @@ export default function TripsView({ isActive }) {
 
   return (
     <div className="h-view-wrapper">
-      {searchBar}
+      {toolbar}
 
       <div className="table-scroll">
         <table className="excel-table h-wagon-table">

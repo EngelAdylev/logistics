@@ -8,6 +8,9 @@ const REBUILD_WARNING =
 const SYNC_V2_WARNING =
   'Запустит полную синхронизацию иерархической модели (Матрёшка): свяжет строки dislocation с рейсами, обновит денормализованные поля и статусы. Операция идемпотентна — безопасно запускать повторно.';
 
+const CLEAR_DATA_WARNING =
+  'Будут удалены все данные: dislocation, tracking_wagons, wagon_comments, wagons, wagon_trips, операции, комментарии. Пользователи и справочники сохраняются. Операция необратима.';
+
 export default function AdminPage() {
   const { loading: authLoading } = useAuth();
   const [users, setUsers] = useState([]);
@@ -24,6 +27,10 @@ export default function AdminPage() {
   const [syncV2Loading, setSyncV2Loading] = useState(false);
   const [syncV2Result, setSyncV2Result] = useState(null);
   const [syncV2Error, setSyncV2Error] = useState(null);
+  const [clearDataConfirmOpen, setClearDataConfirmOpen] = useState(false);
+  const [clearDataLoading, setClearDataLoading] = useState(false);
+  const [clearDataResult, setClearDataResult] = useState(null);
+  const [clearDataError, setClearDataError] = useState(null);
 
   const fetchUsers = async () => {
     setUsersError(null);
@@ -60,6 +67,21 @@ export default function AdminPage() {
       setError('Не удалось выполнить полную пересборку.');
     } finally {
       setRebuildLoading(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    setClearDataConfirmOpen(false);
+    setClearDataLoading(true);
+    setClearDataResult(null);
+    setClearDataError(null);
+    try {
+      const res = await api.post('/admin/clear-data');
+      setClearDataResult(res.data);
+    } catch (e) {
+      setClearDataError('Не удалось очистить данные.');
+    } finally {
+      setClearDataLoading(false);
     }
   };
 
@@ -115,6 +137,23 @@ export default function AdminPage() {
       <div className="admin-toolbar">
         <button
           type="button"
+          className="rebuild-btn rebuild-btn--danger"
+          onClick={() => setClearDataConfirmOpen(true)}
+          disabled={clearDataLoading}
+        >
+          {clearDataLoading ? 'Очистка…' : 'Очистить все данные'}
+        </button>
+        {clearDataResult && (
+          <span className="rebuild-result rebuild-result--success">
+            {clearDataResult.message} Удалено: dislocation={clearDataResult.cleared?.dislocation ?? 0}, tracking_wagons={clearDataResult.cleared?.tracking_wagons ?? 0}, wagons={clearDataResult.cleared?.wagons ?? 0}
+          </span>
+        )}
+        {clearDataError && <span className="rebuild-result rebuild-result--error">{clearDataError}</span>}
+      </div>
+
+      <div className="admin-toolbar">
+        <button
+          type="button"
           className="rebuild-btn"
           onClick={() => setRebuildConfirmOpen(true)}
           disabled={rebuildLoading}
@@ -156,6 +195,23 @@ export default function AdminPage() {
               </button>
               <button type="button" className="save-btn" onClick={handleRebuild} disabled={rebuildLoading}>
                 Выполнить пересборку
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clearDataConfirmOpen && (
+        <div className="modal-overlay" onClick={() => setClearDataConfirmOpen(false)} role="dialog">
+          <div className="modal-content rebuild-confirm" onClick={(e) => e.stopPropagation()}>
+            <h3>Очистка всех данных</h3>
+            <p className="rebuild-warning">{CLEAR_DATA_WARNING}</p>
+            <div className="modal-actions">
+              <button type="button" className="cancel-btn" onClick={() => setClearDataConfirmOpen(false)}>
+                Отмена
+              </button>
+              <button type="button" className="save-btn rebuild-btn--danger" onClick={handleClearData} disabled={clearDataLoading}>
+                Очистить данные
               </button>
             </div>
           </div>

@@ -83,6 +83,7 @@ def startup_event():
                 ("wagons_next_repair_date", "ALTER TABLE wagons ADD COLUMN IF NOT EXISTS next_repair_date TIMESTAMPTZ"),
                 # Порядковый номер рейса
                 ("wagon_trips_flight_number", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS flight_number INTEGER"),
+                ("tracking_wagons_dep_station", "ALTER TABLE tracking_wagons ADD COLUMN IF NOT EXISTS departure_station_code TEXT"),
             ]:
                 try:
                     conn.execute(text(sql))
@@ -290,6 +291,116 @@ def admin_diagnostic(
     except Exception as e:
         info["error"] = str(e)
     return info
+
+
+@app.get("/admin/diagnostic/wagon/{wagon_number}")
+def admin_diagnostic_wagon(
+    wagon_number: str,
+    current_user: models.User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """
+    Диагностика привязки рейсов для конкретного вагона.
+    Показывает: значения flight_start_date в dislocation vs wagon_trips.
+    Помогает выявить причины дробления одного рейса на несколько.
+    """
+    from sqlalchemy import text
+    wagon_number = wagon_number.strip()
+    info = {"wagon_number": wagon_number}
+    try:
+        # dislocation: уникальные flight_start_date (сырые) по вагону
+        d_rows = db.execute(text("""
+            SELECT DISTINCT flight_start_date, flight_id, COUNT(*) as cnt
+            FROM dislocation
+            WHERE railway_carriage_number = :wn
+            GROUP BY flight_start_date, flight_id
+            ORDER BY flight_start_date
+        """), {"wn": wagon_number}).mappings().all()
+        info["dislocation_flight_dates"] = [
+            {
+                "flight_start_date_raw": str(r["flight_start_date"]) if r["flight_start_date"] else None,
+                "flight_id": str(r["flight_id"]) if r["flight_id"] else None,
+                "rows_count": r["cnt"],
+            }
+            for r in d_rows
+        ]
+        # wagon_trips для этого вагона
+        wagon = db.query(models.Wagon).filter(
+            models.Wagon.railway_carriage_number == wagon_number,
+        ).first()
+        if wagon:
+            trips = db.execute(text("""
+                SELECT id, flight_start_date, flight_number, is_active,
+                       last_operation_date, departure_station_code
+                FROM wagon_trips
+                WHERE wagon_id = :wid
+                ORDER BY flight_start_date
+            """), {"wid": wagon.id}).mappings().all()
+            info["wagon_id"] = str(wagon.id)
+            info["wagon_trips"] = [
+                {
+                    "id": str(r["id"]),
+                    "flight_start_date": str(r["flight_start_date"]) if r["flight_start_date"] else None,
+                    "flight_number": r["flight_number"],
+                    "is_active": r["is_active"],
+                    "last_operation_date": str(r["last_operation_date"]) if r["last_operation_date"] else None,
+                }
+                for r in trips
+            ]
+            # Сколько dislocation-строк без flight_id (не привязаны)
+            unlinked = db.execute(text("""
+                SELECT COUNT(*) FROM dislocation
+                WHERE railway_carriage_number = :wn AND flight_id IS NULL
+            """), {"wn": wagon_number}).scalar() or 0
+            info["dislocation_unlinked_count"] = unlinked
+        else:
+            info["wagon"] = None
+            info["note"] = "Wagon not found in wagons table"
+    except Exception as e:
+        info["error"] = str(e)
+    return info
+
+
+@app.post("/admin/clear-data")
+def admin_clear_data(
+    current_user: models.User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """
+    Очистка всех бизнес-данных системы. Пользователи, сессии и справочники не затрагиваются.
+    После очистки можно загружать новые данные с нуля.
+    """
+    from sqlalchemy import text
+    _logger.info("admin_clear_data: started by login=%s", current_user.login)
+    try:
+        tables_to_clear = [
+            "dislocation",
+            "tracking_wagons",   # CASCADE -> wagon_comments
+            "wagons",            # CASCADE -> wagon_trips, wagon_entity_comments, wagon_trip_operations, trip_comments
+            "comment_history",
+        ]
+        counts = {}
+        for t in tables_to_clear:
+            try:
+                r = db.execute(text(f"SELECT COUNT(*) FROM {t}"))
+                counts[t] = r.scalar() or 0
+                db.execute(text(f"TRUNCATE TABLE {t} CASCADE"))
+            except Exception as e:
+                if "does not exist" in str(e).lower():
+                    counts[t] = 0
+                else:
+                    raise
+        db.commit()
+        _logger.info("admin_clear_data: done by login=%s cleared=%s", current_user.login, counts)
+        return {
+            "status": "success",
+            "message": "Данные очищены. Система готова к загрузке новых данных.",
+            "cleared": counts,
+        }
+    except Exception as e:
+        _logger.exception("admin_clear_data failed: %s", e)
+        db.rollback()
+        raise HTTPException(status_code=500, detail={"error": "CLEAR_FAILED", "message": str(e)})
 
 
 @app.post("/admin/rebuild-tracking")
