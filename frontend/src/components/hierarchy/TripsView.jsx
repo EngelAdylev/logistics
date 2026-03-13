@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronRight, ChevronDown, MessageSquare, FilterX } from 'lucide-react';
 import { api } from '../../api';
+import ColumnFilter from '../../table/ColumnFilter';
+import { applyFilters } from '../../table/tableUtils';
 import OperationsTable from './OperationsTable';
 import TripComments from './TripComments';
 
@@ -15,6 +17,14 @@ function formatDateTime(val) {
   });
 }
 
+// Колонки с фильтрами
+const FILTER_COLS = [
+  { id: 'railway_carriage_number', label: 'Вагон' },
+  { id: 'number_train',            label: 'Поезд' },
+  { id: 'departure_station_name',  label: 'Откуда' },
+  { id: 'destination_station_name',label: 'Куда' },
+];
+
 export default function TripsView({ isActive }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +37,8 @@ export default function TripsView({ isActive }) {
 
   const [wagonSearchInput, setWagonSearchInput] = useState('');
   const [wagonSearch, setWagonSearch] = useState('');
+
+  const [columnFilters, setColumnFilters] = useState({});
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
@@ -46,6 +58,7 @@ export default function TripsView({ isActive }) {
       setTotalPages(res.data.pages || 1);
       setPage(p);
       setExpandedTripIds(new Set());
+      setColumnFilters({});
     } catch {
       setError('Не удалось загрузить рейсы.');
       setTrips([]);
@@ -73,6 +86,18 @@ export default function TripsView({ isActive }) {
     setPage(1);
     fetchTrips(1, '');
   };
+
+  const handleFilterChange = (colId, values) => {
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (!values?.length) delete next[colId];
+      else next[colId] = values;
+      return next;
+    });
+  };
+
+  const filteredTrips = useMemo(() => applyFilters(trips, columnFilters), [trips, columnFilters]);
+  const hasActiveFilters = Object.keys(columnFilters).length > 0;
 
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
@@ -107,9 +132,22 @@ export default function TripsView({ isActive }) {
         )}
         <button type="button" className="h-search-btn" onClick={handleSearch}>Найти</button>
       </div>
-      <div className="h-view-meta">
-        Рейсов: {total}
-        {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            className="reset-filters-btn active"
+            onClick={() => setColumnFilters({})}
+            title="Сбросить фильтры столбцов"
+          >
+            <FilterX size={16} /> Сбросить фильтры
+          </button>
+        )}
+        <div className="h-view-meta">
+          Рейсов: {total}
+          {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
+          {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
+        </div>
       </div>
     </div>
   );
@@ -143,17 +181,68 @@ export default function TripsView({ isActive }) {
           <thead>
             <tr>
               <th style={{ width: 32 }} />
-              <th>Вагон</th>
+              {/* Вагон */}
+              <th className="th-with-filter">
+                <span className="th-label">Вагон</span>
+                <ColumnFilter
+                  columnId="railway_carriage_number"
+                  label="Вагон"
+                  rows={trips}
+                  activeValues={columnFilters.railway_carriage_number}
+                  onApply={(v) => handleFilterChange('railway_carriage_number', v)}
+                  onClear={() => handleFilterChange('railway_carriage_number', [])}
+                />
+              </th>
+              <th>№ рейса</th>
               <th>Дата рейса</th>
-              <th>Маршрут</th>
-              <th>Поезд</th>
+              {/* Откуда */}
+              <th className="th-with-filter">
+                <span className="th-label">Откуда</span>
+                <ColumnFilter
+                  columnId="departure_station_name"
+                  label="Откуда"
+                  rows={trips}
+                  activeValues={columnFilters.departure_station_name}
+                  onApply={(v) => handleFilterChange('departure_station_name', v)}
+                  onClear={() => handleFilterChange('departure_station_name', [])}
+                />
+              </th>
+              {/* Куда */}
+              <th className="th-with-filter">
+                <span className="th-label">Куда</span>
+                <ColumnFilter
+                  columnId="destination_station_name"
+                  label="Куда"
+                  rows={trips}
+                  activeValues={columnFilters.destination_station_name}
+                  onApply={(v) => handleFilterChange('destination_station_name', v)}
+                  onClear={() => handleFilterChange('destination_station_name', [])}
+                />
+              </th>
+              {/* Поезд */}
+              <th className="th-with-filter">
+                <span className="th-label">Поезд</span>
+                <ColumnFilter
+                  columnId="number_train"
+                  label="Поезд"
+                  rows={trips}
+                  activeValues={columnFilters.number_train}
+                  onApply={(v) => handleFilterChange('number_train', v)}
+                  onClear={() => handleFilterChange('number_train', [])}
+                />
+              </th>
               <th>Последняя операция</th>
               <th>Дата операции</th>
               <th>Статус</th>
             </tr>
           </thead>
           <tbody>
-            {trips.map((trip) => {
+            {filteredTrips.length === 0 && (
+              <tr>
+                <td colSpan={10} className="empty-table-message">Нет данных по выбранным фильтрам</td>
+              </tr>
+            )}
+            {filteredTrips.map((trip) => {
               const isExpanded = expandedTripIds.has(trip.id);
               const ops = operationsByTripId.get(trip.id);
               const opLoading = opsLoading.has(trip.id);
@@ -174,12 +263,10 @@ export default function TripsView({ isActive }) {
                       </button>
                     </td>
                     <td className="h-wagon-num">{trip.railway_carriage_number || '—'}</td>
+                    <td>{trip.flight_number ?? '—'}</td>
                     <td className="h-trip-date">{formatDate(trip.flight_start_date)}</td>
-                    <td className="h-trip-route">
-                      <span className="h-route-from">{departure}</span>
-                      <span className="h-route-arrow"> → </span>
-                      <span className="h-route-to">{destination}</span>
-                    </td>
+                    <td>{departure}</td>
+                    <td>{destination}</td>
                     <td className="h-trip-train">
                       {trip.number_train || '—'}
                       {trip.train_index && <span className="h-train-index"> / {trip.train_index}</span>}
@@ -208,7 +295,7 @@ export default function TripsView({ isActive }) {
                   {isExpanded && (
                     <tr className="h-ops-row">
                       <td />
-                      <td colSpan={7} className="h-ops-cell">
+                      <td colSpan={9} className="h-ops-cell">
                         <OperationsTable operations={ops} loading={opLoading} />
                       </td>
                     </tr>
