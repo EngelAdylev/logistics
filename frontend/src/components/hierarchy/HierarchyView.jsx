@@ -13,6 +13,10 @@ export default function HierarchyView({ isActive }) {
   const [total, setTotal] = useState(0);
   const LIMIT = 50;
 
+  // фильтр по номеру вагона
+  const [wagonSearch, setWagonSearch] = useState('');
+  const [wagonSearchInput, setWagonSearchInput] = useState('');
+
   // expanded state
   const [expandedWagonIds, setExpandedWagonIds] = useState(new Set());
   const [tripsByWagonId, setTripsByWagonId] = useState(new Map());
@@ -21,12 +25,13 @@ export default function HierarchyView({ isActive }) {
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
   const [opsLoading, setOpsLoading] = useState(new Map());
 
-  const fetchWagons = useCallback(async (p = 1) => {
+  const fetchWagons = useCallback(async (p = 1, search = wagonSearch) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: p, limit: LIMIT });
       if (isActive !== undefined) params.append('is_active', isActive);
+      if (search.trim()) params.append('wagon_number', search.trim());
       const res = await api.get(`/v2/wagons?${params}`);
       setWagons(res.data.items || []);
       setTotal(res.data.total || 0);
@@ -45,8 +50,27 @@ export default function HierarchyView({ isActive }) {
 
   useEffect(() => {
     setPage(1);
-    fetchWagons(1);
+    setWagonSearch('');
+    setWagonSearchInput('');
+    fetchWagons(1, '');
   }, [isActive]);
+
+  const handleSearch = () => {
+    setWagonSearch(wagonSearchInput);
+    setPage(1);
+    fetchWagons(1, wagonSearchInput);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  const handleSearchClear = () => {
+    setWagonSearchInput('');
+    setWagonSearch('');
+    setPage(1);
+    fetchWagons(1, '');
+  };
 
   // --- Раскрытие вагона: загружаем рейсы ---
   const handleWagonExpand = async (wagonId) => {
@@ -96,6 +120,29 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
+  const searchBar = (
+    <div className="h-view-toolbar">
+      <div className="h-search-box">
+        <input
+          type="text"
+          className="h-search-input"
+          placeholder="Поиск по номеру вагона…"
+          value={wagonSearchInput}
+          onChange={(e) => setWagonSearchInput(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+        />
+        {wagonSearchInput && (
+          <button type="button" className="h-search-clear" onClick={handleSearchClear} title="Сбросить">✕</button>
+        )}
+        <button type="button" className="h-search-btn" onClick={handleSearch}>Найти</button>
+      </div>
+      <div className="h-view-meta">
+        Вагонов: {total}
+        {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
+      </div>
+    </div>
+  );
+
   if (loading) return <div className="data-loading">Загрузка вагонов…</div>;
 
   if (error) {
@@ -110,15 +157,17 @@ export default function HierarchyView({ isActive }) {
   }
 
   if (wagons.length === 0) {
-    return <div className="data-loading">Вагонов не найдено</div>;
+    return (
+      <div className="h-view-wrapper">
+        {searchBar}
+        <div className="data-loading">Вагонов не найдено</div>
+      </div>
+    );
   }
 
   return (
     <div className="h-view-wrapper">
-      <div className="h-view-meta">
-        Вагонов: {total}
-        {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
-      </div>
+      {searchBar}
 
       <div className="table-scroll">
         <table className="excel-table h-wagon-table">

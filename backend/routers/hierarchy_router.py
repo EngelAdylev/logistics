@@ -40,6 +40,7 @@ router = APIRouter(prefix="/v2", tags=["hierarchy-v2"])
 @router.get("/wagons", response_model=PaginatedResponse[WagonOut])
 def list_wagons(
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
+    wagon_number: Optional[str] = Query(None, description="Фильтр по номеру вагона"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -49,6 +50,8 @@ def list_wagons(
     q = db.query(Wagon)
     if is_active is not None:
         q = q.filter(Wagon.is_active == is_active)
+    if wagon_number:
+        q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
     q = q.order_by(Wagon.railway_carriage_number)
 
     total = q.count()
@@ -108,6 +111,43 @@ def list_trips(
 
     return PaginatedResponse(
         items=[WagonTripOut.model_validate(t) for t in trips],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=max(1, math.ceil(total / limit)),
+    )
+
+
+@router.get("/trips", response_model=PaginatedResponse[WagonTripOut])
+def list_all_trips(
+    is_active: Optional[bool] = Query(None, description="Фильтр по активности рейса"),
+    wagon_number: Optional[str] = Query(None, description="Фильтр по номеру вагона (частичное совпадение)"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """Список всех рейсов с пагинацией."""
+    q = db.query(WagonTrip, Wagon.railway_carriage_number).join(
+        Wagon, WagonTrip.wagon_id == Wagon.id
+    )
+    if is_active is not None:
+        q = q.filter(WagonTrip.is_active == is_active)
+    if wagon_number:
+        q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
+    q = q.order_by(WagonTrip.last_operation_date.desc().nullslast())
+
+    total = q.count()
+    rows = q.offset((page - 1) * limit).limit(limit).all()
+
+    items = []
+    for trip, carriage_number in rows:
+        out = WagonTripOut.model_validate(trip)
+        out.railway_carriage_number = carriage_number
+        items.append(out)
+
+    return PaginatedResponse(
+        items=items,
         total=total,
         page=page,
         limit=limit,

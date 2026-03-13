@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import re
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import SessionLocal
@@ -8,8 +9,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _fix_dt_str(s: str) -> str:
+    """Приводит строку datetime к виду, понятному fromisoformat.
+    Обрабатывает форматы: '2026-03-03 17:11:00.000 +0300', '2026-02-26 16:42:00+03', и ISO 8601.
+    """
+    s = s.strip().replace("Z", "+00:00")
+    # Убираем пробел перед знаком timezone: "17:11:00.000 +0300" → "17:11:00.000+0300"
+    s = re.sub(r"\s+([+-]\d)", r"\1", s)
+    # +HHMM → +HH:MM (4 цифры без двоеточия)
+    s = re.sub(r"([+-])(\d{2})(\d{2})$", r"\1\2:\3", s)
+    # +HH → +HH:00 (только 2 цифры)
+    s = re.sub(r"([+-])(\d{2})$", r"\1\2:00", s)
+    return s
+
+
 def _normalize_dt(v):
-    """Приводит дату к timestamp для сравнения (dislocation — varchar, tracking — timestamptz)."""
+    """Приводит дату к timestamp (float) для сравнения."""
     if v is None:
         return None
     if hasattr(v, "timestamp"):
@@ -17,19 +32,14 @@ def _normalize_dt(v):
     s = str(v).strip()
     if not s:
         return None
-    if s.endswith("+03") and not s.endswith("+03:"):
-        s = s[:-3] + "+03:00"
-    elif s.endswith("-03") and not s.endswith("-03:"):
-        s = s[:-3] + "-03:00"
     try:
-        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-        return dt.timestamp()
+        return datetime.fromisoformat(_fix_dt_str(s)).timestamp()
     except (ValueError, TypeError):
         return None
 
 
 def _parse_flight_start_date(v):
-    """Парсит flight_start_date из dislocation (varchar) в datetime для поиска в tracking_wagons."""
+    """Парсит datetime-строку из dislocation (varchar) в объект datetime."""
     if v is None:
         return None
     if hasattr(v, "year"):
@@ -37,13 +47,8 @@ def _parse_flight_start_date(v):
     s = str(v).strip()
     if not s:
         return None
-    # Нормализуем +03 -> +03:00 для fromisoformat
-    if s.endswith("+03") and not s.endswith("+03:"):
-        s = s[:-3] + "+03:00"
-    elif s.endswith("-03") and not s.endswith("-03:"):
-        s = s[:-3] + "-03:00"
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return datetime.fromisoformat(_fix_dt_str(s))
     except (ValueError, TypeError):
         return None
 
@@ -148,25 +153,52 @@ def sync_dislocation_to_tracking():
         stats["last_events"] = qualifying_rows
 
         active_before = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).count()
+
+        # Строим to_archive_keys ДО sync loop через ::timestamptz нормализацию в SQL.
+        # Берём ПОСЛЕДНЮЮ операцию per (wagon, normalized_trip_UTC). Если remaining=0 — в архив.
+        arch_epoch_rows = db.execute(text("""
+            WITH nt AS (
+                SELECT railway_carriage_number,
+                       flight_start_date::timestamptz AS fs_ts,
+                       COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
+                       ) AS NUMERIC), 0) AS rem,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                           ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                       ) AS rn
+                FROM dislocation
+            )
+            SELECT railway_carriage_number, EXTRACT(EPOCH FROM fs_ts) AS fs_epoch
+            FROM nt WHERE rn = 1 AND rem <= 0
+        """)).mappings().all()
+        to_archive_keys = {(str(r["railway_carriage_number"]), float(r["fs_epoch"])) for r in arch_epoch_rows if r["fs_epoch"] is not None}
+
+        # qualifying_keys для авто-архива (чтобы не архивировать вагоны которые ещё едут)
         qualifying_keys = set()
         for row in results:
             ts = _normalize_dt(row.get("flight_start_date"))
             if ts is not None:
                 qualifying_keys.add((str(row["railway_carriage_number"]), ts))
 
+        # Sync loop: обновляем данные из qualifying_rows, ставим is_active=True.
+        # Пропускаем вагоны в to_archive_keys — они уже прибыли (remaining=0 по свежей операции).
         for row in results:
             try:
                 flight_dt = _parse_flight_start_date(row.get("flight_start_date"))
                 if flight_dt is None:
                     stats["errors"] += 1
                     continue
-                is_unloaded = row.get("operation_code_railway_carriage") == "20"
+                fs_ts = _normalize_dt(row.get("flight_start_date"))
+                if (str(row["railway_carriage_number"]), fs_ts) in to_archive_keys:
+                    continue  # рейс закрыт (remaining=0), не активируем
                 track_entry = db.query(TrackingWagon).filter(
                     TrackingWagon.railway_carriage_number == row["railway_carriage_number"],
                     TrackingWagon.flight_start_date == flight_dt,
                 ).first()
-                row_dt = row.get("date_time_of_operation")
-
+                row_dt_raw = row.get("date_time_of_operation")
+                row_dt = _parse_flight_start_date(row_dt_raw)
+                row_ts = _normalize_dt(row_dt_raw)
+                entry_ts = _normalize_dt(track_entry.last_operation_date if track_entry else None)
                 if not track_entry:
                     db.add(TrackingWagon(
                         railway_carriage_number=row["railway_carriage_number"],
@@ -174,62 +206,118 @@ def sync_dislocation_to_tracking():
                         current_station_name=row.get("st_name"),
                         current_operation_name=row.get("op_name"),
                         last_operation_date=row_dt,
-                        is_active=not is_unloaded,
+                        is_active=True,
                     ))
                     stats["created"] += 1
-                    if is_unloaded:
-                        stats["archived"] += 1
-                elif track_entry.last_operation_date is None or (row_dt and row_dt > track_entry.last_operation_date):
+                elif entry_ts is None or (row_ts is not None and row_ts > entry_ts):
                     track_entry.current_station_name = row.get("st_name")
                     track_entry.current_operation_name = row.get("op_name")
                     track_entry.last_operation_date = row_dt
-                    track_entry.is_active = not is_unloaded
+                    track_entry.is_active = True
                     stats["updated"] += 1
-                    if is_unloaded:
-                        stats["archived"] += 1
                 else:
-                    track_entry.is_active = not is_unloaded
+                    track_entry.is_active = True
             except Exception as e:
                 stats["errors"] += 1
                 logger.warning(
                     "sync_dislocation_to_tracking: row error wagon=%s flight_start=%s: %s",
-                    row.get("railway_carriage_number"),
-                    row.get("flight_start_date"),
-                    e,
-                    exc_info=False,
+                    row.get("railway_carriage_number"), row.get("flight_start_date"), e,
                 )
-        archived_out = 0
-        active_list = db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all()
-        archived_keys_examples = []
 
-        fail_safe = False
-        if qualifying_rows == 0 and active_before > 0:
-            fail_safe = True
-            logger.warning("sync fail-safe: qualifying_rows=0 but active_before=%s, skipping archive", active_before)
-        elif not qualifying_keys and active_before > 0:
-            fail_safe = True
-            logger.warning("sync fail-safe: qualifying_keys empty but active_before=%s, skipping archive", active_before)
-        elif qualifying_rows > 0 and stats["errors"] >= qualifying_rows:
-            fail_safe = True
-            logger.warning("sync fail-safe: mass errors (%s/%s), skipping archive", stats["errors"], qualifying_rows)
+        db.flush()
 
-        if not fail_safe and qualifying_keys:
-            for tw in active_list:
-                key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
-                if key is not None and key[1] is not None and key not in qualifying_keys:
-                    tw.is_active = False
-                    archived_out += 1
-                    if len(archived_keys_examples) < 10:
-                        archived_keys_examples.append(key)
-        stats["archived"] += archived_out
+        # Условие 1: remaining_distance = 0 → архив (SQL, нормализует все varchar-форматы через ::timestamptz)
+        archived_rem = db.execute(text("""
+            UPDATE tracking_wagons tw
+            SET is_active = false
+            WHERE tw.is_active = true
+              AND EXISTS (
+                  SELECT 1 FROM (
+                      SELECT railway_carriage_number,
+                             flight_start_date::timestamptz AS fs_ts,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
+                             ) AS NUMERIC), 0) AS rem,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                             ) AS rn
+                      FROM dislocation
+                  ) le
+                  WHERE le.rn = 1
+                    AND le.rem <= 0
+                    AND le.railway_carriage_number = tw.railway_carriage_number
+                    AND le.fs_ts = tw.flight_start_date
+              )
+        """)).rowcount
+        stats["archived"] += archived_rem
 
-        qualifying_examples = list(qualifying_keys)[:10]
+        # Восстанавливаем ошибочно заархивированные: remaining>0 И нет записи с remaining=0 для того же рейса
+        restored = db.execute(text("""
+            UPDATE tracking_wagons tw
+            SET is_active = true
+            WHERE tw.is_active = false
+              AND EXISTS (
+                  SELECT 1 FROM (
+                      SELECT railway_carriage_number,
+                             flight_start_date::timestamptz AS fs_ts,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
+                             ) AS NUMERIC), 0) AS rem,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                             ) AS rn
+                      FROM dislocation
+                  ) le
+                  WHERE le.rn = 1
+                    AND le.rem > 0
+                    AND le.railway_carriage_number = tw.railway_carriage_number
+                    AND le.fs_ts = tw.flight_start_date
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM (
+                      SELECT railway_carriage_number,
+                             flight_start_date::timestamptz AS fs_ts,
+                             COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),''
+                             ) AS NUMERIC), 0) AS rem,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY railway_carriage_number, flight_start_date::timestamptz
+                                 ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                             ) AS rn
+                      FROM dislocation
+                  ) le2
+                  WHERE le2.rn = 1
+                    AND le2.rem <= 0
+                    AND le2.railway_carriage_number = tw.railway_carriage_number
+                    AND le2.fs_ts = tw.flight_start_date
+              )
+        """)).rowcount
+        if restored:
+            logger.info("sync_dislocation_to_tracking: restored=%s (wrongly archived, still in transit)", restored)
+
+        # Условие 2: > 20 дней без операций → архив.
+        # Исключаем вагоны которые сейчас есть в qualifying_rows (ещё в пути по дислокации).
+        cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=20)).timestamp()
+        auto_archived = 0
+        for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
+            key = (str(tw.railway_carriage_number), _normalize_dt(tw.flight_start_date))
+            if key in qualifying_keys:
+                continue  # вагон в дислокации, не трогаем
+            op_ts = _normalize_dt(tw.last_operation_date)
+            if op_ts is not None and op_ts < cutoff_ts:
+                tw.is_active = False
+                auto_archived += 1
+        if auto_archived:
+            stats["archived"] += auto_archived
+            logger.info("sync_dislocation_to_tracking: auto_archived_by_age=%s (no ops > 20 days)", auto_archived)
+
+        fail_safe = qualifying_rows == 0 and active_before > 0
+        if fail_safe:
+            logger.warning("sync fail-safe: qualifying_rows=0 but active_before=%s", active_before)
+
         logger.info(
-            "sync_dislocation: qualifying_rows=%s active_before=%s qualifying_keys=%s archived_out=%s errors=%s fail_safe=%s",
-            qualifying_rows, active_before, len(qualifying_keys), archived_out, stats["errors"], fail_safe,
+            "sync_dislocation: qualifying_rows=%s active_before=%s archived_rem=%s restored=%s auto_archived=%s errors=%s",
+            qualifying_rows, active_before, archived_rem, restored, auto_archived, stats["errors"],
         )
-        logger.info("sync_dislocation: qualifying_keys_sample=%s", qualifying_examples)
-        logger.info("sync_dislocation: archived_keys_sample=%s", archived_keys_examples)
 
         db.commit()
         last_events = stats["last_events"]
@@ -270,7 +358,7 @@ def rebuild_tracking_from_dislocation_merge():
                 if flight_dt is None:
                     continue
                 is_unloaded = row.get("operation_code_railway_carriage") == "20"
-                row_dt = row.get("date_time_of_operation")
+                row_dt = _parse_flight_start_date(row.get("date_time_of_operation"))
                 track_entry = db.query(TrackingWagon).filter(
                     TrackingWagon.railway_carriage_number == row["railway_carriage_number"],
                     TrackingWagon.flight_start_date == flight_dt,
