@@ -126,6 +126,7 @@ class WagonOut(BaseModel):
 class WagonTripOut(BaseModel):
     id: UUID
     wagon_id: UUID
+    railway_carriage_number: Optional[str] = None
     flight_number: Optional[int] = None   # Порядковый номер рейса у данного вагона
     flight_start_date: Optional[datetime] = None
     departure_station_code: Optional[str] = None

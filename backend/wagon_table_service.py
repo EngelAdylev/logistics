@@ -44,8 +44,8 @@ QUERY_FULL = text("""
                 NULLIF(TRIM(COALESCE(d.container_number12,'')),'')
             )) as container_numbers,
             ROW_NUMBER() OVER (
-                PARTITION BY d.railway_carriage_number, d.flight_start_date
-                ORDER BY d.date_time_of_operation DESC NULLS LAST
+                PARTITION BY d.railway_carriage_number, d.flight_start_date::timestamptz
+                ORDER BY d.date_time_of_operation::timestamptz DESC NULLS LAST
             ) as rn
         FROM dislocation d
         LEFT JOIN railway_station rs ON d.station_code_performing_operation::text = rs.esr_code
@@ -59,7 +59,7 @@ QUERY_FULL = text("""
             ROW_NUMBER() OVER (PARTITION BY tracking_id ORDER BY created_at DESC) as rn
         FROM wagon_comments
     )
-    SELECT
+    SELECT DISTINCT ON (tw.railway_carriage_number)
         tw.id,
         tw.railway_carriage_number,
         tw.flight_start_date,
@@ -80,18 +80,19 @@ QUERY_FULL = text("""
         le.departure_station_name
     FROM tracking_wagons tw
     LEFT JOIN (
-        SELECT railway_carriage_number, flight_start_date, number_train, train_index, station_name,
+        SELECT railway_carriage_number, flight_start_date::timestamptz AS fs_ts,
+            number_train, train_index, station_name,
             destination_station_name, departure_station_name, waybill_number, type_railway_carriage,
             owners_administration, remaining_mileage, remaining_distance, container_numbers
         FROM LastEvents WHERE rn = 1
     ) le ON tw.railway_carriage_number = le.railway_carriage_number
-        AND tw.flight_start_date IS NOT DISTINCT FROM le.flight_start_date::timestamptz
+        AND tw.flight_start_date IS NOT DISTINCT FROM le.fs_ts
     LEFT JOIN (
         SELECT tracking_id, last_comment_text
         FROM LastComments WHERE rn = 1
     ) lc ON tw.id = lc.tracking_id
     WHERE tw.is_active = :is_active
-    ORDER BY tw.railway_carriage_number, tw.flight_start_date
+    ORDER BY tw.railway_carriage_number, tw.last_operation_date DESC NULLS LAST
 """)
 
 # Запрос без number_train, train_index (fallback, когда колонок нет в dislocation)
@@ -103,7 +104,7 @@ QUERY_FALLBACK = text("""
             ROW_NUMBER() OVER (PARTITION BY tracking_id ORDER BY created_at DESC) as rn
         FROM wagon_comments
     )
-    SELECT
+    SELECT DISTINCT ON (tw.railway_carriage_number)
         tw.id,
         tw.railway_carriage_number,
         tw.flight_start_date,
@@ -120,7 +121,7 @@ QUERY_FALLBACK = text("""
         FROM LastComments WHERE rn = 1
     ) lc ON tw.id = lc.tracking_id
     WHERE tw.is_active = :is_active
-    ORDER BY tw.railway_carriage_number, tw.flight_start_date
+    ORDER BY tw.railway_carriage_number, tw.last_operation_date DESC NULLS LAST
 """)
 
 

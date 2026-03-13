@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import WagonsTable from '../table/WagonsTable';
 import { TABLE_COLUMNS, TABLE_KEY } from '../table/tableColumnsConfig';
 import HierarchyView from '../components/hierarchy/HierarchyView';
+import TripsView from '../components/hierarchy/TripsView';
 
 const DEFAULT_VISIBLE_COLUMN_IDS = TABLE_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
@@ -12,6 +13,7 @@ export default function WagonsPage() {
   const { loading: authLoading } = useAuth();
   const [tab, setTab] = useState('active');
   const [hierarchyFilter, setHierarchyFilter] = useState('active'); // 'active' | 'archive'
+  const [tripsFilter, setTripsFilter] = useState('active'); // 'active' | 'archive' | 'all'
   const [data, setData] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState(null);
@@ -188,6 +190,13 @@ export default function WagonsPage() {
           >
             Матрёшка
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('trips')}
+            className={tab === 'trips' ? 'active' : ''}
+          >
+            Рейсы
+          </button>
         </div>
         <div className="sync-block">
           <button
@@ -235,6 +244,42 @@ export default function WagonsPage() {
               isActive={
                 hierarchyFilter === 'active' ? true
                   : hierarchyFilter === 'archive' ? false
+                    : undefined
+              }
+            />
+          )}
+        </div>
+      ) : tab === 'trips' ? (
+        /* ── Вкладка Рейсы ── */
+        <div>
+          <div className="h-filter-toggle">
+            <button
+              type="button"
+              className={tripsFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setTripsFilter('active')}
+            >
+              Активные
+            </button>
+            <button
+              type="button"
+              className={tripsFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setTripsFilter('archive')}
+            >
+              Архивные
+            </button>
+            <button
+              type="button"
+              className={tripsFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+              onClick={() => setTripsFilter('all')}
+            >
+              Все
+            </button>
+          </div>
+          {!authLoading && (
+            <TripsView
+              isActive={
+                tripsFilter === 'active' ? true
+                  : tripsFilter === 'archive' ? false
                     : undefined
               }
             />
