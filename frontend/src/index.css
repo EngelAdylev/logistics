@@ -180,14 +180,23 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .table-scroll { overflow-x: auto; }
 .excel-table .group-col { width: 36px; padding: 8px; vertical-align: middle; }
 .excel-table .group-header-row {
-  background: #f8fafc; cursor: pointer; font-weight: 600; color: #475569;
+  background: #f8fafc; cursor: pointer; font-weight: 600; color: #1e293b;
 }
+.excel-table .group-header-row td:first-child { border-left: 3px solid #3b82f6; }
 .excel-table .group-header-row:hover { background: #f1f5f9; }
-.group-caret { display: inline-flex; color: #64748b; }
-.group-title { font-size: 0.95rem; }
+.excel-table .group-header-row td { border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; }
+.group-caret { display: inline-flex; color: #3b82f6; }
+.group-title { font-size: 0.9rem; letter-spacing: 0.01em; }
 
 .th-with-filter { white-space: nowrap; }
 .th-with-filter .th-label { margin-right: 6px; }
+.sort-btn {
+  background: transparent; border: none; padding: 3px; cursor: pointer;
+  color: #94a3b8; border-radius: 4px; display: inline-flex; align-items: center;
+  vertical-align: middle; margin-right: 2px;
+}
+.sort-btn:hover { color: var(--active-blue); background: #f1f5f9; }
+.sort-btn.active { color: var(--active-blue); }
 .column-filter { position: relative; display: inline-block; }
 .filter-trigger {
   position: relative; background: transparent; border: none; padding: 4px; cursor: pointer;

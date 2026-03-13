@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { MessageSquarePlus, ChevronDown, ChevronRight, Layers, FilterX } from 'lucide-react';
+import { MessageSquarePlus, ChevronDown, ChevronRight, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
 import ColumnVisibilityPanel from './ColumnVisibilityPanel';
 import { TABLE_COLUMNS } from './tableColumnsConfig';
 import { applyFilters, groupByTrain, getTrainGroupKey, EMPTY_TRAIN_LABEL } from './tableUtils';
@@ -23,9 +23,27 @@ function LastCommentCell({ value }) {
 export default function WagonsTable({ data, columnFilters, onFilterChange, onResetFilters, onOpenComment, visibleColumnIds, onVisibilityChange, wagonCounts }) {
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
+  const [sortDir, setSortDir] = useState(null); // null | 'desc' | 'asc'
 
-  const filteredData = useMemo(() => applyFilters(data, columnFilters), [data, columnFilters]);
-  const groups = useMemo(() => groupByTrain(filteredData), [filteredData]);
+  const filteredData = useMemo(() => {
+    const seen = new Set();
+    return applyFilters(data, columnFilters).filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+  }, [data, columnFilters]);
+
+  const sortedData = useMemo(() => {
+    if (!sortDir) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      const ta = a.last_operation_date ? new Date(a.last_operation_date).getTime() : 0;
+      const tb = b.last_operation_date ? new Date(b.last_operation_date).getTime() : 0;
+      return sortDir === 'desc' ? tb - ta : ta - tb;
+    });
+  }, [filteredData, sortDir]);
+
+  const groups = useMemo(() => groupByTrain(sortedData), [sortedData]);
 
   const toggleTrain = (trainKey) => {
     setCollapsedTrains((prev) => {
@@ -69,7 +87,7 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
         rows,
         collapsed: collapsedTrains.has(trainKey),
       }))
-    : filteredData.map((row) => ({ isGroup: false, row }));
+    : sortedData.map((row) => ({ isGroup: false, row }));
 
   return (
     <div className="wagons-table-wrapper">
@@ -117,6 +135,16 @@ export default function WagonsTable({ data, columnFilters, onFilterChange, onRes
               {visibleCols.map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
+                  {col.id === 'last_operation_date' && (
+                    <button
+                      type="button"
+                      className={`sort-btn ${sortDir ? 'active' : ''}`}
+                      onClick={() => setSortDir((d) => d === null ? 'desc' : d === 'desc' ? 'asc' : null)}
+                      title={sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате'}
+                    >
+                      {sortDir === 'desc' ? <ArrowDown size={14} /> : sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowUpDown size={14} />}
+                    </button>
+                  )}
                   {col.filterable && (
                     <ColumnFilter
                       columnId={col.accessorKey || col.id}

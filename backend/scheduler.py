@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import SessionLocal
@@ -225,6 +225,18 @@ def sync_dislocation_to_tracking():
                     if len(archived_keys_examples) < 10:
                         archived_keys_examples.append(key)
         stats["archived"] += archived_out
+
+        # Авто-архивирование по давности: вагоны без операций > 30 дней → архив
+        cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=30)).timestamp()
+        auto_archived = 0
+        for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
+            op_ts = _normalize_dt(tw.last_operation_date)
+            if op_ts is not None and op_ts < cutoff_ts:
+                tw.is_active = False
+                auto_archived += 1
+        if auto_archived:
+            stats["archived"] += auto_archived
+            logger.info("sync_dislocation: auto_archived_by_age=%s (older than 30 days)", auto_archived)
 
         qualifying_examples = list(qualifying_keys)[:10]
         logger.info(
