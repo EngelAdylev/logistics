@@ -211,6 +211,33 @@ class CommentEditRequest(BaseModel):
     text: str = Field(..., min_length=1)
 
 
+class CommentConstructorSearchItem(BaseModel):
+    """Строка результата поиска для конструктора комментариев."""
+    entity_type: str  # "wagon" | "trip"
+    entity_id: UUID
+    railway_carriage_number: str
+    flight_number: Optional[int] = None
+    flight_start_date: Optional[datetime] = None
+    route: Optional[str] = None
+    status: Optional[str] = None
+    last_operation_name: Optional[str] = None
+
+
+class CommentConstructorApplyRequest(BaseModel):
+    entity_type: str  # "wagon" | "trip"
+    entity_ids: list[UUID]
+    text: str = Field(..., min_length=1, max_length=2000)
+
+
+class CommentConstructorApplyResult(BaseModel):
+    total_requested: int
+    success_count: int
+    failed_count: int
+    failed_ids: list[UUID] = []
+    status: str  # "success" | "partial" | "failure"
+    message: str
+
+
 class SyncV2Result(BaseModel):
     wagons_created: int = 0
     wagons_updated: int = 0

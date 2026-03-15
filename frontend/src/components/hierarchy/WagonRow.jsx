@@ -13,6 +13,8 @@ export default function WagonRow({
   onWagonExpand,
   onTripExpand,
   isExpanded,
+  isSelected,
+  onToggleSelect,
 }) {
   const [showComments, setShowComments] = useState(false);
 
@@ -20,6 +22,17 @@ export default function WagonRow({
     <>
       {/* Строка вагона */}
       <tr className={`h-wagon-row ${isExpanded ? 'h-wagon-row--expanded' : ''}`}>
+        {onToggleSelect != null && (
+          <td className="h-wagon-check">
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect(wagon.id)}
+              className="h-bulk-checkbox"
+              title="Выбрать"
+            />
+          </td>
+        )}
         <td className="h-wagon-expand">
           <button
             type="button"
@@ -65,6 +78,7 @@ export default function WagonRow({
       {/* Рейсы (inline expand) */}
       {isExpanded && (
         <tr className="h-trips-row">
+          {onToggleSelect != null && <td />}
           <td />
           <td colSpan={4} className="h-trips-cell">
             {tripsLoading ? (

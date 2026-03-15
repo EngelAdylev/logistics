@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { MessageSquarePlus } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 
-export default function HierarchyView({ isActive }) {
+export default function HierarchyView({ isActive, onMetaChange }) {
   const [wagons, setWagons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCommentText, setBulkCommentText] = useState('');
+  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
+  const [bulkApplyResult, setBulkApplyResult] = useState(null);
 
   // page state
   const [page, setPage] = useState(1);
@@ -40,6 +47,7 @@ export default function HierarchyView({ isActive }) {
       // Сбрасываем раскрытые элементы при смене страницы
       setExpandedWagonIds(new Set());
       setExpandedTripIds(new Set());
+      setSelectedWagonIds(new Set());
     } catch (e) {
       setError('Не удалось загрузить список вагонов.');
       setWagons([]);
@@ -49,23 +57,25 @@ export default function HierarchyView({ isActive }) {
   }, [isActive]);
 
   useEffect(() => {
+    onMetaChange?.({ total, totalPages, page });
+  }, [total, totalPages, page, onMetaChange]);
+
+  useEffect(() => {
     setPage(1);
     setWagonSearch('');
     setWagonSearchInput('');
     fetchWagons(1, '');
   }, [isActive]);
 
-  const handleSearch = () => {
-    setWagonSearch(wagonSearchInput);
+  const handleWagonFilterApply = (val) => {
+    const s = (val ?? wagonSearchInput).toString().trim();
+    setWagonSearchInput(s);
+    setWagonSearch(s);
     setPage(1);
-    fetchWagons(1, wagonSearchInput);
+    fetchWagons(1, s);
   };
 
-  const handleSearchKeyDown = (e) => {
-    if (e.key === 'Enter') handleSearch();
-  };
-
-  const handleSearchClear = () => {
+  const handleWagonFilterClear = () => {
     setWagonSearchInput('');
     setWagonSearch('');
     setPage(1);
@@ -120,25 +130,79 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
-  const searchBar = (
+  const toggleWagonSelect = (id) => {
+    setSelectedWagonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllWagons = () => {
+    setSelectedWagonIds(new Set(wagons.map((w) => w.id)));
+  };
+
+  const clearSelection = () => setSelectedWagonIds(new Set());
+
+  const handleBulkCommentApply = async () => {
+    const text = bulkCommentText.trim();
+    if (!text || selectedWagonIds.size === 0) return;
+    setBulkApplyLoading(true);
+    setBulkApplyResult(null);
+    try {
+      const res = await api.post('/v2/comment-constructor/apply', {
+        entity_type: 'wagon',
+        entity_ids: Array.from(selectedWagonIds),
+        text,
+      });
+      setBulkApplyResult(res.data);
+      if (res.data.status === 'success' || res.data.success_count > 0) {
+        setBulkCommentText('');
+        setSelectedWagonIds(new Set());
+        setBulkModalOpen(false);
+      }
+    } catch (e) {
+      setBulkApplyResult({
+        status: 'failure',
+        message: e.response?.data?.detail?.message || e.response?.data?.detail || 'Ошибка сохранения.',
+      });
+    } finally {
+      setBulkApplyLoading(false);
+    }
+  };
+
+  const toolbar = (
     <div className="h-view-toolbar">
-      <div className="h-search-box">
-        <input
-          type="text"
-          className="h-search-input"
-          placeholder="Поиск по номеру вагона…"
-          value={wagonSearchInput}
-          onChange={(e) => setWagonSearchInput(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-        />
-        {wagonSearchInput && (
-          <button type="button" className="h-search-clear" onClick={handleSearchClear} title="Сбросить">✕</button>
+      <div className="h-view-toolbar-right">
+        <button
+          type="button"
+          className="h-bulk-select-btn"
+          onClick={selectAllWagons}
+        >
+          Выбрать всё на странице
+        </button>
+        {selectedWagonIds.size > 0 && (
+          <button
+            type="button"
+            className="h-bulk-clear-btn"
+            onClick={clearSelection}
+          >
+            Сбросить выбор
+          </button>
         )}
-        <button type="button" className="h-search-btn" onClick={handleSearch}>Найти</button>
-      </div>
-      <div className="h-view-meta">
-        Вагонов: {total}
-        {totalPages > 1 && ` · стр. ${page} из ${totalPages}`}
+        <button
+          type="button"
+          className="h-bulk-comment-btn"
+          disabled={selectedWagonIds.size === 0}
+          onClick={() => {
+            setBulkApplyResult(null);
+            setBulkModalOpen(true);
+          }}
+        >
+          <MessageSquarePlus size={18} />
+          Добавить комментарий{selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}
+        </button>
       </div>
     </div>
   );
@@ -159,7 +223,7 @@ export default function HierarchyView({ isActive }) {
   if (wagons.length === 0) {
     return (
       <div className="h-view-wrapper">
-        {searchBar}
+        {toolbar}
         <div className="data-loading">Вагонов не найдено</div>
       </div>
     );
@@ -167,14 +231,30 @@ export default function HierarchyView({ isActive }) {
 
   return (
     <div className="h-view-wrapper">
-      {searchBar}
+      {toolbar}
 
       <div className="table-scroll">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
+              <th style={{ width: 44 }} />
               <th style={{ width: 32 }} />
-              <th>Номер вагона</th>
+              <th className="th-with-filter th-filter-has-input">
+                <span className="th-label">Номер вагона</span>
+                <div className="th-filter-input-wrap">
+                  <input
+                    type="text"
+                    className="th-filter-input"
+                    placeholder="Поиск…"
+                    value={wagonSearchInput}
+                    onChange={(e) => setWagonSearchInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleWagonFilterApply()}
+                  />
+                  {wagonSearchInput ? (
+                    <button type="button" className="th-filter-clear" onClick={handleWagonFilterClear} title="Сбросить">✕</button>
+                  ) : null}
+                </div>
+              </th>
               <th>Статус</th>
               <th>Рейсы</th>
               <th style={{ width: 48 }} />
@@ -193,6 +273,8 @@ export default function HierarchyView({ isActive }) {
                 isExpanded={expandedWagonIds.has(wagon.id)}
                 onWagonExpand={handleWagonExpand}
                 onTripExpand={handleTripExpand}
+                isSelected={selectedWagonIds.has(wagon.id)}
+                onToggleSelect={toggleWagonSelect}
               />
             ))}
           </tbody>
@@ -219,6 +301,54 @@ export default function HierarchyView({ isActive }) {
           >
             Вперёд →
           </button>
+        </div>
+      )}
+
+      {/* Modal массового комментария */}
+      {bulkModalOpen && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+        >
+          <div className="modal-content h-bulk-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Массовый комментарий</h3>
+            <p className="h-bulk-modal-count">Выбрано записей: <strong>{selectedWagonIds.size}</strong></p>
+            <label className="h-bulk-modal-label">
+              <textarea
+                value={bulkCommentText}
+                onChange={(e) => setBulkCommentText(e.target.value)}
+                placeholder="Введите текст комментария…"
+                className="h-bulk-modal-textarea"
+                rows={4}
+                maxLength={2000}
+              />
+              <span className="h-bulk-char-count">{bulkCommentText.length} / 2000</span>
+            </label>
+            {bulkApplyResult && (
+              <div className={`h-bulk-result h-bulk-result--${bulkApplyResult.status}`}>
+                {bulkApplyResult.message}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+                disabled={bulkApplyLoading}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleBulkCommentApply}
+                disabled={bulkApplyLoading || !bulkCommentText.trim()}
+              >
+                {bulkApplyLoading ? 'Сохранение…' : 'Применить'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

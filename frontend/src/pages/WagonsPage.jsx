@@ -27,6 +27,8 @@ export default function WagonsPage() {
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_COLUMN_IDS);
   const [settingsError, setSettingsError] = useState('');
   const [wagonCounts, setWagonCounts] = useState({ active: null, archived: null });
+  const [hierarchyMeta, setHierarchyMeta] = useState(null);
+  const [tripsMeta, setTripsMeta] = useState(null);
 
   const fetchData = async (keepDataOnError = false) => {
     setDataError(null);
@@ -216,28 +218,36 @@ export default function WagonsPage() {
       {tab === 'hierarchy' ? (
         /* ── Вкладка Матрёшка ── */
         <div>
-          <div className="h-filter-toggle">
-            <button
-              type="button"
-              className={hierarchyFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setHierarchyFilter('active')}
-            >
-              Активные
-            </button>
-            <button
-              type="button"
-              className={hierarchyFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setHierarchyFilter('archive')}
-            >
-              Архивные
-            </button>
-            <button
-              type="button"
-              className={hierarchyFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setHierarchyFilter('all')}
-            >
-              Все
-            </button>
+          <div className="h-filter-block">
+            <div className="h-filter-toggle">
+              <button
+                type="button"
+                className={hierarchyFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setHierarchyFilter('active')}
+              >
+                Активные
+              </button>
+              <button
+                type="button"
+                className={hierarchyFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setHierarchyFilter('archive')}
+              >
+                Архивные
+              </button>
+              <button
+                type="button"
+                className={hierarchyFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setHierarchyFilter('all')}
+              >
+                Все
+              </button>
+            </div>
+            {hierarchyMeta != null && (
+              <div className="h-view-meta">
+                Вагонов: {hierarchyMeta.total}
+                {hierarchyMeta.totalPages > 1 && ` · стр. ${hierarchyMeta.page} из ${hierarchyMeta.totalPages}`}
+              </div>
+            )}
           </div>
           {!authLoading && (
             <HierarchyView
@@ -246,34 +256,44 @@ export default function WagonsPage() {
                   : hierarchyFilter === 'archive' ? false
                     : undefined
               }
+              onMetaChange={setHierarchyMeta}
             />
           )}
         </div>
       ) : tab === 'trips' ? (
         /* ── Вкладка Рейсы ── */
         <div>
-          <div className="h-filter-toggle">
-            <button
-              type="button"
-              className={tripsFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setTripsFilter('active')}
-            >
-              Активные
-            </button>
-            <button
-              type="button"
-              className={tripsFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setTripsFilter('archive')}
-            >
-              Архивные
-            </button>
-            <button
-              type="button"
-              className={tripsFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setTripsFilter('all')}
-            >
-              Все
-            </button>
+          <div className="h-filter-block">
+            <div className="h-filter-toggle">
+              <button
+                type="button"
+                className={tripsFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setTripsFilter('active')}
+              >
+                Активные
+              </button>
+              <button
+                type="button"
+                className={tripsFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setTripsFilter('archive')}
+              >
+                Архивные
+              </button>
+              <button
+                type="button"
+                className={tripsFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setTripsFilter('all')}
+              >
+                Все
+              </button>
+            </div>
+            {tripsMeta != null && (
+              <div className="h-view-meta">
+                Рейсов: {tripsMeta.total}
+                {tripsMeta.hasActiveFilters && ` (показано: ${tripsMeta.filteredCount})`}
+                {tripsMeta.totalPages > 1 && ` · стр. ${tripsMeta.page} из ${tripsMeta.totalPages}`}
+              </div>
+            )}
           </div>
           {!authLoading && (
             <TripsView
@@ -282,6 +302,7 @@ export default function WagonsPage() {
                   : tripsFilter === 'archive' ? false
                     : undefined
               }
+              onMetaChange={setTripsMeta}
             />
           )}
         </div>

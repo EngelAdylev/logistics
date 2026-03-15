@@ -2,6 +2,7 @@
 Роутер иерархической модели v2: /v2/wagons, /v2/trips, /v2/wagon-comments, /v2/trip-comments.
 Все эндпоинты требуют авторизации.
 """
+import logging
 import math
 from typing import Optional
 from uuid import UUID
@@ -21,6 +22,9 @@ from models import (
     WagonTrip,
 )
 from schemas import (
+    CommentConstructorApplyRequest,
+    CommentConstructorApplyResult,
+    CommentConstructorSearchItem,
     CommentCreateRequest,
     CommentEditRequest,
     CommentHistoryOut,
@@ -439,6 +443,147 @@ def get_trip_comment_history(
         .all()
     )
     return [CommentHistoryOut.model_validate(h) for h in history]
+
+
+# ─── Конструктор комментариев (массовое назначение) ───────────────────────────
+
+MAX_BULK_COMMENT_IDS = 200
+
+logger_cc = logging.getLogger(__name__)
+
+
+@router.get("/comment-constructor/search", response_model=PaginatedResponse[CommentConstructorSearchItem])
+def comment_constructor_search(
+    entity_type: str = Query(..., description="wagon или trip"),
+    wagon_number: Optional[str] = Query(None, description="Поиск по номеру вагона (частичное)"),
+    flight_number: Optional[int] = Query(None, description="Поиск по номеру рейса"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    """Поиск объектов для массового назначения комментария. Вариант Б: один тип сущности за раз."""
+    if entity_type not in ("wagon", "trip"):
+        raise HTTPException(status_code=400, detail={"error": "INVALID_ENTITY_TYPE", "message": "entity_type должен быть wagon или trip"})
+
+    items: list[CommentConstructorSearchItem] = []
+
+    if entity_type == "wagon":
+        q = db.query(Wagon)
+        if wagon_number:
+            q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
+        q = q.order_by(Wagon.railway_carriage_number)
+        total = q.count()
+        wagons = q.offset((page - 1) * limit).limit(limit).all()
+        for w in wagons:
+            items.append(
+                CommentConstructorSearchItem(
+                    entity_type="wagon",
+                    entity_id=w.id,
+                    railway_carriage_number=w.railway_carriage_number,
+                    status="Активен" if w.is_active else "Архив",
+                )
+            )
+    else:
+        q = db.query(WagonTrip, Wagon.railway_carriage_number).join(Wagon, WagonTrip.wagon_id == Wagon.id)
+        if wagon_number:
+            q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
+        if flight_number is not None:
+            q = q.filter(WagonTrip.flight_number == flight_number)
+        q = q.order_by(WagonTrip.last_operation_date.desc().nullslast())
+        total = q.count()
+        rows = q.offset((page - 1) * limit).limit(limit).all()
+        for trip, carriage_num in rows:
+            route = None
+            if trip.departure_station_name or trip.destination_station_name:
+                route = " → ".join(filter(None, [trip.departure_station_name, trip.destination_station_name]))
+            items.append(
+                CommentConstructorSearchItem(
+                    entity_type="trip",
+                    entity_id=trip.id,
+                    railway_carriage_number=carriage_num,
+                    flight_number=trip.flight_number,
+                    flight_start_date=trip.flight_start_date,
+                    route=route,
+                    status="Активен" if trip.is_active else "Архив",
+                    last_operation_name=trip.last_operation_name,
+                )
+            )
+
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
+        pages=max(1, math.ceil(total / limit)) if total else 1,
+    )
+
+
+@router.post("/comment-constructor/apply", response_model=CommentConstructorApplyResult)
+def comment_constructor_apply(
+    body: CommentConstructorApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Массовое назначение комментария выбранным объектам."""
+    unique_ids = list(dict.fromkeys(body.entity_ids))
+    if len(unique_ids) > MAX_BULK_COMMENT_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "TOO_MANY_IDS",
+                "message": f"Максимум {MAX_BULK_COMMENT_IDS} объектов за одну операцию.",
+            },
+        )
+
+    author = current_user.login or "user"
+    success_count = 0
+    failed_ids: list[UUID] = []
+
+    for eid in unique_ids:
+        try:
+            if body.entity_type == "wagon":
+                w = db.query(Wagon).filter(Wagon.id == eid).first()
+                if not w:
+                    failed_ids.append(eid)
+                    continue
+                c = WagonEntityComment(wagon_id=eid, comment_text=body.text, author_name=author)
+            else:
+                t = db.query(WagonTrip).filter(WagonTrip.id == eid).first()
+                if not t:
+                    failed_ids.append(eid)
+                    continue
+                c = TripComment(trip_id=eid, comment_text=body.text, author_name=author)
+            db.add(c)
+            success_count += 1
+        except Exception as ex:
+            logger_cc.warning("comment_constructor: failed entity_id=%s: %s", eid, ex)
+            failed_ids.append(eid)
+
+    db.commit()
+
+    total = len(unique_ids)
+    failed_count = len(failed_ids)
+    status = "success" if failed_count == 0 else ("partial" if success_count > 0 else "failure")
+    msg = (
+        f"Применено к {success_count} из {total} объектов."
+        if failed_count > 0
+        else f"Комментарий успешно применён к {success_count} объектам."
+    )
+
+    logger_cc.info(
+        "comment_constructor: apply login=%s entity_type=%s requested=%d success=%d failed=%d",
+        current_user.login, body.entity_type, total, success_count, failed_count,
+    )
+
+    return CommentConstructorApplyResult(
+        total_requested=total,
+        success_count=success_count,
+        failed_count=failed_count,
+        failed_ids=failed_ids,
+        status=status,
+        message=msg,
+    )
 
 
 # ─── Синхронизация (admin) ───────────────────────────────────────────────────
