@@ -35,6 +35,9 @@ export default function TripsView({ isActive }) {
   const [total, setTotal] = useState(0);
 
   const [columnFilters, setColumnFilters] = useState({});
+
+  // wagonSearch — это только визуальное состояние textarea.
+  // Результат поиска сразу конвертируется в columnFilters.railway_carriage_number.
   const [wagonSearch, setWagonSearch] = useState('');
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
@@ -66,6 +69,24 @@ export default function TripsView({ isActive }) {
     fetchTrips();
   }, [isActive]);
 
+  // Когда textarea меняется — синхронизируем в columnFilters.railway_carriage_number
+  const handleWagonSearch = (value) => {
+    setWagonSearch(value);
+    const tokens = parseTokens(value.toLowerCase());
+    if (!tokens.length) {
+      setColumnFilters((prev) => { const n = { ...prev }; delete n.railway_carriage_number; return n; });
+      return;
+    }
+    // Находим все уникальные номера вагонов которые совпадают с любым токеном
+    const matched = [...new Set(
+      trips.map((t) => t.railway_carriage_number).filter(Boolean).filter((num) => matchesAny(num, tokens)),
+    )];
+    setColumnFilters((prev) => {
+      if (!matched.length) { const n = { ...prev }; delete n.railway_carriage_number; return n; }
+      return { ...prev, railway_carriage_number: matched };
+    });
+  };
+
   const handleFilterChange = (colId, values) => {
     setColumnFilters((prev) => {
       const next = { ...prev };
@@ -75,19 +96,11 @@ export default function TripsView({ isActive }) {
     });
   };
 
-  // Сначала применяем ColumnFilter, потом мультизначный поиск по вагону
-  const filteredTrips = useMemo(() => {
-    let result = applyFilters(trips, columnFilters);
-    const tokens = parseTokens(wagonSearch.toLowerCase());
-    if (tokens.length) {
-      result = result.filter((t) => matchesAny(t.railway_carriage_number, tokens));
-    }
-    return result;
-  }, [trips, columnFilters, wagonSearch]);
+  // Фильтрация только через columnFilters (wagonSearch синхронизирован туда)
+  const filteredTrips = useMemo(() => applyFilters(trips, columnFilters), [trips, columnFilters]);
 
   const hasActiveFilters = Object.keys(columnFilters).length > 0;
   const hasWagonSearch = wagonSearch.trim().length > 0;
-  const hasAnyFilter = hasActiveFilters || hasWagonSearch;
 
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
@@ -108,27 +121,27 @@ export default function TripsView({ isActive }) {
 
   const toolbar = (
     <div className="h-view-toolbar">
-      {/* Поиск по вагонам */}
+      {/* Поиск по вагонам — синхронизируется с ColumnFilter */}
       <div className="h-search-box">
         <textarea
           className="h-search-input h-search-textarea"
           placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
           value={wagonSearch}
-          onChange={(e) => setWagonSearch(e.target.value)}
+          onChange={(e) => handleWagonSearch(e.target.value)}
           rows={2}
         />
         {hasWagonSearch && (
-          <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
+          <button type="button" className="h-search-clear" onClick={() => handleWagonSearch('')} title="Сбросить">✕</button>
         )}
       </div>
 
-      {/* Кнопка сброса ColumnFilter */}
+      {/* Кнопка сброса всех фильтров */}
       {hasActiveFilters && (
         <button
           type="button"
           className="reset-filters-btn active"
-          onClick={() => setColumnFilters({})}
-          title="Сбросить фильтры столбцов"
+          onClick={() => { setColumnFilters({}); setWagonSearch(''); }}
+          title="Сбросить все фильтры"
         >
           <FilterX size={16} /> Сбросить фильтры
         </button>
@@ -136,7 +149,7 @@ export default function TripsView({ isActive }) {
 
       <div className="h-view-meta">
         Рейсов: {total}
-        {hasAnyFilter && ` (показано: ${filteredTrips.length})`}
+        {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
       </div>
     </div>
   );
@@ -170,7 +183,7 @@ export default function TripsView({ isActive }) {
           <thead>
             <tr>
               <th style={{ width: 32 }} />
-              {/* Вагон — ColumnFilter оставлен для точечной фильтрации */}
+              {/* Вагон: activeValues отражает и поиск и ColumnFilter */}
               <th className="th-with-filter">
                 <span className="th-label">Вагон</span>
                 <ColumnFilter
@@ -178,13 +191,12 @@ export default function TripsView({ isActive }) {
                   label="Вагон"
                   rows={trips}
                   activeValues={columnFilters.railway_carriage_number}
-                  onApply={(v) => handleFilterChange('railway_carriage_number', v)}
-                  onClear={() => handleFilterChange('railway_carriage_number', [])}
+                  onApply={(v) => { setWagonSearch(''); handleFilterChange('railway_carriage_number', v); }}
+                  onClear={() => { setWagonSearch(''); handleFilterChange('railway_carriage_number', []); }}
                 />
               </th>
               <th>№ рейса</th>
               <th>Дата рейса</th>
-              {/* Откуда */}
               <th className="th-with-filter">
                 <span className="th-label">Откуда</span>
                 <ColumnFilter
@@ -196,7 +208,6 @@ export default function TripsView({ isActive }) {
                   onClear={() => handleFilterChange('departure_station_name', [])}
                 />
               </th>
-              {/* Куда */}
               <th className="th-with-filter">
                 <span className="th-label">Куда</span>
                 <ColumnFilter
@@ -208,7 +219,6 @@ export default function TripsView({ isActive }) {
                   onClear={() => handleFilterChange('destination_station_name', [])}
                 />
               </th>
-              {/* Поезд */}
               <th className="th-with-filter">
                 <span className="th-label">Поезд</span>
                 <ColumnFilter
