@@ -38,7 +38,6 @@ export default function ColumnFilter({ columnId, label, rows, activeValues, onAp
   useEffect(() => {
     if (open) {
       setSelected(new Set(activeValues || []));
-      positionPopup();
     }
   }, [open]);                    // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -76,7 +75,7 @@ export default function ColumnFilter({ columnId, label, rows, activeValues, onAp
       <button
         type="button"
         className={`filter-trigger ${hasActive ? 'active' : ''}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!open) positionPopup(); setOpen((v) => !v); }}
         title="Фильтр"
         aria-label={`Фильтр по ${label}`}
       >
