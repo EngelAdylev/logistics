@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { MessageSquarePlus } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 
@@ -18,6 +19,13 @@ export default function HierarchyView({ isActive }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
+
+  // Групповой комментарий
+  const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCommentText, setBulkCommentText] = useState('');
+  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
+  const [bulkApplyResult, setBulkApplyResult] = useState(null);
 
   // фильтр по номеру вагона (клиентский, мультизначный)
   const [wagonSearch, setWagonSearch] = useState('');
@@ -41,6 +49,7 @@ export default function HierarchyView({ isActive }) {
       setTotal(res.data.total || 0);
       setExpandedWagonIds(new Set());
       setExpandedTripIds(new Set());
+      setSelectedWagonIds(new Set());
     } catch (e) {
       setError('Не удалось загрузить список вагонов.');
       setWagons([]);
@@ -60,6 +69,50 @@ export default function HierarchyView({ isActive }) {
     if (!tokens.length) return wagons;
     return wagons.filter((w) => matchesAny(w.railway_carriage_number, tokens));
   }, [wagons, wagonSearch]);
+
+  // --- Выбор вагонов ---
+  const toggleWagonSelect = (id) => {
+    setSelectedWagonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllWagons = () => {
+    setSelectedWagonIds(new Set(filteredWagons.map((w) => w.id)));
+  };
+
+  const clearSelection = () => setSelectedWagonIds(new Set());
+
+  // --- Групповой комментарий ---
+  const handleBulkCommentApply = async () => {
+    const text = bulkCommentText.trim();
+    if (!text || selectedWagonIds.size === 0) return;
+    setBulkApplyLoading(true);
+    setBulkApplyResult(null);
+    try {
+      const res = await api.post('/v2/comment-constructor/apply', {
+        entity_type: 'wagon',
+        entity_ids: Array.from(selectedWagonIds),
+        text,
+      });
+      setBulkApplyResult(res.data);
+      if (res.data.status === 'success' || res.data.success_count > 0) {
+        setBulkCommentText('');
+        setSelectedWagonIds(new Set());
+        setBulkModalOpen(false);
+      }
+    } catch (e) {
+      setBulkApplyResult({
+        status: 'failure',
+        message: e.response?.data?.detail?.message || e.response?.data?.detail || 'Ошибка сохранения.',
+      });
+    } finally {
+      setBulkApplyLoading(false);
+    }
+  };
 
   // --- Раскрытие вагона: загружаем рейсы ---
   const handleWagonExpand = async (wagonId) => {
@@ -129,6 +182,25 @@ export default function HierarchyView({ isActive }) {
         Вагонов: {total}
         {hasSearch && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
       </div>
+      <div className="h-view-toolbar-right">
+        <button type="button" className="h-bulk-select-btn" onClick={selectAllWagons}>
+          Выбрать всё
+        </button>
+        {selectedWagonIds.size > 0 && (
+          <button type="button" className="h-bulk-clear-btn" onClick={clearSelection}>
+            Сбросить выбор
+          </button>
+        )}
+        <button
+          type="button"
+          className="h-bulk-comment-btn"
+          disabled={selectedWagonIds.size === 0}
+          onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
+        >
+          <MessageSquarePlus size={18} />
+          Добавить комментарий{selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}
+        </button>
+      </div>
     </div>
   );
 
@@ -163,6 +235,7 @@ export default function HierarchyView({ isActive }) {
           <thead>
             <tr>
               <th style={{ width: 32 }} />
+              <th style={{ width: 32 }} />
               <th>Номер вагона</th>
               <th>Статус</th>
               <th>Рейсы</th>
@@ -172,7 +245,7 @@ export default function HierarchyView({ isActive }) {
           <tbody>
             {filteredWagons.length === 0 ? (
               <tr>
-                <td colSpan={5} className="empty-table-message">Нет вагонов по запросу</td>
+                <td colSpan={6} className="empty-table-message">Нет вагонов по запросу</td>
               </tr>
             ) : (
               filteredWagons.map((wagon) => (
@@ -187,12 +260,62 @@ export default function HierarchyView({ isActive }) {
                   isExpanded={expandedWagonIds.has(wagon.id)}
                   onWagonExpand={handleWagonExpand}
                   onTripExpand={handleTripExpand}
+                  isSelected={selectedWagonIds.has(wagon.id)}
+                  onToggleSelect={toggleWagonSelect}
                 />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Modal массового комментария */}
+      {bulkModalOpen && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+        >
+          <div className="modal-content h-bulk-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Массовый комментарий</h3>
+            <p className="h-bulk-modal-count">Выбрано вагонов: <strong>{selectedWagonIds.size}</strong></p>
+            <label className="h-bulk-modal-label">
+              <textarea
+                value={bulkCommentText}
+                onChange={(e) => setBulkCommentText(e.target.value)}
+                placeholder="Введите текст комментария…"
+                className="h-bulk-modal-textarea"
+                rows={4}
+                maxLength={2000}
+              />
+              <span className="h-bulk-char-count">{bulkCommentText.length} / 2000</span>
+            </label>
+            {bulkApplyResult && (
+              <div className={`h-bulk-result h-bulk-result--${bulkApplyResult.status}`}>
+                {bulkApplyResult.message}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+                disabled={bulkApplyLoading}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleBulkCommentApply}
+                disabled={bulkApplyLoading || !bulkCommentText.trim()}
+              >
+                {bulkApplyLoading ? 'Сохранение…' : 'Применить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

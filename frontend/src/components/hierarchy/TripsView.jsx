@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare, FilterX } from 'lucide-react';
+import { ChevronRight, ChevronDown, MessageSquare, FilterX, MessageSquarePlus } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import { applyFilters } from '../../table/tableUtils';
@@ -45,6 +45,13 @@ export default function TripsView({ isActive }) {
   const [opsLoading, setOpsLoading] = useState(new Map());
   const [commentTrip, setCommentTrip] = useState(null);
 
+  // Групповой комментарий
+  const [selectedTripIds, setSelectedTripIds] = useState(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCommentText, setBulkCommentText] = useState('');
+  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
+  const [bulkApplyResult, setBulkApplyResult] = useState(null);
+
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -57,6 +64,7 @@ export default function TripsView({ isActive }) {
       setExpandedTripIds(new Set());
       setColumnFilters({});
       setWagonSearch('');
+      setSelectedTripIds(new Set());
     } catch {
       setError('Не удалось загрузить рейсы.');
       setTrips([]);
@@ -101,6 +109,50 @@ export default function TripsView({ isActive }) {
 
   const hasActiveFilters = Object.keys(columnFilters).length > 0;
   const hasWagonSearch = wagonSearch.trim().length > 0;
+
+  // --- Выбор рейсов ---
+  const toggleTripSelect = (id) => {
+    setSelectedTripIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllTrips = () => {
+    setSelectedTripIds(new Set(filteredTrips.map((t) => t.id)));
+  };
+
+  const clearTripSelection = () => setSelectedTripIds(new Set());
+
+  // --- Групповой комментарий ---
+  const handleBulkCommentApply = async () => {
+    const text = bulkCommentText.trim();
+    if (!text || selectedTripIds.size === 0) return;
+    setBulkApplyLoading(true);
+    setBulkApplyResult(null);
+    try {
+      const res = await api.post('/v2/comment-constructor/apply', {
+        entity_type: 'trip',
+        entity_ids: Array.from(selectedTripIds),
+        text,
+      });
+      setBulkApplyResult(res.data);
+      if (res.data.status === 'success' || res.data.success_count > 0) {
+        setBulkCommentText('');
+        setSelectedTripIds(new Set());
+        setBulkModalOpen(false);
+      }
+    } catch (e) {
+      setBulkApplyResult({
+        status: 'failure',
+        message: e.response?.data?.detail?.message || e.response?.data?.detail || 'Ошибка сохранения.',
+      });
+    } finally {
+      setBulkApplyLoading(false);
+    }
+  };
 
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
@@ -151,6 +203,26 @@ export default function TripsView({ isActive }) {
         Рейсов: {total}
         {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
       </div>
+
+      <div className="h-view-toolbar-right">
+        <button type="button" className="h-bulk-select-btn" onClick={selectAllTrips}>
+          Выбрать всё
+        </button>
+        {selectedTripIds.size > 0 && (
+          <button type="button" className="h-bulk-clear-btn" onClick={clearTripSelection}>
+            Сбросить выбор
+          </button>
+        )}
+        <button
+          type="button"
+          className="h-bulk-comment-btn"
+          disabled={selectedTripIds.size === 0}
+          onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
+        >
+          <MessageSquarePlus size={18} />
+          Добавить комментарий{selectedTripIds.size > 0 ? ` (${selectedTripIds.size})` : ''}
+        </button>
+      </div>
     </div>
   );
 
@@ -182,6 +254,7 @@ export default function TripsView({ isActive }) {
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
+              <th style={{ width: 32 }} />
               <th style={{ width: 32 }} />
               {/* Вагон: activeValues отражает и поиск и ColumnFilter */}
               <th className="th-with-filter">
@@ -238,7 +311,7 @@ export default function TripsView({ isActive }) {
           <tbody>
             {filteredTrips.length === 0 && (
               <tr>
-                <td colSpan={10} className="empty-table-message">Нет данных по выбранным фильтрам</td>
+                <td colSpan={11} className="empty-table-message">Нет данных по выбранным фильтрам</td>
               </tr>
             )}
             {filteredTrips.map((trip) => {
@@ -251,6 +324,15 @@ export default function TripsView({ isActive }) {
               return (
                 <React.Fragment key={trip.id}>
                   <tr className={`h-trip-row ${isExpanded ? 'h-trip-row--expanded' : ''}`}>
+                    <td className="h-wagon-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedTripIds.has(trip.id)}
+                        onChange={() => toggleTripSelect(trip.id)}
+                        className="h-bulk-checkbox"
+                        title="Выбрать"
+                      />
+                    </td>
                     <td className="h-trip-indent">
                       <button
                         type="button"
@@ -294,6 +376,7 @@ export default function TripsView({ isActive }) {
                   {isExpanded && (
                     <tr className="h-ops-row">
                       <td />
+                      <td />
                       <td colSpan={9} className="h-ops-cell">
                         <OperationsTable operations={ops} loading={opLoading} />
                       </td>
@@ -307,6 +390,54 @@ export default function TripsView({ isActive }) {
       </div>
 
       {commentTrip && <TripComments trip={commentTrip} onClose={() => setCommentTrip(null)} />}
+
+      {/* Modal массового комментария */}
+      {bulkModalOpen && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+        >
+          <div className="modal-content h-bulk-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Массовый комментарий</h3>
+            <p className="h-bulk-modal-count">Выбрано рейсов: <strong>{selectedTripIds.size}</strong></p>
+            <label className="h-bulk-modal-label">
+              <textarea
+                value={bulkCommentText}
+                onChange={(e) => setBulkCommentText(e.target.value)}
+                placeholder="Введите текст комментария…"
+                className="h-bulk-modal-textarea"
+                rows={4}
+                maxLength={2000}
+              />
+              <span className="h-bulk-char-count">{bulkCommentText.length} / 2000</span>
+            </label>
+            {bulkApplyResult && (
+              <div className={`h-bulk-result h-bulk-result--${bulkApplyResult.status}`}>
+                {bulkApplyResult.message}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
+                disabled={bulkApplyLoading}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleBulkCommentApply}
+                disabled={bulkApplyLoading || !bulkCommentText.trim()}
+              >
+                {bulkApplyLoading ? 'Сохранение…' : 'Применить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
