@@ -64,16 +64,11 @@ export default function WagonRow({
         </td>
 
         <td className="h-last-comment">
-          {wagon.last_comment_text ? (
-            <span
-              className="h-last-comment-text"
-              title={wagon.last_comment_text.length > 60 ? wagon.last_comment_text : undefined}
-            >
-              {wagon.last_comment_text.length > 60
-                ? `${wagon.last_comment_text.slice(0, 60)}…`
-                : wagon.last_comment_text}
-            </span>
-          ) : '—'}
+          {wagon.last_comments?.length > 0
+            ? wagon.last_comments.map((c, i) => (
+                <div key={i} className="h-last-comment-text">{c}</div>
+              ))
+            : '—'}
         </td>
 
         <td className="h-wagon-actions">

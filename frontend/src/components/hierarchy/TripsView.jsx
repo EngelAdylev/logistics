@@ -374,16 +374,11 @@ export default function TripsView({ isActive }) {
                       </button>
                     </td>
                     <td className="h-last-comment">
-                      {trip.last_comment_text ? (
-                        <span
-                          className="h-last-comment-text"
-                          title={trip.last_comment_text.length > 60 ? trip.last_comment_text : undefined}
-                        >
-                          {trip.last_comment_text.length > 60
-                            ? `${trip.last_comment_text.slice(0, 60)}…`
-                            : trip.last_comment_text}
-                        </span>
-                      ) : '—'}
+                      {trip.last_comments?.length > 0
+                        ? trip.last_comments.map((c, i) => (
+                            <div key={i} className="h-last-comment-text">{c}</div>
+                          ))
+                        : '—'}
                     </td>
                   </tr>
                   {isExpanded && (
