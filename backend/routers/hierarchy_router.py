@@ -7,6 +7,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from auth import get_current_user, require_role
@@ -52,7 +53,14 @@ def list_wagons(
         q = q.filter(Wagon.is_active == is_active)
     if wagon_number:
         q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
-    q = q.order_by(Wagon.railway_carriage_number)
+    # Сортировка по последней активности рейса — самые активные вагоны первыми
+    last_op_subq = (
+        select(func.max(WagonTrip.last_operation_date))
+        .where(WagonTrip.wagon_id == Wagon.id)
+        .correlate(Wagon)
+        .scalar_subquery()
+    )
+    q = q.order_by(last_op_subq.desc().nullslast(), Wagon.railway_carriage_number)
 
     total = q.count()
     wagons = q.offset((page - 1) * limit).limit(limit).all()
@@ -135,7 +143,7 @@ def list_all_trips(
         q = q.filter(WagonTrip.is_active == is_active)
     if wagon_number:
         q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
-    q = q.order_by(WagonTrip.last_operation_date.desc().nullslast())
+    q = q.order_by(WagonTrip.flight_number.asc().nullslast(), WagonTrip.flight_start_date.asc().nullslast())
 
     total = q.count()
     rows = q.offset((page - 1) * limit).limit(limit).all()
