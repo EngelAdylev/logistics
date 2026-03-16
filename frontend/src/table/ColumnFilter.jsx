@@ -5,7 +5,9 @@ import { getUniqueValues } from './tableUtils';
 export default function ColumnFilter({ columnId, label, rows, activeValues, onApply, onClear }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(new Set(activeValues || []));
+  const [openUpward, setOpenUpward] = useState(false);
   const ref = useRef(null);
+  const popupRef = useRef(null);
 
   const options = getUniqueValues(rows, columnId);
   const hasActive = activeValues?.length > 0;
@@ -13,6 +15,15 @@ export default function ColumnFilter({ columnId, label, rows, activeValues, onAp
   useEffect(() => {
     if (open) setSelected(new Set(activeValues || []));
   }, [open, activeValues]);
+
+  // Флип вверх, если попап вылезает за нижний край viewport
+  useEffect(() => {
+    if (open && popupRef.current) {
+      const rect = popupRef.current.getBoundingClientRect();
+      setOpenUpward(rect.bottom > window.innerHeight - 8);
+    }
+    if (!open) setOpenUpward(false);
+  }, [open]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -57,7 +68,10 @@ export default function ColumnFilter({ columnId, label, rows, activeValues, onAp
         {hasActive && <span className="filter-badge">{activeValues.length}</span>}
       </button>
       {open && (
-        <div className="filter-popup">
+        <div
+          className={`filter-popup${openUpward ? ' filter-popup--up' : ''}`}
+          ref={popupRef}
+        >
           <div className="filter-title">{label}</div>
           <div className="filter-options">
             {options.map((opt) => (
