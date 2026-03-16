@@ -21,6 +21,9 @@ from models import (
     WagonTrip,
 )
 from schemas import (
+    CommentConstructorApplyRequest,
+    CommentConstructorApplyResult,
+    CommentConstructorSearchItem,
     CommentCreateRequest,
     CommentEditRequest,
     CommentHistoryOut,
@@ -452,6 +455,81 @@ def get_trip_comment_history(
         .all()
     )
     return [CommentHistoryOut.model_validate(h) for h in history]
+
+
+# ─── Конструктор комментариев (массовое назначение) ──────────────────────────
+
+import logging as _logging
+
+MAX_BULK_COMMENT_IDS = 200
+_logger_cc = _logging.getLogger(__name__)
+
+
+@router.post("/comment-constructor/apply", response_model=CommentConstructorApplyResult)
+def comment_constructor_apply(
+    body: CommentConstructorApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Массовое назначение комментария выбранным объектам."""
+    unique_ids = list(dict.fromkeys(body.entity_ids))
+    if len(unique_ids) > MAX_BULK_COMMENT_IDS:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "TOO_MANY_IDS",
+                "message": f"Максимум {MAX_BULK_COMMENT_IDS} объектов за одну операцию.",
+            },
+        )
+
+    author = current_user.login or "user"
+    success_count = 0
+    failed_ids: list[UUID] = []
+
+    for eid in unique_ids:
+        try:
+            if body.entity_type == "wagon":
+                w = db.query(Wagon).filter(Wagon.id == eid).first()
+                if not w:
+                    failed_ids.append(eid)
+                    continue
+                c = WagonEntityComment(wagon_id=eid, comment_text=body.text, author_name=author)
+            else:
+                t = db.query(WagonTrip).filter(WagonTrip.id == eid).first()
+                if not t:
+                    failed_ids.append(eid)
+                    continue
+                c = TripComment(trip_id=eid, comment_text=body.text, author_name=author)
+            db.add(c)
+            success_count += 1
+        except Exception as ex:
+            _logger_cc.warning("comment_constructor: failed entity_id=%s: %s", eid, ex)
+            failed_ids.append(eid)
+
+    db.commit()
+
+    total = len(unique_ids)
+    failed_count = len(failed_ids)
+    status = "success" if failed_count == 0 else ("partial" if success_count > 0 else "failure")
+    msg = (
+        f"Применено к {success_count} из {total} объектов."
+        if failed_count > 0
+        else f"Комментарий успешно применён к {success_count} объектам."
+    )
+
+    _logger_cc.info(
+        "comment_constructor: apply login=%s entity_type=%s requested=%d success=%d failed=%d",
+        current_user.login, body.entity_type, total, success_count, failed_count,
+    )
+
+    return CommentConstructorApplyResult(
+        total_requested=total,
+        success_count=success_count,
+        failed_count=failed_count,
+        failed_ids=failed_ids,
+        status=status,
+        message=msg,
+    )
 
 
 # ─── Синхронизация (admin) ───────────────────────────────────────────────────
