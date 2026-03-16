@@ -350,7 +350,35 @@ def sync_dislocation_to_tracking():
         """)).rowcount
         stats["archived"] += archived_rem
 
+        # Условие 1б: последний код операции = '20' или '96' → архив
+        archived_op = db.execute(text("""
+            UPDATE tracking_wagons tw
+            SET is_active = false
+            WHERE tw.is_active = true
+              AND EXISTS (
+                  SELECT 1 FROM (
+                      SELECT railway_carriage_number,
+                             ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                             TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                             TRIM(COALESCE(operation_code_railway_carriage::text, '')) AS op_code,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY railway_carriage_number,
+                                     ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                                     TRIM(COALESCE(flight_start_station_code::text, ''))
+                                 ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                             ) AS rn
+                      FROM dislocation
+                  ) le
+                  WHERE le.rn = 1 AND le.op_code IN ('20', '96')
+                    AND le.railway_carriage_number = tw.railway_carriage_number
+                    AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
+                    AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
+              )
+        """)).rowcount
+        stats["archived"] += archived_op
+
         # Восстанавливаем ошибочно заархивированные: remaining>0 (по вагон, дата, станция)
+        # Не восстанавливаем если последний код операции терминальный (20 или 96)
         restored = db.execute(text("""
             UPDATE tracking_wagons tw
             SET is_active = true
@@ -392,6 +420,25 @@ def sync_dislocation_to_tracking():
                     AND le2.railway_carriage_number = tw.railway_carriage_number
                     AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le2.bus_date
                     AND TRIM(COALESCE(tw.departure_station_code, '')) = le2.dep_st
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM (
+                      SELECT railway_carriage_number,
+                             ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+                             TRIM(COALESCE(flight_start_station_code::text, '')) AS dep_st,
+                             TRIM(COALESCE(operation_code_railway_carriage::text, '')) AS op_code,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY railway_carriage_number,
+                                     ((flight_start_date::timestamptz AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                                     TRIM(COALESCE(flight_start_station_code::text, ''))
+                                 ORDER BY date_time_of_operation::timestamptz DESC NULLS LAST
+                             ) AS rn
+                      FROM dislocation
+                  ) le3
+                  WHERE le3.rn = 1 AND le3.op_code IN ('20', '96')
+                    AND le3.railway_carriage_number = tw.railway_carriage_number
+                    AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le3.bus_date
+                    AND TRIM(COALESCE(tw.departure_station_code, '')) = le3.dep_st
               )
         """)).rowcount
         if restored:
