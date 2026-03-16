@@ -199,32 +199,53 @@ def list_operations(
         raise HTTPException(status_code=404, detail={"error": "TRIP_NOT_FOUND", "message": "Рейс не найден"})
 
     total = db.execute(
-        text("SELECT COUNT(*) FROM dislocation WHERE flight_id = :tid"),
+        text("""
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT
+                    date_time_of_operation::timestamptz,
+                    operation_code_railway_carriage,
+                    station_code_performing_operation
+                FROM dislocation
+                WHERE flight_id = :tid
+            ) sub
+        """),
         {"tid": trip_id},
     ).scalar() or 0
 
     rows = db.execute(
         text(f"""
-            SELECT
-                d._id                                      AS id,
-                d.flight_id                                AS trip_id,
-                d.date_time_of_operation::timestamptz      AS operation_datetime,
-                d.operation_code_railway_carriage          AS operation_code,
-                oc.name                                    AS operation_name,
-                d.station_code_performing_operation        AS station_code,
-                rs.name                                    AS station_name,
-                d.remaining_distance,
-                d.number_train,
-                d.train_index,
-                d.waybill_number,
-                {_CONTAINER_CONCAT}                        AS container_numbers
-            FROM dislocation d
-            LEFT JOIN operation_code oc
-                ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
-            LEFT JOIN railway_station rs
-                ON d.station_code_performing_operation::text = rs.esr_code
-            WHERE d.flight_id = :tid
-            ORDER BY d.date_time_of_operation::timestamptz DESC
+            SELECT id, trip_id, operation_datetime, operation_code, operation_name,
+                   station_code, station_name, remaining_distance, number_train,
+                   train_index, waybill_number, container_numbers
+            FROM (
+                SELECT DISTINCT ON (
+                    d.date_time_of_operation::timestamptz,
+                    d.operation_code_railway_carriage,
+                    d.station_code_performing_operation
+                )
+                    d._id                                      AS id,
+                    d.flight_id                                AS trip_id,
+                    d.date_time_of_operation::timestamptz      AS operation_datetime,
+                    d.operation_code_railway_carriage          AS operation_code,
+                    oc.name                                    AS operation_name,
+                    d.station_code_performing_operation        AS station_code,
+                    rs.name                                    AS station_name,
+                    d.remaining_distance,
+                    d.number_train,
+                    d.train_index,
+                    d.waybill_number,
+                    {_CONTAINER_CONCAT}                        AS container_numbers
+                FROM dislocation d
+                LEFT JOIN operation_code oc
+                    ON d.operation_code_railway_carriage = oc.operation_code_railway_carriage
+                LEFT JOIN railway_station rs
+                    ON d.station_code_performing_operation::text = rs.esr_code
+                WHERE d.flight_id = :tid
+                ORDER BY d.date_time_of_operation::timestamptz,
+                         d.operation_code_railway_carriage,
+                         d.station_code_performing_operation
+            ) sub
+            ORDER BY operation_datetime DESC
             OFFSET :offset LIMIT :limit
         """),
         {"tid": trip_id, "offset": (page - 1) * limit, "limit": limit},
