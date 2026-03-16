@@ -236,15 +236,10 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   padding: 0 4px;
 }
 .filter-popup {
-  position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 50;
+  /* position/top/left/bottom/maxHeight управляются через JS inline style (position:fixed) */
   background: white; border: 1px solid var(--border-color); border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 180px; max-height: 280px;
-  display: flex; flex-direction: column;
-}
-/* Открытие вверх когда снизу не хватает места */
-.filter-popup--up {
-  top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18); min-width: 180px;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 .filter-title { padding: 10px 12px; font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
 .filter-options { padding: 8px; overflow-y: auto; max-height: 180px; }
