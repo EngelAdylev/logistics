@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:15
+    container_name: railway_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-selftest123}
+      POSTGRES_DB: logistics_service
+    volumes:
+      - railway_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d logistics_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: railway_backend
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://admin:${DB_PASSWORD:-selftest123}@db:5432/logistics_service
+      JWT_SECRET: ${JWT_SECRET:-selftest_jwt_secret_change_me_32ch}
+      CORS_ORIGINS: "*"
+      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.http
+      args:
+        VITE_API_URL: /api
+    container_name: railway_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  railway_data:
