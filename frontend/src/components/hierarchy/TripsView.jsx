@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare, FilterX, MessageSquarePlus } from 'lucide-react';
+import { ChevronRight, ChevronDown, MessageSquare, FilterX } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import { applyFilters } from '../../table/tableUtils';
@@ -17,45 +17,30 @@ function formatDateTime(val) {
   });
 }
 
-export default function TripsView({ isActive, onMetaChange }) {
+export default function TripsView({ isActive }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const LIMIT = 50;
 
   const [columnFilters, setColumnFilters] = useState({});
-  const [wagonSearchInput, setWagonSearchInput] = useState('');
-  const [flightNumberSearchInput, setFlightNumberSearchInput] = useState('');
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
   const [opsLoading, setOpsLoading] = useState(new Map());
   const [commentTrip, setCommentTrip] = useState(null);
 
-  const [selectedTripIds, setSelectedTripIds] = useState(new Set());
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkCommentText, setBulkCommentText] = useState('');
-  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
-  const [bulkApplyResult, setBulkApplyResult] = useState(null);
-
-  const fetchTrips = useCallback(async (p = 1) => {
+  const fetchTrips = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: p, limit: LIMIT });
+      const params = new URLSearchParams({ page: 1, limit: 9999 });
       if (isActive !== undefined) params.append('is_active', isActive);
       const res = await api.get(`/v2/trips?${params}`);
       setTrips(res.data.items || []);
       setTotal(res.data.total || 0);
-      setTotalPages(res.data.pages || 1);
-      setPage(p);
       setExpandedTripIds(new Set());
       setColumnFilters({});
-      setSelectedTripIds(new Set());
     } catch {
       setError('Не удалось загрузить рейсы.');
       setTrips([]);
@@ -64,33 +49,8 @@ export default function TripsView({ isActive, onMetaChange }) {
     }
   }, [isActive]);
 
-  const filteredTrips = useMemo(() => {
-    let list = applyFilters(trips, columnFilters);
-    const wagonQ = wagonSearchInput.trim().toLowerCase();
-    const flightQ = flightNumberSearchInput.trim();
-    if (wagonQ) {
-      list = list.filter((row) => {
-        const v = (row.railway_carriage_number ?? '').toString().toLowerCase();
-        return v.includes(wagonQ);
-      });
-    }
-    if (flightQ) {
-      list = list.filter((row) => {
-        const v = (row.flight_number ?? '').toString();
-        return v.includes(flightQ);
-      });
-    }
-    return list;
-  }, [trips, columnFilters, wagonSearchInput, flightNumberSearchInput]);
-  const hasActiveFilters = Object.keys(columnFilters).length > 0 || wagonSearchInput.trim() !== '' || flightNumberSearchInput.trim() !== '';
-
   useEffect(() => {
-    onMetaChange?.({ total, totalPages, page, filteredCount: filteredTrips.length, hasActiveFilters });
-  }, [total, totalPages, page, filteredTrips.length, hasActiveFilters, onMetaChange]);
-
-  useEffect(() => {
-    setPage(1);
-    fetchTrips(1);
+    fetchTrips();
   }, [isActive]);
 
   const handleFilterChange = (colId, values) => {
@@ -102,47 +62,8 @@ export default function TripsView({ isActive, onMetaChange }) {
     });
   };
 
-  const toggleTripSelect = (id) => {
-    setSelectedTripIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllTrips = () => {
-    setSelectedTripIds(new Set(filteredTrips.map((t) => t.id)));
-  };
-
-  const clearTripSelection = () => setSelectedTripIds(new Set());
-
-  const handleBulkCommentApply = async () => {
-    const text = bulkCommentText.trim();
-    if (!text || selectedTripIds.size === 0) return;
-    setBulkApplyLoading(true);
-    setBulkApplyResult(null);
-    try {
-      const res = await api.post('/v2/comment-constructor/apply', {
-        entity_type: 'trip',
-        entity_ids: Array.from(selectedTripIds),
-        text,
-      });
-      setBulkApplyResult(res.data);
-      if (res.data.status === 'success' || res.data.success_count > 0) {
-        setBulkCommentText('');
-        setSelectedTripIds(new Set());
-        setBulkModalOpen(false);
-      }
-    } catch (e) {
-      setBulkApplyResult({
-        status: 'failure',
-        message: e.response?.data?.detail?.message || e.response?.data?.detail || 'Ошибка сохранения.',
-      });
-    } finally {
-      setBulkApplyLoading(false);
-    }
-  };
+  const filteredTrips = useMemo(() => applyFilters(trips, columnFilters), [trips, columnFilters]);
+  const hasActiveFilters = Object.keys(columnFilters).length > 0;
 
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
@@ -167,37 +88,15 @@ export default function TripsView({ isActive, onMetaChange }) {
         <button
           type="button"
           className="reset-filters-btn active"
-          onClick={() => {
-            setColumnFilters({});
-            setWagonSearchInput('');
-            setFlightNumberSearchInput('');
-          }}
+          onClick={() => setColumnFilters({})}
           title="Сбросить фильтры столбцов"
         >
           <FilterX size={16} /> Сбросить фильтры
         </button>
       )}
-      <div className="h-view-toolbar-right">
-        <button type="button" className="h-bulk-select-btn" onClick={selectAllTrips}>
-          Выбрать всё на странице
-        </button>
-        {selectedTripIds.size > 0 && (
-          <button type="button" className="h-bulk-clear-btn" onClick={clearTripSelection}>
-            Сбросить выбор
-          </button>
-        )}
-        <button
-          type="button"
-          className="h-bulk-comment-btn"
-          disabled={selectedTripIds.size === 0}
-          onClick={() => {
-            setBulkApplyResult(null);
-            setBulkModalOpen(true);
-          }}
-        >
-          <MessageSquarePlus size={18} />
-          Добавить комментарий{selectedTripIds.size > 0 ? ` (${selectedTripIds.size})` : ''}
-        </button>
+      <div className="h-view-meta">
+        Рейсов: {total}
+        {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
       </div>
     </div>
   );
@@ -208,7 +107,7 @@ export default function TripsView({ isActive, onMetaChange }) {
     return (
       <div className="data-error">
         {error}
-        <button type="button" className="retry-btn" onClick={() => fetchTrips(page)}>Повторить</button>
+        <button type="button" className="retry-btn" onClick={fetchTrips}>Повторить</button>
       </div>
     );
   }
@@ -230,49 +129,20 @@ export default function TripsView({ isActive, onMetaChange }) {
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
-              <th style={{ width: 44 }} />
               <th style={{ width: 32 }} />
               {/* Вагон */}
-              <th className="th-with-filter th-filter-has-input">
-                <div className="th-label-row">
-                  <span className="th-label">Вагон</span>
-                  <ColumnFilter
-                    columnId="railway_carriage_number"
-                    label="Вагон"
-                    rows={trips}
-                    activeValues={columnFilters.railway_carriage_number}
-                    onApply={(v) => handleFilterChange('railway_carriage_number', v)}
-                    onClear={() => handleFilterChange('railway_carriage_number', [])}
-                  />
-                </div>
-                <div className="th-filter-input-wrap">
-                  <input
-                    type="text"
-                    className="th-filter-input"
-                    placeholder="Поиск…"
-                    value={wagonSearchInput}
-                    onChange={(e) => setWagonSearchInput(e.target.value)}
-                  />
-                  {wagonSearchInput ? (
-                    <button type="button" className="th-filter-clear" onClick={() => setWagonSearchInput('')} title="Сбросить">✕</button>
-                  ) : null}
-                </div>
+              <th className="th-with-filter">
+                <span className="th-label">Вагон</span>
+                <ColumnFilter
+                  columnId="railway_carriage_number"
+                  label="Вагон"
+                  rows={trips}
+                  activeValues={columnFilters.railway_carriage_number}
+                  onApply={(v) => handleFilterChange('railway_carriage_number', v)}
+                  onClear={() => handleFilterChange('railway_carriage_number', [])}
+                />
               </th>
-              <th className="th-with-filter th-filter-has-input">
-                <span className="th-label">№ рейса</span>
-                <div className="th-filter-input-wrap">
-                  <input
-                    type="text"
-                    className="th-filter-input"
-                    placeholder="Поиск…"
-                    value={flightNumberSearchInput}
-                    onChange={(e) => setFlightNumberSearchInput(e.target.value)}
-                  />
-                  {flightNumberSearchInput ? (
-                    <button type="button" className="th-filter-clear" onClick={() => setFlightNumberSearchInput('')} title="Сбросить">✕</button>
-                  ) : null}
-                </div>
-              </th>
+              <th>№ рейса</th>
               <th>Дата рейса</th>
               {/* Откуда */}
               <th className="th-with-filter">
@@ -318,7 +188,7 @@ export default function TripsView({ isActive, onMetaChange }) {
           <tbody>
             {filteredTrips.length === 0 && (
               <tr>
-                <td colSpan={11} className="empty-table-message">Нет данных по выбранным фильтрам</td>
+                <td colSpan={10} className="empty-table-message">Нет данных по выбранным фильтрам</td>
               </tr>
             )}
             {filteredTrips.map((trip) => {
@@ -331,15 +201,6 @@ export default function TripsView({ isActive, onMetaChange }) {
               return (
                 <React.Fragment key={trip.id}>
                   <tr className={`h-trip-row ${isExpanded ? 'h-trip-row--expanded' : ''}`}>
-                    <td className="h-wagon-check">
-                      <input
-                        type="checkbox"
-                        checked={selectedTripIds.has(trip.id)}
-                        onChange={() => toggleTripSelect(trip.id)}
-                        className="h-bulk-checkbox"
-                        title="Выбрать"
-                      />
-                    </td>
                     <td className="h-trip-indent">
                       <button
                         type="button"
@@ -383,8 +244,7 @@ export default function TripsView({ isActive, onMetaChange }) {
                   {isExpanded && (
                     <tr className="h-ops-row">
                       <td />
-                      <td />
-                      <td colSpan={8} className="h-ops-cell">
+                      <td colSpan={9} className="h-ops-cell">
                         <OperationsTable operations={ops} loading={opLoading} />
                       </td>
                     </tr>
@@ -396,67 +256,7 @@ export default function TripsView({ isActive, onMetaChange }) {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="h-pagination">
-          <button type="button" className="h-page-btn" disabled={page <= 1} onClick={() => fetchTrips(page - 1)}>
-            ← Назад
-          </button>
-          <span className="h-page-info">{page} / {totalPages}</span>
-          <button type="button" className="h-page-btn" disabled={page >= totalPages} onClick={() => fetchTrips(page + 1)}>
-            Вперёд →
-          </button>
-        </div>
-      )}
-
       {commentTrip && <TripComments trip={commentTrip} onClose={() => setCommentTrip(null)} />}
-
-      {/* Modal массового комментария */}
-      {bulkModalOpen && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
-        >
-          <div className="modal-content h-bulk-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Массовый комментарий</h3>
-            <p className="h-bulk-modal-count">Выбрано записей: <strong>{selectedTripIds.size}</strong></p>
-            <label className="h-bulk-modal-label">
-              <textarea
-                value={bulkCommentText}
-                onChange={(e) => setBulkCommentText(e.target.value)}
-                placeholder="Введите текст комментария…"
-                className="h-bulk-modal-textarea"
-                rows={4}
-                maxLength={2000}
-              />
-              <span className="h-bulk-char-count">{bulkCommentText.length} / 2000</span>
-            </label>
-            {bulkApplyResult && (
-              <div className={`h-bulk-result h-bulk-result--${bulkApplyResult.status}`}>
-                {bulkApplyResult.message}
-              </div>
-            )}
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="cancel-btn"
-                onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
-                disabled={bulkApplyLoading}
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                className="save-btn"
-                onClick={handleBulkCommentApply}
-                disabled={bulkApplyLoading || !bulkCommentText.trim()}
-              >
-                {bulkApplyLoading ? 'Сохранение…' : 'Применить'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

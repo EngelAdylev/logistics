@@ -203,6 +203,12 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   background: none; border: none; color: #94a3b8; cursor: pointer; padding: 2px 4px; font-size: 0.9rem;
 }
 .th-filter-clear:hover { color: #64748b; }
+.th-filter-multi-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; padding: 1px 6px; font-size: 0.72rem; font-weight: 700;
+  border-radius: 10px; background: var(--active-blue); color: #fff;
+  white-space: nowrap; flex-shrink: 0; letter-spacing: 0.01em;
+}
 .th-with-filter { white-space: nowrap; }
 .th-with-filter.th-filter-has-input { white-space: normal; }
 .th-with-filter .th-label { margin-right: 6px; }
