@@ -111,6 +111,7 @@ class WagonOut(BaseModel):
     is_active: bool
     trip_count: int = 0
     active_trip_count: int = 0
+    last_comment_text: Optional[str] = None
     # Мастер-данные (заполняются из внешних систем)
     owner: Optional[str] = None
     type: Optional[str] = None
@@ -140,6 +141,7 @@ class WagonTripOut(BaseModel):
     last_operation_name: Optional[str] = None
     last_operation_code: Optional[str] = None
     last_station_name: Optional[str] = None
+    last_comment_text: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

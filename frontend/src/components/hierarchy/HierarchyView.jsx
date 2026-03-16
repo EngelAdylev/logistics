@@ -239,13 +239,14 @@ export default function HierarchyView({ isActive }) {
               <th>Номер вагона</th>
               <th>Статус</th>
               <th>Рейсы</th>
+              <th>Комментарий</th>
               <th style={{ width: 48 }} />
             </tr>
           </thead>
           <tbody>
             {filteredWagons.length === 0 ? (
               <tr>
-                <td colSpan={6} className="empty-table-message">Нет вагонов по запросу</td>
+                <td colSpan={7} className="empty-table-message">Нет вагонов по запросу</td>
               </tr>
             ) : (
               filteredWagons.map((wagon) => (

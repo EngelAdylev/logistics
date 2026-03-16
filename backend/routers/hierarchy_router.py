@@ -75,6 +75,12 @@ def list_wagons(
             WagonTrip.wagon_id == w.id,
             WagonTrip.is_active == True,
         ).count()
+        last_comment_row = (
+            db.query(WagonEntityComment.comment_text)
+            .filter(WagonEntityComment.wagon_id == w.id)
+            .order_by(WagonEntityComment.created_at.desc())
+            .first()
+        )
         items.append(
             WagonOut(
                 id=w.id,
@@ -82,6 +88,7 @@ def list_wagons(
                 is_active=w.is_active,
                 trip_count=trip_count,
                 active_trip_count=active_trip_count,
+                last_comment_text=last_comment_row[0] if last_comment_row else None,
                 created_at=w.created_at,
                 updated_at=w.updated_at,
             )
@@ -120,8 +127,28 @@ def list_trips(
     total = q.count()
     trips = q.offset((page - 1) * limit).limit(limit).all()
 
+    # Подгружаем последние комментарии к рейсам батчем
+    trip_ids = [t.id for t in trips]
+    comments_map: dict = {}
+    if trip_ids:
+        comment_rows = (
+            db.query(TripComment.trip_id, TripComment.comment_text)
+            .filter(TripComment.trip_id.in_(trip_ids))
+            .order_by(TripComment.trip_id, TripComment.created_at.desc())
+            .all()
+        )
+        for tid, ctext in comment_rows:
+            if tid not in comments_map:
+                comments_map[tid] = ctext
+
+    items = []
+    for t in trips:
+        out = WagonTripOut.model_validate(t)
+        out.last_comment_text = comments_map.get(t.id)
+        items.append(out)
+
     return PaginatedResponse(
-        items=[WagonTripOut.model_validate(t) for t in trips],
+        items=items,
         total=total,
         page=page,
         limit=limit,
@@ -139,7 +166,15 @@ def list_all_trips(
     _current_user: User = Depends(get_current_user),
 ):
     """Список всех рейсов с пагинацией."""
-    q = db.query(WagonTrip, Wagon.railway_carriage_number).join(
+    last_trip_comment_subq = (
+        select(TripComment.comment_text)
+        .where(TripComment.trip_id == WagonTrip.id)
+        .order_by(TripComment.created_at.desc())
+        .limit(1)
+        .correlate(WagonTrip)
+        .scalar_subquery()
+    )
+    q = db.query(WagonTrip, Wagon.railway_carriage_number, last_trip_comment_subq.label("last_comment_text")).join(
         Wagon, WagonTrip.wagon_id == Wagon.id
     )
     if is_active is not None:
@@ -152,9 +187,10 @@ def list_all_trips(
     rows = q.offset((page - 1) * limit).limit(limit).all()
 
     items = []
-    for trip, carriage_number in rows:
+    for trip, carriage_number, last_comment_text in rows:
         out = WagonTripOut.model_validate(trip)
         out.railway_carriage_number = carriage_number
+        out.last_comment_text = last_comment_text
         items.append(out)
 
     return PaginatedResponse(

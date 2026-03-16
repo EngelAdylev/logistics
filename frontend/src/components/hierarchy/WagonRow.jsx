@@ -63,6 +63,19 @@ export default function WagonRow({
           )}
         </td>
 
+        <td className="h-last-comment">
+          {wagon.last_comment_text ? (
+            <span
+              className="h-last-comment-text"
+              title={wagon.last_comment_text.length > 60 ? wagon.last_comment_text : undefined}
+            >
+              {wagon.last_comment_text.length > 60
+                ? `${wagon.last_comment_text.slice(0, 60)}…`
+                : wagon.last_comment_text}
+            </span>
+          ) : '—'}
+        </td>
+
         <td className="h-wagon-actions">
           <button
             type="button"
@@ -80,7 +93,7 @@ export default function WagonRow({
         <tr className="h-trips-row">
           {onToggleSelect != null && <td />}
           <td />
-          <td colSpan={4} className="h-trips-cell">
+          <td colSpan={5} className="h-trips-cell">
             {tripsLoading ? (
               <div className="h-ops-loading">Загрузка рейсов…</div>
             ) : !trips || trips.length === 0 ? (

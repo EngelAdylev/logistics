@@ -306,12 +306,13 @@ export default function TripsView({ isActive }) {
               <th>Последняя операция</th>
               <th>Дата операции</th>
               <th>Статус</th>
+              <th>Комментарий</th>
             </tr>
           </thead>
           <tbody>
             {filteredTrips.length === 0 && (
               <tr>
-                <td colSpan={11} className="empty-table-message">Нет данных по выбранным фильтрам</td>
+                <td colSpan={12} className="empty-table-message">Нет данных по выбранным фильтрам</td>
               </tr>
             )}
             {filteredTrips.map((trip) => {
@@ -372,12 +373,24 @@ export default function TripsView({ isActive }) {
                         <MessageSquare size={14} />
                       </button>
                     </td>
+                    <td className="h-last-comment">
+                      {trip.last_comment_text ? (
+                        <span
+                          className="h-last-comment-text"
+                          title={trip.last_comment_text.length > 60 ? trip.last_comment_text : undefined}
+                        >
+                          {trip.last_comment_text.length > 60
+                            ? `${trip.last_comment_text.slice(0, 60)}…`
+                            : trip.last_comment_text}
+                        </span>
+                      ) : '—'}
+                    </td>
                   </tr>
                   {isExpanded && (
                     <tr className="h-ops-row">
                       <td />
                       <td />
-                      <td colSpan={9} className="h-ops-cell">
+                      <td colSpan={10} className="h-ops-cell">
                         <OperationsTable operations={ops} loading={opLoading} />
                       </td>
                     </tr>
