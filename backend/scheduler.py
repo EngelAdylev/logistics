@@ -475,7 +475,7 @@ def rebuild_tracking_from_dislocation_merge():
                     continue
                 bus_d = _business_date(flight_dt)
                 dep_st = _norm_station(row.get("flight_start_station_code"))
-                is_unloaded = row.get("operation_code_railway_carriage") == "20"
+                is_unloaded = row.get("operation_code_railway_carriage") in ("20", "96")
                 row_dt = _parse_flight_start_date(row.get("date_time_of_operation"))
                 track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 if not track_entry:
