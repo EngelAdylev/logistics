@@ -294,6 +294,24 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
 .h-view-meta { font-size: 0.85rem; color: #64748b; }
+
+/* Поиск по вагонам */
+.h-search-box { position: relative; display: flex; align-items: flex-start; gap: 4px; }
+.h-search-input {
+  padding: 6px 28px 6px 10px; border: 1px solid var(--border-color); border-radius: 6px;
+  font-size: 0.875rem; font-family: inherit; background: #fff; outline: none;
+  transition: border-color 0.15s;
+}
+.h-search-input:focus { border-color: var(--active-blue); }
+.h-search-textarea {
+  width: 260px; resize: none; line-height: 1.4; padding-right: 10px;
+}
+.h-search-clear {
+  position: absolute; top: 6px; right: 6px; background: none; border: none;
+  color: #9ca3af; cursor: pointer; font-size: 0.8rem; line-height: 1;
+  padding: 2px; border-radius: 3px;
+}
+.h-search-clear:hover { color: #374151; }
 .h-bulk-select-btn, .h-bulk-clear-btn {
   padding: 6px 12px; font-size: 0.85rem; border: 1px solid var(--border-color);
   background: #f8fafc; border-radius: 6px; cursor: pointer;

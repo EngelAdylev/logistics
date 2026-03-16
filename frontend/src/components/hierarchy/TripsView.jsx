@@ -17,6 +17,17 @@ function formatDateTime(val) {
   });
 }
 
+/** Разбивает строку ввода по пробелу/переносу/запятой → массив токенов */
+function parseTokens(input) {
+  return input.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** Возвращает true, если строка val содержит хотя бы один токен из tokens */
+function matchesAny(val, tokens) {
+  const lower = (val || '').toLowerCase();
+  return tokens.some((t) => lower.includes(t));
+}
+
 export default function TripsView({ isActive }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +35,7 @@ export default function TripsView({ isActive }) {
   const [total, setTotal] = useState(0);
 
   const [columnFilters, setColumnFilters] = useState({});
+  const [wagonSearch, setWagonSearch] = useState('');
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
@@ -41,6 +53,7 @@ export default function TripsView({ isActive }) {
       setTotal(res.data.total || 0);
       setExpandedTripIds(new Set());
       setColumnFilters({});
+      setWagonSearch('');
     } catch {
       setError('Не удалось загрузить рейсы.');
       setTrips([]);
@@ -62,8 +75,19 @@ export default function TripsView({ isActive }) {
     });
   };
 
-  const filteredTrips = useMemo(() => applyFilters(trips, columnFilters), [trips, columnFilters]);
+  // Сначала применяем ColumnFilter, потом мультизначный поиск по вагону
+  const filteredTrips = useMemo(() => {
+    let result = applyFilters(trips, columnFilters);
+    const tokens = parseTokens(wagonSearch.toLowerCase());
+    if (tokens.length) {
+      result = result.filter((t) => matchesAny(t.railway_carriage_number, tokens));
+    }
+    return result;
+  }, [trips, columnFilters, wagonSearch]);
+
   const hasActiveFilters = Object.keys(columnFilters).length > 0;
+  const hasWagonSearch = wagonSearch.trim().length > 0;
+  const hasAnyFilter = hasActiveFilters || hasWagonSearch;
 
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
@@ -84,6 +108,21 @@ export default function TripsView({ isActive }) {
 
   const toolbar = (
     <div className="h-view-toolbar">
+      {/* Поиск по вагонам */}
+      <div className="h-search-box">
+        <textarea
+          className="h-search-input h-search-textarea"
+          placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
+          value={wagonSearch}
+          onChange={(e) => setWagonSearch(e.target.value)}
+          rows={2}
+        />
+        {hasWagonSearch && (
+          <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
+        )}
+      </div>
+
+      {/* Кнопка сброса ColumnFilter */}
       {hasActiveFilters && (
         <button
           type="button"
@@ -94,9 +133,10 @@ export default function TripsView({ isActive }) {
           <FilterX size={16} /> Сбросить фильтры
         </button>
       )}
+
       <div className="h-view-meta">
         Рейсов: {total}
-        {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
+        {hasAnyFilter && ` (показано: ${filteredTrips.length})`}
       </div>
     </div>
   );
@@ -130,7 +170,7 @@ export default function TripsView({ isActive }) {
           <thead>
             <tr>
               <th style={{ width: 32 }} />
-              {/* Вагон */}
+              {/* Вагон — ColumnFilter оставлен для точечной фильтрации */}
               <th className="th-with-filter">
                 <span className="th-label">Вагон</span>
                 <ColumnFilter

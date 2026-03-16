@@ -2,13 +2,24 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 
+/** Разбивает строку ввода по пробелу/переносу/запятой → массив токенов */
+function parseTokens(input) {
+  return input.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+/** Возвращает true, если строка val содержит хотя бы один токен из tokens */
+function matchesAny(val, tokens) {
+  const lower = (val || '').toLowerCase();
+  return tokens.some((t) => lower.includes(t));
+}
+
 export default function HierarchyView({ isActive }) {
   const [wagons, setWagons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
 
-  // фильтр по номеру вагона (клиентский)
+  // фильтр по номеру вагона (клиентский, мультизначный)
   const [wagonSearch, setWagonSearch] = useState('');
 
   // expanded state
@@ -43,11 +54,11 @@ export default function HierarchyView({ isActive }) {
     fetchWagons();
   }, [isActive]);
 
-  // Клиентский фильтр по номеру вагона
+  // Клиентский мультизначный фильтр по номеру вагона
   const filteredWagons = useMemo(() => {
-    const q = wagonSearch.trim().toLowerCase();
-    if (!q) return wagons;
-    return wagons.filter((w) => w.railway_carriage_number?.toLowerCase().includes(q));
+    const tokens = parseTokens(wagonSearch.toLowerCase());
+    if (!tokens.length) return wagons;
+    return wagons.filter((w) => matchesAny(w.railway_carriage_number, tokens));
   }, [wagons, wagonSearch]);
 
   // --- Раскрытие вагона: загружаем рейсы ---
@@ -61,7 +72,7 @@ export default function HierarchyView({ isActive }) {
     next.add(wagonId);
     setExpandedWagonIds(next);
 
-    if (tripsByWagonId.has(wagonId)) return; // уже загружены
+    if (tripsByWagonId.has(wagonId)) return;
 
     setTripsLoading((prev) => new Map(prev).set(wagonId, true));
     try {
@@ -85,7 +96,7 @@ export default function HierarchyView({ isActive }) {
     next.add(tripId);
     setExpandedTripIds(next);
 
-    if (operationsByTripId.has(tripId)) return; // уже загружены
+    if (operationsByTripId.has(tripId)) return;
 
     setOpsLoading((prev) => new Map(prev).set(tripId, true));
     try {
@@ -98,23 +109,25 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
+  const hasSearch = wagonSearch.trim().length > 0;
+
   const toolbar = (
     <div className="h-view-toolbar">
       <div className="h-search-box">
-        <input
-          type="text"
-          className="h-search-input"
-          placeholder="Поиск по номеру вагона…"
+        <textarea
+          className="h-search-input h-search-textarea"
+          placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
           value={wagonSearch}
           onChange={(e) => setWagonSearch(e.target.value)}
+          rows={2}
         />
-        {wagonSearch && (
+        {hasSearch && (
           <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
         )}
       </div>
       <div className="h-view-meta">
         Вагонов: {total}
-        {wagonSearch.trim() && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
+        {hasSearch && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
       </div>
     </div>
   );
