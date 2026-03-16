@@ -64,10 +64,8 @@ export default function WagonRow({
         </td>
 
         <td className="h-last-comment">
-          {wagon.last_comments?.length > 0
-            ? wagon.last_comments.map((c, i) => (
-                <div key={i} className="h-last-comment-text">{c}</div>
-              ))
+          {wagon.last_comment_text
+            ? <span className="h-last-comment-text">{wagon.last_comment_text}</span>
             : '—'}
         </td>
 

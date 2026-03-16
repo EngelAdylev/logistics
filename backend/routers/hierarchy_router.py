@@ -68,11 +68,11 @@ def list_wagons(
     total = q.count()
     wagons = q.offset((page - 1) * limit).limit(limit).all()
 
-    # Батч-загрузка счётчиков и комментариев
+    # Батч-загрузка счётчиков и последнего комментария
     wagon_ids = [w.id for w in wagons]
     trip_counts: dict = {}
     active_trip_counts: dict = {}
-    wagon_comments_map: dict = {}
+    wagon_last_comment: dict = {}
     if wagon_ids:
         for row in db.query(WagonTrip.wagon_id, func.count()).filter(
             WagonTrip.wagon_id.in_(wagon_ids)
@@ -82,13 +82,17 @@ def list_wagons(
             WagonTrip.wagon_id.in_(wagon_ids), WagonTrip.is_active == True
         ).group_by(WagonTrip.wagon_id).all():
             active_trip_counts[row[0]] = row[1]
-        for row in (
-            db.query(WagonEntityComment.wagon_id, WagonEntityComment.comment_text)
-            .filter(WagonEntityComment.wagon_id.in_(wagon_ids))
-            .order_by(WagonEntityComment.wagon_id, WagonEntityComment.created_at.desc())
-            .all()
+        # DISTINCT ON — один последний комментарий на вагон
+        for row in db.execute(
+            text("""
+                SELECT DISTINCT ON (wagon_id) wagon_id, comment_text
+                FROM wagon_entity_comments
+                WHERE wagon_id = ANY(:ids)
+                ORDER BY wagon_id, created_at DESC
+            """),
+            {"ids": wagon_ids},
         ):
-            wagon_comments_map.setdefault(row[0], []).append(row[1])
+            wagon_last_comment[row[0]] = row[1]
 
     items = []
     for w in wagons:
@@ -99,7 +103,7 @@ def list_wagons(
                 is_active=w.is_active,
                 trip_count=trip_counts.get(w.id, 0),
                 active_trip_count=active_trip_counts.get(w.id, 0),
-                last_comments=wagon_comments_map.get(w.id, []),
+                last_comment_text=wagon_last_comment.get(w.id),
                 created_at=w.created_at,
                 updated_at=w.updated_at,
             )
@@ -138,22 +142,25 @@ def list_trips(
     total = q.count()
     trips = q.offset((page - 1) * limit).limit(limit).all()
 
-    # Батч-загрузка всех комментариев к рейсам
+    # Батч-загрузка последнего комментария к рейсам
     trip_ids = [t.id for t in trips]
-    comments_map: dict = {}
+    trip_last_comment: dict = {}
     if trip_ids:
-        for tid, ctext in (
-            db.query(TripComment.trip_id, TripComment.comment_text)
-            .filter(TripComment.trip_id.in_(trip_ids))
-            .order_by(TripComment.trip_id, TripComment.created_at.desc())
-            .all()
+        for row in db.execute(
+            text("""
+                SELECT DISTINCT ON (trip_id) trip_id, comment_text
+                FROM trip_comments
+                WHERE trip_id = ANY(:ids)
+                ORDER BY trip_id, created_at DESC
+            """),
+            {"ids": trip_ids},
         ):
-            comments_map.setdefault(tid, []).append(ctext)
+            trip_last_comment[row[0]] = row[1]
 
     items = []
     for t in trips:
         out = WagonTripOut.model_validate(t)
-        out.last_comments = comments_map.get(t.id, [])
+        out.last_comment_text = trip_last_comment.get(t.id)
         items.append(out)
 
     return PaginatedResponse(
@@ -187,23 +194,26 @@ def list_all_trips(
     total = q.count()
     rows = q.offset((page - 1) * limit).limit(limit).all()
 
-    # Батч-загрузка всех комментариев
+    # Батч-загрузка последнего комментария
     trip_ids = [trip.id for trip, _ in rows]
-    comments_map: dict = {}
+    trip_last_comment: dict = {}
     if trip_ids:
-        for tid, ctext in (
-            db.query(TripComment.trip_id, TripComment.comment_text)
-            .filter(TripComment.trip_id.in_(trip_ids))
-            .order_by(TripComment.trip_id, TripComment.created_at.desc())
-            .all()
+        for row in db.execute(
+            text("""
+                SELECT DISTINCT ON (trip_id) trip_id, comment_text
+                FROM trip_comments
+                WHERE trip_id = ANY(:ids)
+                ORDER BY trip_id, created_at DESC
+            """),
+            {"ids": trip_ids},
         ):
-            comments_map.setdefault(tid, []).append(ctext)
+            trip_last_comment[row[0]] = row[1]
 
     items = []
     for trip, carriage_number in rows:
         out = WagonTripOut.model_validate(trip)
         out.railway_carriage_number = carriage_number
-        out.last_comments = comments_map.get(trip.id, [])
+        out.last_comment_text = trip_last_comment.get(trip.id)
         items.append(out)
 
     return PaginatedResponse(

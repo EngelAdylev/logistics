@@ -374,10 +374,8 @@ export default function TripsView({ isActive }) {
                       </button>
                     </td>
                     <td className="h-last-comment">
-                      {trip.last_comments?.length > 0
-                        ? trip.last_comments.map((c, i) => (
-                            <div key={i} className="h-last-comment-text">{c}</div>
-                          ))
+                      {trip.last_comment_text
+                        ? <span className="h-last-comment-text">{trip.last_comment_text}</span>
                         : '—'}
                     </td>
                   </tr>
