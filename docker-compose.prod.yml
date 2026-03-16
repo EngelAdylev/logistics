@@ -1,30 +1,10 @@
 services:
-  db:
-    image: postgres:15
-    container_name: railway_db
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-logistics_service}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-logistics_service}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: always
-    # Port NOT exposed — db is only accessible inside docker network
-
   backend:
     build: ./backend
     container_name: railway_backend
-    depends_on:
-      db:
-        condition: service_healthy
     restart: always
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-logistics_service}
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGINS: https://${DOMAIN}
       ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
@@ -35,6 +15,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: /api
     container_name: railway_frontend
     ports:
       - "80:80"
@@ -57,6 +39,3 @@ services:
     # Auto-renew every 12 hours
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'"
     restart: always
-
-volumes:
-  postgres_data:

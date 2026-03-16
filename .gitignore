@@ -3,6 +3,9 @@
 .env.*
 *.env
 
+# Keep example template in repo
+!.env.example
+
 # Python
 __pycache__/
 *.pyc
