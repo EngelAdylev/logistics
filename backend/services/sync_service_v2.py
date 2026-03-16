@@ -351,7 +351,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 destination_station_name = last_op.dst_name,
                 number_train          = last_op.number_train,
                 train_index           = last_op.train_index,
-                is_active             = (last_op.op_code IS NULL OR last_op.op_code NOT IN ('20')),
+                is_active             = (last_op.op_code IS NULL OR last_op.op_code NOT IN ('20', '96')),
                 updated_at            = now()
             FROM (
                 SELECT DISTINCT ON (d.flight_id)

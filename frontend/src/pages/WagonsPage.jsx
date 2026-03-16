@@ -11,9 +11,17 @@ const DEFAULT_VISIBLE_COLUMN_IDS = TABLE_COLUMNS.filter((c) => c.isDefaultVisibl
 
 export default function WagonsPage() {
   const { loading: authLoading } = useAuth();
-  const [tab, setTab] = useState('active');
-  const [hierarchyFilter, setHierarchyFilter] = useState('active'); // 'active' | 'archive'
-  const [tripsFilter, setTripsFilter] = useState('active'); // 'active' | 'archive' | 'all'
+
+  // Главные вкладки: Дислокация | Матрёшка | Рейсы
+  const [tab, setTab] = useState('dislocation');
+
+  // Переключатель внутри вкладки Дислокация
+  const [dislocationFilter, setDislocationFilter] = useState('active'); // 'active' | 'archive' | 'all'
+
+  // Переключатели в Матрёшка и Рейсы
+  const [hierarchyFilter, setHierarchyFilter] = useState('active');
+  const [tripsFilter, setTripsFilter] = useState('active');
+
   const [data, setData] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState(null);
@@ -34,9 +42,20 @@ export default function WagonsPage() {
     setDataError(null);
     setDataLoading(true);
     try {
-      const endpoint = tab === 'active' ? '/wagons/active' : '/wagons/archive';
-      const res = await api.get(endpoint);
-      setData(Array.isArray(res.data) ? res.data : []);
+      if (dislocationFilter === 'all') {
+        const [activeRes, archiveRes] = await Promise.all([
+          api.get('/wagons/active'),
+          api.get('/wagons/archive'),
+        ]);
+        setData([
+          ...(Array.isArray(activeRes.data) ? activeRes.data : []),
+          ...(Array.isArray(archiveRes.data) ? archiveRes.data : []),
+        ]);
+      } else {
+        const endpoint = dislocationFilter === 'active' ? '/wagons/active' : '/wagons/archive';
+        const res = await api.get(endpoint);
+        setData(Array.isArray(res.data) ? res.data : []);
+      }
       return true;
     } catch (e) {
       console.error(e);
@@ -64,10 +83,14 @@ export default function WagonsPage() {
     }
   };
 
+  // Загружаем данные при переключении вкладки на Дислокацию или смене фильтра
   useEffect(() => {
     if (authLoading) return;
-    fetchData();
-  }, [tab, authLoading]);
+    if (tab === 'dislocation') {
+      setColumnFilters({});
+      fetchData();
+    }
+  }, [tab, dislocationFilter, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (authLoading) return;
@@ -122,9 +145,9 @@ export default function WagonsPage() {
       setSyncMessage(
         `${statusMsg} Создано: ${d.created ?? 0}, обновлено: ${d.updated ?? 0}${d.errors ? `, ошибок: ${d.errors}` : ''}.`
       );
-      const ok = await fetchData(true);
-      if (!ok) {
-        setDataError('Не удалось обновить таблицу. Показаны предыдущие данные.');
+      if (tab === 'dislocation') {
+        const ok = await fetchData(true);
+        if (!ok) setDataError('Не удалось обновить таблицу. Показаны предыдущие данные.');
       }
     } catch (e) {
       const detail = e.response?.data?.detail;
@@ -167,23 +190,45 @@ export default function WagonsPage() {
     });
   };
 
+  // Переключатель фильтра для вкладки Дислокация
+  const DislocationFilterToggle = () => (
+    <div className="h-filter-block">
+      <div className="h-filter-toggle">
+        <button
+          type="button"
+          className={dislocationFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+          onClick={() => setDislocationFilter('active')}
+        >
+          Активные
+        </button>
+        <button
+          type="button"
+          className={dislocationFilter === 'archive' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+          onClick={() => setDislocationFilter('archive')}
+        >
+          Архивные
+        </button>
+        <button
+          type="button"
+          className={dislocationFilter === 'all' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+          onClick={() => setDislocationFilter('all')}
+        >
+          Все
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div className="tabs-row">
         <div className="tabs">
           <button
             type="button"
-            onClick={() => setTab('active')}
-            className={tab === 'active' ? 'active' : ''}
+            onClick={() => setTab('dislocation')}
+            className={tab === 'dislocation' ? 'active' : ''}
           >
-            Активные
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('archive')}
-            className={tab === 'archive' ? 'active' : ''}
-          >
-            Архив
+            Дислокация
           </button>
           <button
             type="button"
@@ -307,8 +352,9 @@ export default function WagonsPage() {
           )}
         </div>
       ) : (
-        /* ── Вкладки Активные / Архив ── */
+        /* ── Вкладка Дислокация ── */
         <>
+          <DislocationFilterToggle />
           {settingsError && <div className="settings-error">{settingsError}</div>}
           {dataError && (
             <div className="data-error">
