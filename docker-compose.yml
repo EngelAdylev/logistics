@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     networks:
       - proxy
+    expose:
+      - "8000"
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
@@ -19,8 +21,8 @@ services:
       args:
         VITE_API_URL: /api
     container_name: railway_frontend
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     networks:
       - proxy
     depends_on:
