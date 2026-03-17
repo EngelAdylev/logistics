@@ -350,7 +350,7 @@ def sync_dislocation_to_tracking():
         """)).rowcount
         stats["archived"] += archived_rem
 
-        # Условие 1б: последний код операции = '20' или '96' → архив
+        # Условие 1б: последний код операции = '96' → архив
         archived_op = db.execute(text("""
             UPDATE tracking_wagons tw
             SET is_active = false
@@ -369,7 +369,7 @@ def sync_dislocation_to_tracking():
                              ) AS rn
                       FROM dislocation
                   ) le
-                  WHERE le.rn = 1 AND le.op_code IN ('20', '96')
+                  WHERE le.rn = 1 AND le.op_code IN ('96')
                     AND le.railway_carriage_number = tw.railway_carriage_number
                     AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
                     AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
@@ -435,7 +435,7 @@ def sync_dislocation_to_tracking():
                              ) AS rn
                       FROM dislocation
                   ) le3
-                  WHERE le3.rn = 1 AND le3.op_code IN ('20', '96')
+                  WHERE le3.rn = 1 AND le3.op_code IN ('96')
                     AND le3.railway_carriage_number = tw.railway_carriage_number
                     AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le3.bus_date
                     AND TRIM(COALESCE(tw.departure_station_code, '')) = le3.dep_st
@@ -522,7 +522,7 @@ def rebuild_tracking_from_dislocation_merge():
                     continue
                 bus_d = _business_date(flight_dt)
                 dep_st = _norm_station(row.get("flight_start_station_code"))
-                is_unloaded = row.get("operation_code_railway_carriage") in ("20", "96")
+                is_unloaded = row.get("operation_code_railway_carriage") in ("96",)
                 row_dt = _parse_flight_start_date(row.get("date_time_of_operation"))
                 track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 if not track_entry:
