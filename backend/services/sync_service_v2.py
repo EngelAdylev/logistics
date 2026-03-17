@@ -352,7 +352,10 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 number_train          = last_op.number_train,
                 train_index           = last_op.train_index,
                 number_railway_carriage_on_train = last_op.number_railway_carriage_on_train,
-                is_active             = NOT (last_op.rem <= 0 AND last_op.op_code IS NOT NULL AND last_op.op_code IN ('20', '43', '85', '96')),
+                is_active             = NOT (
+                    last_op.op_code = '96'
+                    OR (last_op.rem <= 0 AND last_op.op_code IN ('20', '43', '85'))
+                ),
                 updated_at            = now()
             FROM (
                 SELECT DISTINCT ON (d.flight_id)
