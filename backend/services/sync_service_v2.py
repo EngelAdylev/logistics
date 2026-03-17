@@ -335,7 +335,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
             LEFT JOIN railway_station rs_dep
                 ON first_op.fsc::text = rs_dep.esr_code
             WHERE wt.id = first_op.flight_id
-              AND wt.departure_station_code IS NULL
+              AND wt.departure_station_name IS NULL
         """))
 
         # Шаг 5. Batch UPDATE: денормализованные поля последней операции + is_active
