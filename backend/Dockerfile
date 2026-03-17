@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM docker.lkds.alabuga.ru/alabuga/python:3.13.7-slim-clean
 
 WORKDIR /app
 
