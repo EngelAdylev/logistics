@@ -75,6 +75,7 @@ class TrackingWagonTableRowOut(BaseModel):
     is_active: bool
     number_train: Optional[str] = None
     train_index: Optional[str] = None
+    number_railway_carriage_on_train: Optional[str] = None
     last_comment_text: Optional[str] = None
     # Расширенные поля из dislocation
     remaining_distance: Optional[str] = None
@@ -136,6 +137,7 @@ class WagonTripOut(BaseModel):
     destination_station_name: Optional[str] = None
     number_train: Optional[str] = None
     train_index: Optional[str] = None
+    number_railway_carriage_on_train: Optional[str] = None
     is_active: bool
     last_operation_date: Optional[datetime] = None
     last_operation_name: Optional[str] = None
@@ -160,6 +162,7 @@ class WagonTripOperationOut(BaseModel):
     remaining_distance: Optional[str] = None
     number_train: Optional[str] = None
     train_index: Optional[str] = None
+    number_railway_carriage_on_train: Optional[str] = None
     waybill_number: Optional[str] = None
     container_numbers: Optional[str] = None
     created_at: Optional[datetime] = None

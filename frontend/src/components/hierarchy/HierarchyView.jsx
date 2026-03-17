@@ -179,7 +179,7 @@ export default function HierarchyView({ isActive }) {
         )}
       </div>
       <div className="h-view-meta">
-        Вагонов: {total}
+        вагонов на слежении: {total}
         {hasSearch && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
       </div>
       <div className="h-view-toolbar-right">

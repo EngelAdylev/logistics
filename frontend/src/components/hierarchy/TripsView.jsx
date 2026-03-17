@@ -303,6 +303,7 @@ export default function TripsView({ isActive }) {
                   onClear={() => handleFilterChange('number_train', [])}
                 />
               </th>
+              <th>№ ваг. на поезде</th>
               <th>Последняя операция</th>
               <th>Дата операции</th>
               <th>Статус</th>
@@ -353,6 +354,7 @@ export default function TripsView({ isActive }) {
                       {trip.number_train || '—'}
                       {trip.train_index && <span className="h-train-index"> / {trip.train_index}</span>}
                     </td>
+                    <td>{trip.number_railway_carriage_on_train || '—'}</td>
                     <td className="h-trip-lastop">
                       <div>{trip.last_operation_name || '—'}</div>
                       {trip.last_station_name && (

@@ -24,6 +24,7 @@ export default function OperationsTable({ operations, loading }) {
             <th>Станция</th>
             <th>Ост. расст.</th>
             <th>Поезд</th>
+            <th>№ ваг. на поезде</th>
           </tr>
         </thead>
         <tbody>
@@ -39,6 +40,7 @@ export default function OperationsTable({ operations, loading }) {
               <td>{op.station_name || op.station_code || '—'}</td>
               <td>{op.remaining_distance || '—'}</td>
               <td>{op.number_train || '—'}</td>
+              <td>{op.number_railway_carriage_on_train || '—'}</td>
             </tr>
           ))}
         </tbody>

@@ -235,7 +235,7 @@ export default function WagonsPage() {
             onClick={() => setTab('hierarchy')}
             className={tab === 'hierarchy' ? 'active' : ''}
           >
-            Матрёшка
+            Вагоны на слежении
           </button>
           <button
             type="button"
@@ -261,7 +261,7 @@ export default function WagonsPage() {
       </div>
 
       {tab === 'hierarchy' ? (
-        /* ── Вкладка Матрёшка ── */
+        /* ── Вкладка Вагоны на слежении ── */
         <div>
           <div className="h-filter-block">
             <div className="h-filter-toggle">
@@ -289,7 +289,7 @@ export default function WagonsPage() {
             </div>
             {hierarchyMeta != null && (
               <div className="h-view-meta">
-                Вагонов: {hierarchyMeta.total}
+                вагонов на слежении: {hierarchyMeta.total}
                 {hierarchyMeta.totalPages > 1 && ` · стр. ${hierarchyMeta.page} из ${hierarchyMeta.totalPages}`}
               </div>
             )}

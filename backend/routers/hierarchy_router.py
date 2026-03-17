@@ -278,7 +278,7 @@ def list_operations(
         text(f"""
             SELECT id, trip_id, operation_datetime, operation_code, operation_name,
                    station_code, station_name, remaining_distance, number_train,
-                   train_index, waybill_number, container_numbers
+                   train_index, number_railway_carriage_on_train, waybill_number, container_numbers
             FROM (
                 SELECT DISTINCT ON (
                     d.date_time_of_operation::timestamptz,
@@ -295,6 +295,7 @@ def list_operations(
                     d.remaining_distance::text AS remaining_distance,
                     d.number_train,
                     d.train_index,
+                    d.number_railway_carriage_on_train,
                     d.waybill_number,
                     {_CONTAINER_CONCAT}                        AS container_numbers
                 FROM dislocation d
@@ -325,6 +326,7 @@ def list_operations(
             remaining_distance=row["remaining_distance"],
             number_train=row["number_train"],
             train_index=row["train_index"],
+            number_railway_carriage_on_train=row["number_railway_carriage_on_train"],
             waybill_number=row["waybill_number"],
             container_numbers=row["container_numbers"],
             created_at=None,
