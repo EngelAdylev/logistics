@@ -292,7 +292,7 @@ def list_operations(
                     oc.name                                    AS operation_name,
                     d.station_code_performing_operation        AS station_code,
                     rs.name                                    AS station_name,
-                    d.remaining_distance,
+                    d.remaining_distance::text AS remaining_distance,
                     d.number_train,
                     d.train_index,
                     d.waybill_number,
