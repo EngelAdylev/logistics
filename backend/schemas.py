@@ -113,6 +113,15 @@ class WagonOut(BaseModel):
     trip_count: int = 0
     active_trip_count: int = 0
     last_comment_text: Optional[str] = None
+    # Поля последнего активного рейса
+    number_train: Optional[str] = None
+    train_index: Optional[str] = None
+    number_railway_carriage_on_train: Optional[str] = None
+    last_station_name: Optional[str] = None
+    last_operation_name: Optional[str] = None
+    last_operation_date: Optional[datetime] = None
+    departure_station_name: Optional[str] = None
+    destination_station_name: Optional[str] = None
     # Мастер-данные (заполняются из внешних систем)
     owner: Optional[str] = None
     type: Optional[str] = None

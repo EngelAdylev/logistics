@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquarePlus } from 'lucide-react';
+import { MessageSquarePlus, Layers, FilterX } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
+import { HIERARCHY_COLUMNS } from './hierarchyColumnsConfig';
+import ColumnFilter from '../../table/ColumnFilter';
+import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
+import { applyFilters, groupByTrain, EMPTY_TRAIN_LABEL } from '../../table/tableUtils';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
-/** Разбивает строку ввода по пробелу/переносу/запятой → массив токенов */
 function parseTokens(input) {
   return input.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
 }
 
-/** Возвращает true, если строка val содержит хотя бы один токен из tokens */
 function matchesAny(val, tokens) {
   const lower = (val || '').toLowerCase();
   return tokens.some((t) => lower.includes(t));
 }
+
+const DEFAULT_VISIBLE_IDS = HIERARCHY_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
 export default function HierarchyView({ isActive }) {
   const [wagons, setWagons] = useState([]);
@@ -20,23 +25,31 @@ export default function HierarchyView({ isActive }) {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
 
-  // Групповой комментарий
-  const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkCommentText, setBulkCommentText] = useState('');
-  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
-  const [bulkApplyResult, setBulkApplyResult] = useState(null);
-
-  // фильтр по номеру вагона (клиентский, мультизначный)
+  // Search
   const [wagonSearch, setWagonSearch] = useState('');
 
-  // expanded state
+  // Column config
+  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
+  const [columnFilters, setColumnFilters] = useState({});
+
+  // Group by train
+  const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
+  const [collapsedTrains, setCollapsedTrains] = useState(new Set());
+
+  // Expand state (matryoshka)
   const [expandedWagonIds, setExpandedWagonIds] = useState(new Set());
   const [tripsByWagonId, setTripsByWagonId] = useState(new Map());
   const [tripsLoading, setTripsLoading] = useState(new Map());
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
   const [opsLoading, setOpsLoading] = useState(new Map());
+
+  // Group comment
+  const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCommentText, setBulkCommentText] = useState('');
+  const [bulkApplyLoading, setBulkApplyLoading] = useState(false);
+  const [bulkApplyResult, setBulkApplyResult] = useState(null);
 
   const fetchWagons = useCallback(async () => {
     setLoading(true);
@@ -63,14 +76,39 @@ export default function HierarchyView({ isActive }) {
     fetchWagons();
   }, [isActive]);
 
-  // Клиентский мультизначный фильтр по номеру вагона
-  const filteredWagons = useMemo(() => {
+  // Client-side wagon search filter
+  const searchedWagons = useMemo(() => {
     const tokens = parseTokens(wagonSearch.toLowerCase());
     if (!tokens.length) return wagons;
     return wagons.filter((w) => matchesAny(w.railway_carriage_number, tokens));
   }, [wagons, wagonSearch]);
 
-  // --- Выбор вагонов ---
+  // Column filters
+  const filteredWagons = useMemo(() => applyFilters(searchedWagons, columnFilters), [searchedWagons, columnFilters]);
+
+  const handleFilterChange = (colId, vals) => {
+    setColumnFilters((prev) => ({ ...prev, [colId]: vals }));
+  };
+  const handleResetFilters = () => setColumnFilters({});
+
+  // Group by train
+  const groups = useMemo(() => groupByTrain(filteredWagons), [filteredWagons]);
+
+  const toggleTrain = (trainKey) => {
+    setCollapsedTrains((prev) => {
+      const next = new Set(prev);
+      if (next.has(trainKey)) next.delete(trainKey);
+      else next.add(trainKey);
+      return next;
+    });
+  };
+
+  // Visible cols
+  const visibleCols = visibleColumnIds.length
+    ? HIERARCHY_COLUMNS.filter((c) => visibleColumnIds.includes(c.id))
+    : HIERARCHY_COLUMNS.filter((c) => c.isDefaultVisible !== false);
+
+  // Selection
   const toggleWagonSelect = (id) => {
     setSelectedWagonIds((prev) => {
       const next = new Set(prev);
@@ -79,14 +117,10 @@ export default function HierarchyView({ isActive }) {
       return next;
     });
   };
-
-  const selectAllWagons = () => {
-    setSelectedWagonIds(new Set(filteredWagons.map((w) => w.id)));
-  };
-
+  const selectAllWagons = () => setSelectedWagonIds(new Set(filteredWagons.map((w) => w.id)));
   const clearSelection = () => setSelectedWagonIds(new Set());
 
-  // --- Групповой комментарий ---
+  // Bulk comment
   const handleBulkCommentApply = async () => {
     const text = bulkCommentText.trim();
     if (!text || selectedWagonIds.size === 0) return;
@@ -114,19 +148,13 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
-  // --- Раскрытие вагона: загружаем рейсы ---
+  // Matryoshka expand
   const handleWagonExpand = async (wagonId) => {
     const next = new Set(expandedWagonIds);
-    if (next.has(wagonId)) {
-      next.delete(wagonId);
-      setExpandedWagonIds(next);
-      return;
-    }
+    if (next.has(wagonId)) { next.delete(wagonId); setExpandedWagonIds(next); return; }
     next.add(wagonId);
     setExpandedWagonIds(next);
-
     if (tripsByWagonId.has(wagonId)) return;
-
     setTripsLoading((prev) => new Map(prev).set(wagonId, true));
     try {
       const res = await api.get(`/v2/wagons/${wagonId}/trips?include_archived=true&limit=200`);
@@ -138,19 +166,12 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
-  // --- Раскрытие рейса: загружаем операции ---
   const handleTripExpand = async (tripId) => {
     const next = new Set(expandedTripIds);
-    if (next.has(tripId)) {
-      next.delete(tripId);
-      setExpandedTripIds(next);
-      return;
-    }
+    if (next.has(tripId)) { next.delete(tripId); setExpandedTripIds(next); return; }
     next.add(tripId);
     setExpandedTripIds(next);
-
     if (operationsByTripId.has(tripId)) return;
-
     setOpsLoading((prev) => new Map(prev).set(tripId, true));
     try {
       const res = await api.get(`/v2/trips/${tripId}/operations?limit=500`);
@@ -163,114 +184,168 @@ export default function HierarchyView({ isActive }) {
   };
 
   const hasSearch = wagonSearch.trim().length > 0;
+  const hasFilters = Object.keys(columnFilters).length > 0;
 
-  const toolbar = (
-    <div className="h-view-toolbar">
-      <div className="h-search-box">
-        <textarea
-          className="h-search-input h-search-textarea"
-          placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
-          value={wagonSearch}
-          onChange={(e) => setWagonSearch(e.target.value)}
-          rows={2}
-        />
-        {hasSearch && (
-          <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
-        )}
-      </div>
-      <div className="h-view-meta">
-        вагонов на слежении: {total}
-        {hasSearch && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
-      </div>
-      <div className="h-view-toolbar-right">
-        <button type="button" className="h-bulk-select-btn" onClick={selectAllWagons}>
-          Выбрать всё
-        </button>
-        {selectedWagonIds.size > 0 && (
-          <button type="button" className="h-bulk-clear-btn" onClick={clearSelection}>
-            Сбросить выбор
-          </button>
-        )}
-        <button
-          type="button"
-          className="h-bulk-comment-btn"
-          disabled={selectedWagonIds.size === 0}
-          onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
-        >
-          <MessageSquarePlus size={18} />
-          Добавить комментарий{selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}
-        </button>
-      </div>
-    </div>
+  const renderWagonRow = (wagon) => (
+    <WagonRow
+      key={wagon.id}
+      wagon={wagon}
+      trips={tripsByWagonId.get(wagon.id)}
+      tripsLoading={tripsLoading.has(wagon.id)}
+      operations={operationsByTripId}
+      opsLoading={opsLoading}
+      expandedTripIds={expandedTripIds}
+      isExpanded={expandedWagonIds.has(wagon.id)}
+      onWagonExpand={handleWagonExpand}
+      onTripExpand={handleTripExpand}
+      isSelected={selectedWagonIds.has(wagon.id)}
+      onToggleSelect={toggleWagonSelect}
+      visibleCols={visibleCols}
+      isGrouped={groupByTrainEnabled}
+    />
   );
 
   if (loading) return <div className="data-loading">Загрузка вагонов…</div>;
+  if (error) return (
+    <div className="data-error">
+      {error}
+      <button type="button" className="retry-btn" onClick={fetchWagons}>Повторить</button>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="data-error">
-        {error}
-        <button type="button" className="retry-btn" onClick={fetchWagons}>
-          Повторить
-        </button>
-      </div>
-    );
-  }
-
-  if (wagons.length === 0) {
-    return (
-      <div className="h-view-wrapper">
-        {toolbar}
-        <div className="data-loading">Вагонов не найдено</div>
-      </div>
-    );
-  }
+  const colCountMain = 2 + visibleCols.length; // checkbox + expand + cols
 
   return (
     <div className="h-view-wrapper">
-      {toolbar}
+      {/* Search + selection + bulk comment toolbar */}
+      <div className="h-view-toolbar">
+        <div className="h-search-box">
+          <textarea
+            className="h-search-input h-search-textarea"
+            placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
+            value={wagonSearch}
+            onChange={(e) => setWagonSearch(e.target.value)}
+            rows={2}
+          />
+          {hasSearch && (
+            <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
+          )}
+        </div>
+        <div className="h-view-meta">
+          вагонов на слежении: {total}
+          {(hasSearch || hasFilters) && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
+        </div>
+        <div className="h-view-toolbar-right">
+          <button type="button" className="h-bulk-select-btn" onClick={selectAllWagons}>Выбрать всё</button>
+          {selectedWagonIds.size > 0 && (
+            <button type="button" className="h-bulk-clear-btn" onClick={clearSelection}>Сбросить выбор</button>
+          )}
+          <button
+            type="button"
+            className="h-bulk-comment-btn"
+            disabled={selectedWagonIds.size === 0}
+            onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
+          >
+            <MessageSquarePlus size={18} />
+            Добавить комментарий{selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}
+          </button>
+        </div>
+      </div>
 
+      {/* Table controls toolbar */}
+      <div className="table-toolbar">
+        <button
+          type="button"
+          className={`group-toggle ${groupByTrainEnabled ? 'active' : ''}`}
+          onClick={() => setGroupByTrainEnabled(!groupByTrainEnabled)}
+          title="Группировать по поезду"
+        >
+          <Layers size={18} />
+          {groupByTrainEnabled ? 'Группировка по поезду вкл.' : 'Группировать по поезду'}
+        </button>
+        <button
+          type="button"
+          className={`reset-filters-btn ${hasFilters ? 'active' : ''}`}
+          onClick={handleResetFilters}
+          disabled={!hasFilters}
+        >
+          <FilterX size={18} />
+          Сбросить фильтры
+        </button>
+        <ColumnVisibilityPanel
+          visibleColumnIds={visibleColumnIds}
+          onVisibilityChange={setVisibleColumnIds}
+          columns={HIERARCHY_COLUMNS}
+        />
+      </div>
+
+      {/* Table */}
       <div className="table-scroll">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
-              <th style={{ width: 32 }} />
-              <th style={{ width: 32 }} />
-              <th>Номер вагона</th>
-              <th>Статус</th>
-              <th>Рейсы</th>
-              <th>Комментарий</th>
-              <th style={{ width: 48 }} />
+              <th style={{ width: 32 }} title="Выбор" />
+              {groupByTrainEnabled && <th className="group-col" />}
+              <th style={{ width: 32 }} title="Развернуть" />
+              {visibleCols.map((col) => (
+                <th key={col.id} className="th-with-filter">
+                  <span className="th-label">{col.label}</span>
+                  {col.filterable && (
+                    <ColumnFilter
+                      columnId={col.accessorKey || col.id}
+                      label={col.label}
+                      rows={searchedWagons}
+                      activeValues={columnFilters?.[col.accessorKey || col.id]}
+                      onApply={(vals) => handleFilterChange(col.accessorKey || col.id, vals)}
+                      onClear={() => handleFilterChange(col.accessorKey || col.id, [])}
+                    />
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {filteredWagons.length === 0 ? (
               <tr>
-                <td colSpan={7} className="empty-table-message">Нет вагонов по запросу</td>
+                <td colSpan={colCountMain + (groupByTrainEnabled ? 1 : 0)} className="empty-table-message">
+                  Нет вагонов по запросу
+                </td>
               </tr>
+            ) : groupByTrainEnabled ? (
+              Array.from(groups.entries()).map(([trainKey, rows]) => {
+                const displayLabel = trainKey === EMPTY_TRAIN_LABEL ? trainKey : `Поезд ${trainKey}`;
+                const count = rows.length;
+                const wagonWord = count === 1 ? 'вагон' : count >= 2 && count <= 4 ? 'вагона' : 'вагонов';
+                const collapsed = collapsedTrains.has(trainKey);
+                return (
+                  <React.Fragment key={trainKey}>
+                    <tr
+                      className="group-header-row"
+                      onClick={() => toggleTrain(trainKey)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && toggleTrain(trainKey)}
+                    >
+                      <td />
+                      <td className="group-col">
+                        <span className="group-caret">{collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+                      </td>
+                      <td colSpan={visibleCols.length + 1}>
+                        <span className="group-title">{displayLabel} ({count} {wagonWord})</span>
+                      </td>
+                    </tr>
+                    {!collapsed && rows.map((wagon) => renderWagonRow(wagon))}
+                  </React.Fragment>
+                );
+              })
             ) : (
-              filteredWagons.map((wagon) => (
-                <WagonRow
-                  key={wagon.id}
-                  wagon={wagon}
-                  trips={tripsByWagonId.get(wagon.id)}
-                  tripsLoading={tripsLoading.has(wagon.id)}
-                  operations={operationsByTripId}
-                  opsLoading={opsLoading}
-                  expandedTripIds={expandedTripIds}
-                  isExpanded={expandedWagonIds.has(wagon.id)}
-                  onWagonExpand={handleWagonExpand}
-                  onTripExpand={handleTripExpand}
-                  isSelected={selectedWagonIds.has(wagon.id)}
-                  onToggleSelect={toggleWagonSelect}
-                />
-              ))
+              filteredWagons.map((wagon) => renderWagonRow(wagon))
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Modal массового комментария */}
+      {/* Bulk comment modal */}
       {bulkModalOpen && (
         <div
           className="modal-overlay"
@@ -297,20 +372,10 @@ export default function HierarchyView({ isActive }) {
               </div>
             )}
             <div className="modal-actions">
-              <button
-                type="button"
-                className="cancel-btn"
-                onClick={() => !bulkApplyLoading && setBulkModalOpen(false)}
-                disabled={bulkApplyLoading}
-              >
+              <button type="button" className="cancel-btn" onClick={() => !bulkApplyLoading && setBulkModalOpen(false)} disabled={bulkApplyLoading}>
                 Отмена
               </button>
-              <button
-                type="button"
-                className="save-btn"
-                onClick={handleBulkCommentApply}
-                disabled={bulkApplyLoading || !bulkCommentText.trim()}
-              >
+              <button type="button" className="save-btn" onClick={handleBulkCommentApply} disabled={bulkApplyLoading || !bulkCommentText.trim()}>
                 {bulkApplyLoading ? 'Сохранение…' : 'Применить'}
               </button>
             </div>

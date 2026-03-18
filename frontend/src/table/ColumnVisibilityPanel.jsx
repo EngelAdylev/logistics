@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Columns3 } from 'lucide-react';
 import { TABLE_COLUMNS } from './tableColumnsConfig';
 
-export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityChange }) {
+export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityChange, columns: columnsProp }) {
+  const columns = columnsProp || TABLE_COLUMNS;
   const [open, setOpen] = useState(false);
   const [localVisible, setLocalVisible] = useState(new Set(visibleColumnIds || []));
   const ref = useRef(null);
@@ -20,13 +21,13 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
   }, [open]);
 
   const toggle = (colId) => {
-    const col = TABLE_COLUMNS.find((c) => c.id === colId);
+    const col = columns.find((c) => c.id === colId);
     if (col?.isRequired) return;
     setLocalVisible((prev) => {
       const next = new Set(prev);
       if (next.has(colId)) next.delete(colId);
       else next.add(colId);
-      const ordered = TABLE_COLUMNS.filter((c) => next.has(c.id)).map((c) => c.id);
+      const ordered = columns.filter((c) => next.has(c.id)).map((c) => c.id);
       onVisibilityChange(ordered);
       return next;
     });
@@ -48,7 +49,7 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
         <div className="column-visibility-popup">
           <div className="column-visibility-title">Отображаемые поля</div>
           <div className="column-visibility-list">
-            {TABLE_COLUMNS.map((col) => (
+            {columns.map((col) => (
               <label
                 key={col.id}
                 className={`column-visibility-item ${col.isRequired ? 'required' : ''}`}

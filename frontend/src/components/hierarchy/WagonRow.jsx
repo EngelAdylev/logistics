@@ -3,25 +3,57 @@ import { ChevronRight, ChevronDown, MessageSquare } from 'lucide-react';
 import TripRow from './TripRow';
 import WagonComments from './WagonComments';
 
+const MAX_COMMENT_LENGTH = 60;
+
+function formatDate(v) {
+  return v ? new Date(v).toLocaleString() : '—';
+}
+
+function renderCell(wagon, col, onShowComments) {
+  if (col.id === 'last_operation_date') return formatDate(wagon[col.accessorKey]);
+  if (col.id === 'last_comment_text') {
+    const text = wagon[col.accessorKey]?.toString?.()?.trim?.() ?? '';
+    if (!text) return '—';
+    const truncated = text.length > MAX_COMMENT_LENGTH ? `${text.slice(0, MAX_COMMENT_LENGTH)}…` : text;
+    return <span title={text.length > MAX_COMMENT_LENGTH ? text : undefined}>{truncated}</span>;
+  }
+  if (col.id === 'chat') {
+    return (
+      <button
+        type="button"
+        className="h-comment-icon-btn"
+        onClick={() => onShowComments()}
+        title="Комментарии к вагону"
+      >
+        <MessageSquare size={15} />
+      </button>
+    );
+  }
+  const v = wagon[col.accessorKey];
+  return v?.toString?.()?.trim?.() ?? '—';
+}
+
 export default function WagonRow({
   wagon,
   trips,
   tripsLoading,
-  operations,      // Map<trip_id, WagonTripOperation[]>
-  opsLoading,      // Map<trip_id, boolean>
-  expandedTripIds, // Set<trip_id>
+  operations,
+  opsLoading,
+  expandedTripIds,
   onWagonExpand,
   onTripExpand,
   isExpanded,
   isSelected,
   onToggleSelect,
+  visibleCols,
+  isGrouped,
 }) {
   const [showComments, setShowComments] = useState(false);
 
   return (
     <>
-      {/* Строка вагона */}
       <tr className={`h-wagon-row ${isExpanded ? 'h-wagon-row--expanded' : ''}`}>
+        {/* Checkbox */}
         {onToggleSelect != null && (
           <td className="h-wagon-check">
             <input
@@ -33,6 +65,7 @@ export default function WagonRow({
             />
           </td>
         )}
+        {/* Expand button */}
         <td className="h-wagon-expand">
           <button
             type="button"
@@ -43,50 +76,23 @@ export default function WagonRow({
             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </button>
         </td>
-
-        <td className="h-wagon-number">
-          <strong>{wagon.railway_carriage_number}</strong>
-        </td>
-
-        <td className="h-wagon-status">
-          <span className={`h-status-badge ${wagon.is_active ? 'h-status-active' : 'h-status-archived'}`}>
-            {wagon.is_active ? 'Активен' : 'Архив'}
-          </span>
-        </td>
-
-        <td className="h-wagon-trips">
-          <span title="Всего рейсов">{wagon.trip_count ?? 0}</span>
-          {wagon.active_trip_count > 0 && (
-            <span className="h-wagon-active-trips" title="Активных рейсов">
-              {' '}({wagon.active_trip_count} акт.)
-            </span>
-          )}
-        </td>
-
-        <td className="h-last-comment">
-          {wagon.last_comment_text
-            ? <span className="h-last-comment-text">{wagon.last_comment_text}</span>
-            : '—'}
-        </td>
-
-        <td className="h-wagon-actions">
-          <button
-            type="button"
-            className="h-comment-icon-btn"
-            onClick={() => setShowComments(true)}
-            title="Комментарии к вагону"
-          >
-            <MessageSquare size={15} />
-          </button>
-        </td>
+        {/* Dynamic columns */}
+        {visibleCols.map((col) => (
+          <td key={col.id} className={col.id === 'railway_carriage_number' ? 'h-wagon-number' : undefined}>
+            {col.id === 'railway_carriage_number'
+              ? <strong>{wagon.railway_carriage_number}</strong>
+              : renderCell(wagon, col, () => setShowComments(true))}
+          </td>
+        ))}
       </tr>
 
-      {/* Рейсы (inline expand) */}
+      {/* Trips expand row */}
       {isExpanded && (
         <tr className="h-trips-row">
           {onToggleSelect != null && <td />}
+          {isGrouped && <td />}
           <td />
-          <td colSpan={5} className="h-trips-cell">
+          <td colSpan={visibleCols.length} className="h-trips-cell">
             {tripsLoading ? (
               <div className="h-ops-loading">Загрузка рейсов…</div>
             ) : !trips || trips.length === 0 ? (
@@ -123,7 +129,6 @@ export default function WagonRow({
         </tr>
       )}
 
-      {/* Модальное окно комментариев */}
       {showComments && (
         <WagonComments wagon={wagon} onClose={() => setShowComments(false)} />
       )}
