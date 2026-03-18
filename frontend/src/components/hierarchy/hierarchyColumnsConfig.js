@@ -11,6 +11,7 @@ export const HIERARCHY_COLUMNS = [
   { id: 'last_operation_date', label: 'Время операции', accessorKey: 'last_operation_date', filterable: false, isRequired: false, isDefaultVisible: true },
   { id: 'departure_station_name', label: 'Станция отправления', accessorKey: 'departure_station_name', filterable: true, isRequired: false, isDefaultVisible: false },
   { id: 'destination_station_name', label: 'Станция назначения', accessorKey: 'destination_station_name', filterable: true, isRequired: false, isDefaultVisible: false },
+  { id: 'waybill_number', label: '№ накладной', accessorKey: 'waybill_number', filterable: true, isRequired: false, isDefaultVisible: true },
   { id: 'last_comment_text', label: 'Последний комментарий', accessorKey: 'last_comment_text', filterable: true, isRequired: false, isDefaultVisible: true },
   { id: 'chat', label: 'Чат', accessorKey: null, filterable: false, isRequired: true, isDefaultVisible: true },
 ];

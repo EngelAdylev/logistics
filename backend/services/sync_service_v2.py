@@ -352,6 +352,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 number_train          = last_op.number_train,
                 train_index           = last_op.train_index,
                 number_railway_carriage_on_train = last_op.number_railway_carriage_on_train,
+                waybill_number        = last_op.waybill_number,
                 is_active             = NOT (
                     last_op.op_code = '96'
                     OR (last_op.rem <= 0 AND last_op.op_code IN ('20', '43', '85'))
@@ -367,6 +368,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                     d.number_train,
                     d.train_index,
                     d.number_railway_carriage_on_train,
+                    d.waybill_number,
                     oc.name                            AS op_name,
                     rs_op.name                         AS stn_name,
                     rs_dst.name                        AS dst_name

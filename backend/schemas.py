@@ -122,6 +122,7 @@ class WagonOut(BaseModel):
     last_operation_date: Optional[datetime] = None
     departure_station_name: Optional[str] = None
     destination_station_name: Optional[str] = None
+    waybill_number: Optional[str] = None
     # Мастер-данные (заполняются из внешних систем)
     owner: Optional[str] = None
     type: Optional[str] = None
