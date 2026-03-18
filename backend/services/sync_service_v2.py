@@ -415,6 +415,32 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 updated_at = now()
         """))
 
+        # Шаг 7b. Архивируем рейсы, которых больше нет в qualifying_rows дислокации.
+        # Если по рейсу нет ни одной записи в dislocation с rem > 0 — рейс завершён.
+        db.execute(text("""
+            UPDATE wagon_trips wt
+            SET is_active = false, updated_at = now()
+            WHERE wt.is_active = true
+              AND NOT EXISTS (
+                  SELECT 1 FROM dislocation d
+                  WHERE d.flight_id = wt.id
+                    AND COALESCE(
+                          CAST(NULLIF(TRIM(COALESCE(d.remaining_distance::text, '')), '') AS NUMERIC),
+                          0
+                        ) > 0
+              )
+        """))
+
+        # Шаг 7c. Обновляем Wagon.is_active после шага 7b
+        db.execute(text("""
+            UPDATE wagons w
+            SET is_active = EXISTS (
+                    SELECT 1 FROM wagon_trips wt
+                    WHERE wt.wagon_id = w.id AND wt.is_active = true
+                ),
+                updated_at = now()
+        """))
+
         # Шаг 8. Нормализация активности: у каждого вагона не более одного активного рейса (ТЗ №1)
         import time as _time
         _t0 = _time.perf_counter()
