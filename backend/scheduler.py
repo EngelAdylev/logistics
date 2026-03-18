@@ -407,43 +407,23 @@ def sync_dislocation_to_tracking():
         if restored:
             logger.info("sync_dislocation_to_tracking: restored=%s (wrongly archived, still in transit)", restored)
 
-        # Условие 2: вагона нет в текущей дислокации → архив.
-        # Защита: не трогаем ничего если qualifying_rows=0 (пустая выборка).
+        # Условие 2: > 20 дней без операций → архив.
+        # Исключаем вагоны которые сейчас есть в qualifying_rows (ещё в пути по дислокации).
+        cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=20)).timestamp()
         auto_archived = 0
-        if qualifying_rows > 0:
-            for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
-                bus_d = _business_date(tw.flight_start_date)
-                dep_st = _norm_station(tw.departure_station_code)
-                key = (str(tw.railway_carriage_number), bus_d, dep_st)
-                if bus_d is not None and key in qualifying_keys:
-                    continue  # вагон в дислокации, не трогаем
+        for tw in db.query(TrackingWagon).filter(TrackingWagon.is_active == True).all():
+            bus_d = _business_date(tw.flight_start_date)
+            dep_st = _norm_station(tw.departure_station_code)
+            key = (str(tw.railway_carriage_number), bus_d, dep_st)
+            if bus_d is not None and key in qualifying_keys:
+                continue  # вагон в дислокации, не трогаем
+            op_ts = _normalize_dt(tw.last_operation_date)
+            if op_ts is not None and op_ts < cutoff_ts:
                 tw.is_active = False
                 auto_archived += 1
         if auto_archived:
             stats["archived"] += auto_archived
-            logger.info("sync_dislocation_to_tracking: auto_archived_not_in_qualifying=%s", auto_archived)
-
-        # Условие 3: нормализация — у вагона не более одного активного рейса (самый свежий).
-        normalized = db.execute(text("""
-            WITH active_ranked AS (
-                SELECT id,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY railway_carriage_number
-                           ORDER BY last_operation_date DESC NULLS LAST,
-                                    flight_start_date DESC NULLS LAST,
-                                    id DESC
-                       ) AS rn
-                FROM tracking_wagons
-                WHERE is_active = true
-            )
-            UPDATE tracking_wagons tw
-            SET is_active = false
-            FROM active_ranked ar
-            WHERE tw.id = ar.id AND ar.rn > 1
-        """)).rowcount
-        if normalized:
-            stats["archived"] += normalized
-            logger.info("sync_dislocation_to_tracking: normalized=%s (>1 active trip per wagon)", normalized)
+            logger.info("sync_dislocation_to_tracking: auto_archived_by_age=%s (no ops > 20 days)", auto_archived)
 
         fail_safe = qualifying_rows == 0 and active_before > 0
         if fail_safe:
