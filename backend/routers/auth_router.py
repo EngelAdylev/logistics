@@ -30,13 +30,13 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         httponly=True,
         secure=False,
         samesite="lax",
-        path="/auth",
+        path="/",
         max_age=settings.REFRESH_TTL_SECONDS,
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(key="refresh_token", path="/auth")
+    response.delete_cookie(key="refresh_token", path="/")
 
 
 @router.post("/login", response_model=LoginResponse)
