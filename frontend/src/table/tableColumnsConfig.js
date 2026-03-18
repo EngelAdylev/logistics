@@ -12,7 +12,7 @@ export const TABLE_COLUMNS = [
   { id: 'last_operation_date', label: 'Время операции', accessorKey: 'last_operation_date', filterable: false, isRequired: false, isDefaultVisible: true },
   { id: 'remaining_distance', label: 'Остаточное расстояние', accessorKey: 'remaining_distance', filterable: true, isRequired: false, isDefaultVisible: false },
   { id: 'remaining_mileage', label: 'Остаток пробега', accessorKey: 'remaining_mileage', filterable: true, isRequired: false, isDefaultVisible: false },
-  { id: 'waybill_number', label: '№ накладной', accessorKey: 'waybill_number', filterable: true, isRequired: false, isDefaultVisible: false },
+  { id: 'waybill_number', label: '№ накладной', accessorKey: 'waybill_number', filterable: true, isRequired: false, isDefaultVisible: true },
   { id: 'container_numbers', label: '№ КТК', accessorKey: 'container_numbers', filterable: false, isRequired: false, isDefaultVisible: false },
   { id: 'destination_station_name', label: 'Станция назначения', accessorKey: 'destination_station_name', filterable: true, isRequired: false, isDefaultVisible: false },
   { id: 'departure_station_name', label: 'Станция отправления', accessorKey: 'departure_station_name', filterable: true, isRequired: false, isDefaultVisible: false },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquarePlus, Layers, FilterX } from 'lucide-react';
+import { MessageSquarePlus, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 import { HIERARCHY_COLUMNS } from './hierarchyColumnsConfig';
@@ -31,6 +31,9 @@ export default function HierarchyView({ isActive }) {
   // Column config
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
   const [columnFilters, setColumnFilters] = useState({});
+
+  // Sort by date
+  const [sortDir, setSortDir] = useState(null); // null | 'desc' | 'asc'
 
   // Group by train
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
@@ -73,8 +76,16 @@ export default function HierarchyView({ isActive }) {
     return wagons.filter((w) => matchesAny(w.railway_carriage_number, tokens));
   }, [wagons, wagonSearch]);
 
-  // Column filters
-  const filteredWagons = useMemo(() => applyFilters(searchedWagons, columnFilters), [searchedWagons, columnFilters]);
+  // Column filters + sort
+  const filteredWagons = useMemo(() => {
+    const filtered = applyFilters(searchedWagons, columnFilters);
+    if (!sortDir) return filtered;
+    return [...filtered].sort((a, b) => {
+      const ta = a.last_operation_date ? new Date(a.last_operation_date).getTime() : 0;
+      const tb = b.last_operation_date ? new Date(b.last_operation_date).getTime() : 0;
+      return sortDir === 'desc' ? tb - ta : ta - tb;
+    });
+  }, [searchedWagons, columnFilters, sortDir]);
 
   const handleFilterChange = (colId, vals) => {
     setColumnFilters((prev) => ({ ...prev, [colId]: vals }));
@@ -250,6 +261,16 @@ export default function HierarchyView({ isActive }) {
               {visibleCols.map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
+                  {col.id === 'last_operation_date' && (
+                    <button
+                      type="button"
+                      className={`sort-btn ${sortDir ? 'active' : ''}`}
+                      onClick={() => setSortDir((d) => d === null ? 'desc' : d === 'desc' ? 'asc' : null)}
+                      title={sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате'}
+                    >
+                      {sortDir === 'desc' ? <ArrowDown size={14} /> : sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowUpDown size={14} />}
+                    </button>
+                  )}
                   {col.filterable && (
                     <ColumnFilter
                       columnId={col.accessorKey || col.id}
