@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare } from 'lucide-react';
-import TripRow from './TripRow';
+import { ChevronRight, MessageSquare } from 'lucide-react';
 import WagonComments from './WagonComments';
+import WagonTripsModal from './WagonTripsModal';
 
 const MAX_COMMENT_LENGTH = 60;
 
@@ -22,7 +22,7 @@ function renderCell(wagon, col, onShowComments) {
       <button
         type="button"
         className="h-comment-icon-btn"
-        onClick={() => onShowComments()}
+        onClick={(e) => { e.stopPropagation(); onShowComments(); }}
         title="Комментарии к вагону"
       >
         <MessageSquare size={15} />
@@ -35,27 +35,22 @@ function renderCell(wagon, col, onShowComments) {
 
 export default function WagonRow({
   wagon,
-  trips,
-  tripsLoading,
-  operations,
-  opsLoading,
-  expandedTripIds,
-  onWagonExpand,
-  onTripExpand,
-  isExpanded,
   isSelected,
   onToggleSelect,
   visibleCols,
-  isGrouped,
 }) {
+  const [tripsModalOpen, setTripsModalOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
 
   return (
     <>
-      <tr className={`h-wagon-row ${isExpanded ? 'h-wagon-row--expanded' : ''}`}>
-        {/* Checkbox */}
+      <tr
+        className="h-wagon-row h-wagon-clickrow"
+        onClick={() => setTripsModalOpen(true)}
+        title="Нажмите для просмотра рейсов"
+      >
         {onToggleSelect != null && (
-          <td className="h-wagon-check">
+          <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
               checked={!!isSelected}
@@ -65,18 +60,9 @@ export default function WagonRow({
             />
           </td>
         )}
-        {/* Expand button */}
         <td className="h-wagon-expand">
-          <button
-            type="button"
-            className="h-expand-btn h-expand-btn--wagon"
-            onClick={() => onWagonExpand(wagon.id)}
-            title={isExpanded ? 'Свернуть рейсы' : 'Развернуть рейсы'}
-          >
-            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+          <ChevronRight size={16} className="h-wagon-chevron" />
         </td>
-        {/* Dynamic columns */}
         {visibleCols.map((col) => (
           <td key={col.id} className={col.id === 'railway_carriage_number' ? 'h-wagon-number' : undefined}>
             {col.id === 'railway_carriage_number'
@@ -86,47 +72,8 @@ export default function WagonRow({
         ))}
       </tr>
 
-      {/* Trips expand row */}
-      {isExpanded && (
-        <tr className="h-trips-row">
-          {onToggleSelect != null && <td />}
-          {isGrouped && <td />}
-          <td />
-          <td colSpan={visibleCols.length} className="h-trips-cell">
-            {tripsLoading ? (
-              <div className="h-ops-loading">Загрузка рейсов…</div>
-            ) : !trips || trips.length === 0 ? (
-              <div className="h-ops-empty">Рейсов нет</div>
-            ) : (
-              <table className="h-trips-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 32 }} />
-                    <th>№ рейса</th>
-                    <th>Дата рейса</th>
-                    <th>Маршрут</th>
-                    <th>Поезд</th>
-                    <th>Последняя операция</th>
-                    <th>Дата опер.</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trips.map((trip) => (
-                    <TripRow
-                      key={trip.id}
-                      trip={trip}
-                      operations={operations.get(trip.id)}
-                      operationsLoading={opsLoading.get(trip.id) ?? false}
-                      isExpanded={expandedTripIds.has(trip.id)}
-                      onExpand={onTripExpand}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </td>
-        </tr>
+      {tripsModalOpen && (
+        <WagonTripsModal wagon={wagon} onClose={() => setTripsModalOpen(false)} />
       )}
 
       {showComments && (

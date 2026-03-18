@@ -36,14 +36,6 @@ export default function HierarchyView({ isActive }) {
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
 
-  // Expand state (matryoshka)
-  const [expandedWagonIds, setExpandedWagonIds] = useState(new Set());
-  const [tripsByWagonId, setTripsByWagonId] = useState(new Map());
-  const [tripsLoading, setTripsLoading] = useState(new Map());
-  const [expandedTripIds, setExpandedTripIds] = useState(new Set());
-  const [operationsByTripId, setOperationsByTripId] = useState(new Map());
-  const [opsLoading, setOpsLoading] = useState(new Map());
-
   // Group comment
   const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -60,8 +52,6 @@ export default function HierarchyView({ isActive }) {
       const res = await api.get(`/v2/wagons?${params}`);
       setWagons(res.data.items || []);
       setTotal(res.data.total || 0);
-      setExpandedWagonIds(new Set());
-      setExpandedTripIds(new Set());
       setSelectedWagonIds(new Set());
     } catch (e) {
       setError('Не удалось загрузить список вагонов.');
@@ -148,41 +138,6 @@ export default function HierarchyView({ isActive }) {
     }
   };
 
-  // Matryoshka expand
-  const handleWagonExpand = async (wagonId) => {
-    const next = new Set(expandedWagonIds);
-    if (next.has(wagonId)) { next.delete(wagonId); setExpandedWagonIds(next); return; }
-    next.add(wagonId);
-    setExpandedWagonIds(next);
-    if (tripsByWagonId.has(wagonId)) return;
-    setTripsLoading((prev) => new Map(prev).set(wagonId, true));
-    try {
-      const res = await api.get(`/v2/wagons/${wagonId}/trips?include_archived=true&limit=200`);
-      setTripsByWagonId((prev) => new Map(prev).set(wagonId, res.data.items || []));
-    } catch {
-      setTripsByWagonId((prev) => new Map(prev).set(wagonId, []));
-    } finally {
-      setTripsLoading((prev) => { const m = new Map(prev); m.delete(wagonId); return m; });
-    }
-  };
-
-  const handleTripExpand = async (tripId) => {
-    const next = new Set(expandedTripIds);
-    if (next.has(tripId)) { next.delete(tripId); setExpandedTripIds(next); return; }
-    next.add(tripId);
-    setExpandedTripIds(next);
-    if (operationsByTripId.has(tripId)) return;
-    setOpsLoading((prev) => new Map(prev).set(tripId, true));
-    try {
-      const res = await api.get(`/v2/trips/${tripId}/operations?limit=500`);
-      setOperationsByTripId((prev) => new Map(prev).set(tripId, res.data.items || []));
-    } catch {
-      setOperationsByTripId((prev) => new Map(prev).set(tripId, []));
-    } finally {
-      setOpsLoading((prev) => { const m = new Map(prev); m.delete(tripId); return m; });
-    }
-  };
-
   const hasSearch = wagonSearch.trim().length > 0;
   const hasFilters = Object.keys(columnFilters).length > 0;
 
@@ -190,18 +145,9 @@ export default function HierarchyView({ isActive }) {
     <WagonRow
       key={wagon.id}
       wagon={wagon}
-      trips={tripsByWagonId.get(wagon.id)}
-      tripsLoading={tripsLoading.has(wagon.id)}
-      operations={operationsByTripId}
-      opsLoading={opsLoading}
-      expandedTripIds={expandedTripIds}
-      isExpanded={expandedWagonIds.has(wagon.id)}
-      onWagonExpand={handleWagonExpand}
-      onTripExpand={handleTripExpand}
       isSelected={selectedWagonIds.has(wagon.id)}
       onToggleSelect={toggleWagonSelect}
       visibleCols={visibleCols}
-      isGrouped={groupByTrainEnabled}
     />
   );
 

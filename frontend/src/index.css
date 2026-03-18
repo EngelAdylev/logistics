@@ -539,6 +539,8 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 /* Кликабельная строка вагона */
 .h-wagon-clickrow { cursor: pointer; }
 .h-wagon-clickrow:hover td { background: #eff6ff; }
+.h-wagon-chevron { color: #94a3b8; transition: color 0.15s; }
+.h-wagon-clickrow:hover .h-wagon-chevron { color: #3b82f6; }
 
 /* Ops table внутри модального окна: sticky заголовок */
 .h-modal-body .h-ops-table th {
