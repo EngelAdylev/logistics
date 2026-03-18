@@ -148,6 +148,7 @@ export default function HierarchyView({ isActive }) {
       isSelected={selectedWagonIds.has(wagon.id)}
       onToggleSelect={toggleWagonSelect}
       visibleCols={visibleCols}
+      isGrouped={groupByTrainEnabled}
     />
   );
 

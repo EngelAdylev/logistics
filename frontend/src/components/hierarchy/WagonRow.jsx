@@ -38,6 +38,7 @@ export default function WagonRow({
   isSelected,
   onToggleSelect,
   visibleCols,
+  isGrouped,
 }) {
   const [tripsModalOpen, setTripsModalOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -60,6 +61,7 @@ export default function WagonRow({
             />
           </td>
         )}
+        {isGrouped && <td className="group-col" />}
         <td className="h-wagon-expand">
           <ChevronRight size={16} className="h-wagon-chevron" />
         </td>
