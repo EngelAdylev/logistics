@@ -385,6 +385,28 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
             WHERE wt.id = last_op.flight_id
         """))
 
+        # Шаг 5b. Дозаполняем waybill_number из любой ненулевой записи по рейсу,
+        # если последняя операция не содержала номер накладной.
+        db.execute(text("""
+            UPDATE wagon_trips wt
+            SET waybill_number = (
+                SELECT d.waybill_number
+                FROM dislocation d
+                WHERE d.flight_id = wt.id
+                  AND d.waybill_number IS NOT NULL
+                  AND TRIM(d.waybill_number) != ''
+                ORDER BY d.date_time_of_operation DESC NULLS LAST
+                LIMIT 1
+            ), updated_at = now()
+            WHERE (wt.waybill_number IS NULL OR TRIM(wt.waybill_number) = '')
+              AND EXISTS (
+                SELECT 1 FROM dislocation d
+                WHERE d.flight_id = wt.id
+                  AND d.waybill_number IS NOT NULL
+                  AND TRIM(d.waybill_number) != ''
+              )
+        """))
+
         # Шаг 6. Присваиваем flight_number тем рейсам, у которых его ещё нет.
         # Номера глобально уникальны по всей таблице wagon_trips (как номер документа в 1С):
         # каждый новый рейс любого вагона получает следующий номер, нет повторений.
