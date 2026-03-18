@@ -423,6 +423,28 @@ def sync_dislocation_to_tracking():
             stats["archived"] += auto_archived
             logger.info("sync_dislocation_to_tracking: auto_archived_not_in_qualifying=%s", auto_archived)
 
+        # Условие 3: нормализация — у вагона не более одного активного рейса (самый свежий).
+        normalized = db.execute(text("""
+            WITH active_ranked AS (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY railway_carriage_number
+                           ORDER BY last_operation_date DESC NULLS LAST,
+                                    flight_start_date DESC NULLS LAST,
+                                    id DESC
+                       ) AS rn
+                FROM tracking_wagons
+                WHERE is_active = true
+            )
+            UPDATE tracking_wagons tw
+            SET is_active = false
+            FROM active_ranked ar
+            WHERE tw.id = ar.id AND ar.rn > 1
+        """)).rowcount
+        if normalized:
+            stats["archived"] += normalized
+            logger.info("sync_dislocation_to_tracking: normalized=%s (>1 active trip per wagon)", normalized)
+
         fail_safe = qualifying_rows == 0 and active_before > 0
         if fail_safe:
             logger.warning("sync fail-safe: qualifying_rows=0 but active_before=%s", active_before)
