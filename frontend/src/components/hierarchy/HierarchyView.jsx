@@ -233,7 +233,7 @@ export default function HierarchyView({ isActive }) {
             <tr>
               <th style={{ width: 32 }} title="Выбор" />
               {groupByTrainEnabled && <th className="group-col" />}
-              <th style={{ width: 32 }} title="Развернуть" />
+              <th style={{ width: 80 }}>Рейсы</th>
               {visibleCols.map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>

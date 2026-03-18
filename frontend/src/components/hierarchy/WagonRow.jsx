@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import WagonComments from './WagonComments';
 import WagonTripsModal from './WagonTripsModal';
 
@@ -62,8 +62,11 @@ export default function WagonRow({
           </td>
         )}
         {isGrouped && <td className="group-col" />}
-        <td className="h-wagon-expand">
-          <ChevronRight size={16} className="h-wagon-chevron" />
+        <td className="h-wagon-trips-count" onClick={(e) => e.stopPropagation()}>
+          <span title="Всего рейсов">{wagon.trip_count ?? 0}</span>
+          {wagon.active_trip_count > 0 && (
+            <span className="h-wagon-active-trips" title="Активных рейсов"> ({wagon.active_trip_count} акт.)</span>
+          )}
         </td>
         {visibleCols.map((col) => (
           <td key={col.id} className={col.id === 'railway_carriage_number' ? 'h-wagon-number' : undefined}>
