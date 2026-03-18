@@ -56,6 +56,14 @@ QUERY_FULL = text("""
         LEFT JOIN railway_station rs_dest ON d.destination_station_code::text = rs_dest.esr_code
         LEFT JOIN railway_station rs_dep ON d.flight_start_station_code::text = rs_dep.esr_code
     ),
+    LastWaybill AS (
+        SELECT DISTINCT ON (railway_carriage_number)
+            railway_carriage_number,
+            waybill_number
+        FROM dislocation
+        WHERE waybill_number IS NOT NULL AND TRIM(waybill_number) != ''
+        ORDER BY railway_carriage_number, date_time_of_operation::timestamptz DESC NULLS LAST
+    ),
     LastComments AS (
         SELECT
             tracking_id,
@@ -76,7 +84,7 @@ QUERY_FULL = text("""
         lc.last_comment_text,
         le.remaining_distance,
         le.remaining_mileage,
-        le.waybill_number,
+        COALESCE(le.waybill_number, lw.waybill_number) AS waybill_number,
         le.type_railway_carriage,
         le.owners_administration,
         le.container_numbers,
@@ -92,6 +100,7 @@ QUERY_FULL = text("""
     ) le ON tw.railway_carriage_number = le.railway_carriage_number
         AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
         AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
+    LEFT JOIN LastWaybill lw ON tw.railway_carriage_number = lw.railway_carriage_number
     LEFT JOIN (
         SELECT tracking_id, last_comment_text
         FROM LastComments WHERE rn = 1
