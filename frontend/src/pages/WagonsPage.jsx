@@ -235,7 +235,7 @@ export default function WagonsPage() {
             onClick={() => setTab('hierarchy')}
             className={tab === 'hierarchy' ? 'active' : ''}
           >
-            Вагоны на слежении
+            Дислокация
           </button>
           <button
             type="button"

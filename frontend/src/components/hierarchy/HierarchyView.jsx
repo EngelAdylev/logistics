@@ -82,7 +82,20 @@ export default function HierarchyView({ isActive }) {
   const handleResetFilters = () => setColumnFilters({});
 
   // Group by train
-  const groups = useMemo(() => groupByTrain(filteredWagons), [filteredWagons]);
+  const groups = useMemo(() => {
+    const raw = groupByTrain(filteredWagons);
+    if (!groupByTrainEnabled) return raw;
+    // Сортировка вагонов внутри каждой группы по номеру вагона (числовая)
+    const sorted = new Map();
+    for (const [key, rows] of raw.entries()) {
+      sorted.set(key, [...rows].sort((a, b) =>
+        String(a.railway_carriage_number || '').localeCompare(
+          String(b.railway_carriage_number || ''), undefined, { numeric: true }
+        )
+      ));
+    }
+    return sorted;
+  }, [filteredWagons, groupByTrainEnabled]);
 
   const toggleTrain = (trainKey) => {
     setCollapsedTrains((prev) => {

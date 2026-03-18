@@ -256,6 +256,7 @@ export default function TripsView({ isActive }) {
             <tr>
               <th style={{ width: 32 }} />
               <th style={{ width: 32 }} />
+              <th>№ рейса</th>
               {/* Вагон: activeValues отражает и поиск и ColumnFilter */}
               <th className="th-with-filter">
                 <span className="th-label">Вагон</span>
@@ -268,7 +269,6 @@ export default function TripsView({ isActive }) {
                   onClear={() => { setWagonSearch(''); handleFilterChange('railway_carriage_number', []); }}
                 />
               </th>
-              <th>№ рейса</th>
               <th>Дата рейса</th>
               <th className="th-with-filter">
                 <span className="th-label">Откуда</span>
@@ -345,8 +345,8 @@ export default function TripsView({ isActive }) {
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
                     </td>
-                    <td className="h-wagon-num">{trip.railway_carriage_number || '—'}</td>
                     <td>{trip.flight_number ?? '—'}</td>
+                    <td className="h-wagon-num">{trip.railway_carriage_number || '—'}</td>
                     <td className="h-trip-date">{formatDate(trip.flight_start_date)}</td>
                     <td>{departure}</td>
                     <td>{destination}</td>
