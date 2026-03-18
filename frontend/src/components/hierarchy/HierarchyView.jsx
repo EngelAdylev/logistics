@@ -89,8 +89,8 @@ export default function HierarchyView({ isActive }) {
     const sorted = new Map();
     for (const [key, rows] of raw.entries()) {
       sorted.set(key, [...rows].sort((a, b) =>
-        String(a.railway_carriage_number || '').localeCompare(
-          String(b.railway_carriage_number || ''), undefined, { numeric: true }
+        String(a.number_railway_carriage_on_train || '').localeCompare(
+          String(b.number_railway_carriage_on_train || ''), undefined, { numeric: true }
         )
       ));
     }
