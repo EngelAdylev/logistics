@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare, FilterX, MessageSquarePlus } from 'lucide-react';
+import { ChevronRight, ChevronDown, MessageSquare, FilterX, MessageSquarePlus, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import { applyFilters } from '../../table/tableUtils';
@@ -39,6 +39,10 @@ export default function TripsView({ isActive }) {
   // wagonSearch — это только визуальное состояние textarea.
   // Результат поиска сразу конвертируется в columnFilters.railway_carriage_number.
   const [wagonSearch, setWagonSearch] = useState('');
+
+  // Сортировка: какая колонка активна + направление
+  const [sortField, setSortField] = useState(null); // null | 'flight_start_date' | 'last_operation_date'
+  const [sortDir, setSortDir] = useState(null);     // null | 'desc' | 'asc'
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
@@ -104,8 +108,28 @@ export default function TripsView({ isActive }) {
     });
   };
 
-  // Фильтрация только через columnFilters (wagonSearch синхронизирован туда)
-  const filteredTrips = useMemo(() => applyFilters(trips, columnFilters), [trips, columnFilters]);
+  // Переключатель сортировки: null → desc → asc → null
+  const handleSort = (field) => {
+    if (sortField !== field) { setSortField(field); setSortDir('desc'); return; }
+    if (sortDir === 'desc') { setSortDir('asc'); return; }
+    setSortField(null); setSortDir(null);
+  };
+
+  const sortIcon = (field) => {
+    if (sortField !== field) return <ArrowUpDown size={14} />;
+    return sortDir === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />;
+  };
+
+  // Фильтрация + сортировка
+  const filteredTrips = useMemo(() => {
+    const filtered = applyFilters(trips, columnFilters);
+    if (!sortField || !sortDir) return filtered;
+    return [...filtered].sort((a, b) => {
+      const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
+      const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
+      return sortDir === 'desc' ? tb - ta : ta - tb;
+    });
+  }, [trips, columnFilters, sortField, sortDir]);
 
   const hasActiveFilters = Object.keys(columnFilters).length > 0;
   const hasWagonSearch = wagonSearch.trim().length > 0;
@@ -269,7 +293,17 @@ export default function TripsView({ isActive }) {
                   onClear={() => { setWagonSearch(''); handleFilterChange('railway_carriage_number', []); }}
                 />
               </th>
-              <th>Дата рейса</th>
+              <th className="th-with-filter">
+                <span className="th-label">Дата рейса</span>
+                <button
+                  type="button"
+                  className={`sort-btn ${sortField === 'flight_start_date' ? 'active' : ''}`}
+                  onClick={() => handleSort('flight_start_date')}
+                  title={sortField === 'flight_start_date' && sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortField === 'flight_start_date' && sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате рейса'}
+                >
+                  {sortIcon('flight_start_date')}
+                </button>
+              </th>
               <th className="th-with-filter">
                 <span className="th-label">Откуда</span>
                 <ColumnFilter
@@ -305,7 +339,17 @@ export default function TripsView({ isActive }) {
               </th>
               <th>№ ваг. на поезде</th>
               <th>Последняя операция</th>
-              <th>Дата операции</th>
+              <th className="th-with-filter">
+                <span className="th-label">Дата операции</span>
+                <button
+                  type="button"
+                  className={`sort-btn ${sortField === 'last_operation_date' ? 'active' : ''}`}
+                  onClick={() => handleSort('last_operation_date')}
+                  title={sortField === 'last_operation_date' && sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortField === 'last_operation_date' && sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате операции'}
+                >
+                  {sortIcon('last_operation_date')}
+                </button>
+              </th>
               <th>Статус</th>
               <th>Комментарий</th>
             </tr>
