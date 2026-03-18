@@ -228,7 +228,7 @@ export default function WagonsPage() {
             onClick={() => setTab('dislocation')}
             className={tab === 'dislocation' ? 'active' : ''}
           >
-            Дислокация
+            Дислокация (неактуально)
           </button>
           <button
             type="button"

@@ -62,17 +62,22 @@ export default function WagonRow({
           </td>
         )}
         {isGrouped && <td className="group-col" />}
+        {visibleCols.slice(0, 1).map((col) => (
+          <td key={col.id} className={col.id === 'railway_carriage_number' ? 'h-wagon-number' : undefined}>
+            {col.id === 'railway_carriage_number'
+              ? <strong>{wagon.railway_carriage_number}</strong>
+              : renderCell(wagon, col, () => setShowComments(true))}
+          </td>
+        ))}
         <td className="h-wagon-trips-count" onClick={(e) => e.stopPropagation()}>
           <span title="Всего рейсов">{wagon.trip_count ?? 0}</span>
           {wagon.active_trip_count > 0 && (
             <span className="h-wagon-active-trips" title="Активных рейсов"> ({wagon.active_trip_count} акт.)</span>
           )}
         </td>
-        {visibleCols.map((col) => (
-          <td key={col.id} className={col.id === 'railway_carriage_number' ? 'h-wagon-number' : undefined}>
-            {col.id === 'railway_carriage_number'
-              ? <strong>{wagon.railway_carriage_number}</strong>
-              : renderCell(wagon, col, () => setShowComments(true))}
+        {visibleCols.slice(1).map((col) => (
+          <td key={col.id}>
+            {renderCell(wagon, col, () => setShowComments(true))}
           </td>
         ))}
       </tr>

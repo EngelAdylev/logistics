@@ -257,8 +257,23 @@ export default function HierarchyView({ isActive }) {
             <tr>
               <th style={{ width: 32 }} title="Выбор" />
               {groupByTrainEnabled && <th className="group-col" />}
+              {visibleCols.slice(0, 1).map((col) => (
+                <th key={col.id} className="th-with-filter">
+                  <span className="th-label">{col.label}</span>
+                  {col.filterable && (
+                    <ColumnFilter
+                      columnId={col.accessorKey || col.id}
+                      label={col.label}
+                      rows={searchedWagons}
+                      activeValues={columnFilters?.[col.accessorKey || col.id]}
+                      onApply={(vals) => handleFilterChange(col.accessorKey || col.id, vals)}
+                      onClear={() => handleFilterChange(col.accessorKey || col.id, [])}
+                    />
+                  )}
+                </th>
+              ))}
               <th style={{ width: 80 }}>Рейсы</th>
-              {visibleCols.map((col) => (
+              {visibleCols.slice(1).map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
                   {col.id === 'last_operation_date' && (

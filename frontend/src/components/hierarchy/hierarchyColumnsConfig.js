@@ -2,9 +2,9 @@
  * Конфигурация колонок таблицы "Вагоны на слежении".
  */
 export const HIERARCHY_COLUMNS = [
+  { id: 'railway_carriage_number', label: 'Вагон', accessorKey: 'railway_carriage_number', filterable: true, isRequired: true, isDefaultVisible: true },
   { id: 'number_train', label: '№ поезда', accessorKey: 'number_train', filterable: true, isRequired: false, isDefaultVisible: true },
   { id: 'train_index', label: 'Индекс поезда', accessorKey: 'train_index', filterable: true, isRequired: false, isDefaultVisible: false },
-  { id: 'railway_carriage_number', label: 'Вагон', accessorKey: 'railway_carriage_number', filterable: true, isRequired: true, isDefaultVisible: true },
   { id: 'number_railway_carriage_on_train', label: '№ ваг. на поезде', accessorKey: 'number_railway_carriage_on_train', filterable: true, isRequired: true, isDefaultVisible: true },
   { id: 'last_station_name', label: 'Станция операции', accessorKey: 'last_station_name', filterable: true, isRequired: false, isDefaultVisible: true },
   { id: 'last_operation_name', label: 'Операция', accessorKey: 'last_operation_name', filterable: true, isRequired: false, isDefaultVisible: true },
