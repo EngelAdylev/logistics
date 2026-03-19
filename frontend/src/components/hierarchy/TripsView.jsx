@@ -274,7 +274,7 @@ export default function TripsView({ isActive }) {
     <div className="h-view-wrapper">
       {toolbar}
 
-      <div className="table-scroll">
+      <div className="table-scroll h-table-scroll">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
