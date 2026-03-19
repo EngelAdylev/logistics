@@ -107,7 +107,8 @@ def list_wagons(
                 number_railway_carriage_on_train,
                 departure_station_name,
                 destination_station_name,
-                waybill_number
+                waybill_number,
+                remaining_distance
             FROM wagon_trips
             WHERE wagon_id = ANY(:ids)
               AND is_active = true
@@ -135,6 +136,7 @@ def list_wagons(
                 departure_station_name=last_trip[7] if last_trip else None,
                 destination_station_name=last_trip[8] if last_trip else None,
                 waybill_number=last_trip[9] if last_trip else None,
+                remaining_distance=last_trip[10] if last_trip else None,
                 created_at=w.created_at,
                 updated_at=w.updated_at,
             )

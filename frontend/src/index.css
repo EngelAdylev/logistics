@@ -339,7 +339,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-bulk-result--partial { background: #fef9c3; color: #854d0e; }
 .h-bulk-result--failure { background: #fef2f2; color: #991b1b; }
 
-.h-wagon-table { width: 100%; }
+.h-wagon-table { min-width: 100%; width: max-content; }
 .h-wagon-row { background: #fff; }
 .h-wagon-row--expanded > td { background: #f0f9ff; }
 .h-wagon-row:hover > td { background: #f8fafc; }

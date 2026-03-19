@@ -125,6 +125,7 @@ class WagonTrip(Base):
     train_index = Column(Text)
     number_railway_carriage_on_train = Column(Text)
     waybill_number = Column(Text)
+    remaining_distance = Column(Text)
     is_active = Column(Boolean, default=True)
     # Денормализованные поля последней операции (обновляются при каждой синхронизации)
     last_operation_date = Column(DateTime(timezone=True))

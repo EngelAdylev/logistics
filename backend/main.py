@@ -86,6 +86,7 @@ def startup_event():
                 ("tracking_wagons_dep_station", "ALTER TABLE tracking_wagons ADD COLUMN IF NOT EXISTS departure_station_code TEXT"),
                 ("wagon_trips_carriage_on_train", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS number_railway_carriage_on_train TEXT"),
                 ("wagon_trips_waybill_number", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS waybill_number TEXT"),
+                ("wagon_trips_remaining_distance", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS remaining_distance TEXT"),
             ]:
                 try:
                     conn.execute(text(sql))
