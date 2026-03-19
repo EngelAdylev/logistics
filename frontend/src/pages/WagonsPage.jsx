@@ -18,22 +18,44 @@ export default function WagonsPage() {
   const [syncMessage, setSyncMessage] = useState('');
   const [hierarchyMeta, setHierarchyMeta] = useState(null);
   const [tripsMeta, setTripsMeta] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleSync = async () => {
     setSyncLoading(true);
-    setSyncMessage('');
+    setSyncMessage('Шаг 1/2: загрузка данных…');
     try {
+      // Шаг 1: старый синк (dislocation → tracking_wagons)
       const res = await api.post('/wagons/sync');
       const d = res.data;
       const status = d.sync_status || (d.success ? 'success' : 'failure');
-      const statusMsg = status === 'success'
-        ? 'Данные обновлены.'
-        : status === 'partial_failure'
-          ? 'Синхронизация завершена с ошибками. Часть данных обновлена.'
-          : 'Синхронизация завершилась с ошибкой.';
+      if (status === 'failure') {
+        setSyncMessage('Синхронизация завершилась с ошибкой.');
+        return;
+      }
+
+      // Шаг 2: новый синк (dislocation → wagons/wagon_trips)
+      setSyncMessage('Шаг 2/2: обновление дислокации…');
+      try {
+        await api.post('/v2/sync');
+      } catch (e2) {
+        const detail2 = e2.response?.data?.detail;
+        if (typeof detail2 === 'object' && detail2?.error === 'SYNC_IN_PROGRESS') {
+          setSyncMessage('Обновление уже выполняется.');
+          return;
+        }
+        // v2 sync не критичен — показываем предупреждение, но не блокируем
+        setSyncMessage(`Данные загружены, но дислокация не обновилась: ${detail2 || e2.message}`);
+        return;
+      }
+
+      const statusMsg = status === 'partial_failure'
+        ? 'Синхронизация завершена с ошибками. Часть данных обновлена.'
+        : 'Данные обновлены.';
       setSyncMessage(
         `${statusMsg} Создано: ${d.created ?? 0}, обновлено: ${d.updated ?? 0}${d.errors ? `, ошибок: ${d.errors}` : ''}.`
       );
+      // Перезагружаем таблицу дислокации
+      setRefreshKey((k) => k + 1);
     } catch (e) {
       const detail = e.response?.data?.detail;
       if (typeof detail === 'object' && detail?.error === 'SYNC_IN_PROGRESS') {
@@ -122,6 +144,7 @@ export default function WagonsPage() {
                     : undefined
               }
               onMetaChange={setHierarchyMeta}
+              refreshKey={refreshKey}
             />
           )}
         </div>

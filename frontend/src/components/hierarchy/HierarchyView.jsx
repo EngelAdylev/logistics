@@ -19,7 +19,7 @@ function matchesAny(val, tokens) {
 
 const DEFAULT_VISIBLE_IDS = HIERARCHY_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
-export default function HierarchyView({ isActive }) {
+export default function HierarchyView({ isActive, refreshKey }) {
   const [wagons, setWagons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -67,7 +67,7 @@ export default function HierarchyView({ isActive }) {
   useEffect(() => {
     setWagonSearch('');
     fetchWagons();
-  }, [isActive]);
+  }, [isActive, refreshKey]);
 
   // Client-side wagon search filter
   const searchedWagons = useMemo(() => {
