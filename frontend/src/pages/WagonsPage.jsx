@@ -69,7 +69,7 @@ export default function WagonsPage() {
   };
 
   return (
-    <>
+    <div className="wagons-page">
       <div className="tabs-row">
         <div className="tabs">
           <button
@@ -104,7 +104,7 @@ export default function WagonsPage() {
 
       {tab === 'hierarchy' ? (
         /* ── Вкладка Дислокация ── */
-        <div>
+        <div className="h-tab-content">
           <div className="h-filter-block">
             <div className="h-filter-toggle">
               <button
@@ -150,7 +150,7 @@ export default function WagonsPage() {
         </div>
       ) : (
         /* ── Вкладка Рейсы ── */
-        <div>
+        <div className="h-tab-content">
           <div className="h-filter-block">
             <div className="h-filter-toggle">
               <button
@@ -195,6 +195,6 @@ export default function WagonsPage() {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

@@ -124,14 +124,14 @@ export default function AdminPage() {
 
   if (authLoading) {
     return (
-      <div className="admin-section">
+      <div className="admin-page admin-section">
         <div className="data-loading">Проверка авторизации…</div>
       </div>
     );
   }
 
   return (
-    <div className="admin-section">
+    <div className="admin-page admin-section">
       <h2>Управление пользователями</h2>
 
       <div className="admin-toolbar">
