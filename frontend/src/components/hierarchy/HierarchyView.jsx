@@ -251,7 +251,7 @@ export default function HierarchyView({ isActive }) {
       </div>
 
       {/* Table */}
-      <div className="table-scroll">
+      <div className="table-scroll h-table-scroll">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>

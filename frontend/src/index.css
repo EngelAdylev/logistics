@@ -181,6 +181,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .reset-filters-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .reset-filters-btn.active { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
 .table-scroll { overflow-x: auto; }
+.h-table-scroll { max-height: calc(100vh - 280px); overflow-y: auto; }
 .excel-table .group-col { width: 36px; padding: 8px; vertical-align: middle; }
 .excel-table .group-header-row {
   background: #f8fafc; cursor: pointer; font-weight: 600; color: #1e293b;
@@ -340,6 +341,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-bulk-result--failure { background: #fef2f2; color: #991b1b; }
 
 .h-wagon-table { min-width: 100%; width: max-content; }
+.h-wagon-table thead th { position: sticky; top: 0; z-index: 2; background: #f1f5f9; }
 .h-wagon-row { background: #fff; }
 .h-wagon-row--expanded > td { background: #f0f9ff; }
 .h-wagon-row:hover > td { background: #f8fafc; }

@@ -356,7 +356,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 remaining_distance    = last_op.remaining_distance_raw,
                 is_active             = NOT (
                     last_op.op_code = '96'
-                    OR (last_op.rem <= 0 AND last_op.op_code IN ('20', '43', '85'))
+                    OR (last_op.rem <= 0 AND last_op.op_code IN ('20', '85'))
                 ),
                 updated_at            = now()
             FROM (

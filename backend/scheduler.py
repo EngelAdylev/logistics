@@ -263,7 +263,7 @@ def sync_dislocation_to_tracking():
             )
             SELECT railway_carriage_number, bus_date, dep_st FROM nt
             WHERE rn = 1 AND (
-                (rem <= 0 AND op_code IN ('20', '43', '85'))
+                (rem <= 0 AND op_code IN ('20', '85'))
                 OR op_code = '96'
             )
         """)).mappings().all()
@@ -349,7 +349,7 @@ def sync_dislocation_to_tracking():
                       FROM dislocation
                   ) le
                   WHERE le.rn = 1 AND (
-                      (le.rem <= 0 AND le.op_code IN ('20', '43', '85'))
+                      (le.rem <= 0 AND le.op_code IN ('20', '85'))
                       OR le.op_code = '96'
                   )
                     AND le.railway_carriage_number = tw.railway_carriage_number
@@ -491,7 +491,7 @@ def rebuild_tracking_from_dislocation_merge():
                     _rem_val = float(_raw_rem) if _raw_rem else 0
                 except (ValueError, TypeError):
                     _rem_val = 0
-                is_unloaded = op_code == "96" or (_rem_val <= 0 and op_code in ("20", "43", "85"))
+                is_unloaded = op_code == "96" or (_rem_val <= 0 and op_code in ("20", "85"))
                 row_dt = _parse_flight_start_date(row.get("date_time_of_operation"))
                 track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 if not track_entry:
