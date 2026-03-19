@@ -80,8 +80,8 @@ def _parse_flight_start_date(v):
 def _fetch_qualifying_rows(db):
     """
     Возвращает строки dislocation, подходящие для слежения:
-    (станция отправления=648400 ИЛИ станция назначения=648400) И remaining_distance > 0.
-    При 0 результатах — fallback: только remaining_distance > 0.
+    (станция отправления=648400 ИЛИ станция назначения=648400) — без фильтра по remaining_distance.
+    При 0 результатах — fallback: все последние операции по рейсу.
     Base CTE не зависит от railway_station/operation_code: при отсутствии или ошибке
     этих таблиц используется dislocation-only CTE (st_name/op_name = NULL).
     """
@@ -122,26 +122,12 @@ def _fetch_qualifying_rows(db):
                 OR TRIM(COALESCE(flight_start_station_code::text, '')) LIKE '%648400'
                 OR TRIM(COALESCE(destination_station_code::text, '')) LIKE '%648400'
               )
-              AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text, '')), '') AS NUMERIC), 0) > 0
         """)
         results = []
         try:
             results = db.execute(query_strict).mappings().all()
         except Exception as e:
             logger.warning("qualifying query (strict) failed: %s", e)
-        if not results:
-            try:
-                query_fallback = text(base_cte + """
-                    SELECT * FROM LastEvents
-                    WHERE rn = 1
-                      AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text, '')), '') AS NUMERIC), 0) > 0
-                """)
-                results = db.execute(query_fallback).mappings().all()
-                if results:
-                    logger.info("qualifying rows: strict=0, using fallback (remaining_distance > 0), got %s rows", len(results))
-            except Exception as e:
-                logger.warning("qualifying query (remaining_distance fallback) failed: %s", e)
-                results = []
         if not results:
             try:
                 query_all = text(base_cte + """
@@ -208,11 +194,6 @@ def _fetch_qualifying_rows_tracking(db):
                     OR TRIM(COALESCE(destination_station_code::text,'')) = '648400'
                     OR TRIM(COALESCE(flight_start_station_code::text,'')) LIKE '%648400'
                     OR TRIM(COALESCE(destination_station_code::text,'')) LIKE '%648400')
-                  AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) > 0
-            """,
-            base_cte + """
-                SELECT * FROM LastEvents WHERE rn = 1
-                  AND COALESCE(CAST(NULLIF(TRIM(COALESCE(remaining_distance::text,'')),'') AS NUMERIC), 0) > 0
             """,
             base_cte + " SELECT * FROM LastEvents WHERE rn = 1",
         ]:
