@@ -183,6 +183,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .reset-filters-btn.active { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
 .table-scroll { overflow-x: auto; }
 .h-table-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.h-table-scroll-x { overflow-x: auto; }
 .excel-table .group-col { width: 36px; padding: 8px; vertical-align: middle; }
 .excel-table .group-header-row {
   background: #f8fafc; cursor: pointer; font-weight: 600; color: #1e293b;

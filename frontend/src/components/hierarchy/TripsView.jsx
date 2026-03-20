@@ -274,7 +274,8 @@ export default function TripsView({ isActive }) {
     <div className="h-view-wrapper">
       {toolbar}
 
-      <div className="table-scroll h-table-scroll">
+      <div className="h-table-scroll">
+        <div className="h-table-scroll-x">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
@@ -439,6 +440,7 @@ export default function TripsView({ isActive }) {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {commentTrip && <TripComments trip={commentTrip} onClose={() => setCommentTrip(null)} />}

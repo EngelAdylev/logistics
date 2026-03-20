@@ -251,7 +251,8 @@ export default function HierarchyView({ isActive, refreshKey }) {
       </div>
 
       {/* Table */}
-      <div className="table-scroll h-table-scroll">
+      <div className="h-table-scroll">
+        <div className="h-table-scroll-x">
         <table className="excel-table h-wagon-table">
           <thead>
             <tr>
@@ -339,6 +340,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Bulk comment modal */}
