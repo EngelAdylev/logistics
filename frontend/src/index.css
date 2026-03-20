@@ -343,8 +343,8 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-bulk-result--partial { background: #fef9c3; color: #854d0e; }
 .h-bulk-result--failure { background: #fef2f2; color: #991b1b; }
 
-.h-wagon-table { min-width: 100%; width: max-content; }
-.h-wagon-table thead th { position: sticky; top: 0; z-index: 2; background: #f1f5f9; }
+.h-wagon-table { min-width: 100%; width: max-content; border-collapse: separate; border-spacing: 0; overflow: visible; }
+.h-wagon-table thead th { position: sticky; top: 0; z-index: 2; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; }
 .h-wagon-row { background: #fff; }
 .h-wagon-row--expanded > td { background: #f0f9ff; }
 .h-wagon-row:hover > td { background: #f8fafc; }
