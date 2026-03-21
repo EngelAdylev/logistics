@@ -34,7 +34,7 @@ services:
       CORS_ORIGINS: "*"
       ADMIN_LOGIN: admin
       ADMIN_PASSWORD: admin123
-      SUPPORT_AGENT_URL: http://host.docker.internal:8080
+      SUPPORT_AGENT_URL: http://host.docker.internal:8000
     depends_on:
       db:
         condition: service_healthy
