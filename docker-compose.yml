@@ -1,18 +1,43 @@
+# ================================================================
+# Локальный запуск: docker-compose up --build
+# Откроется на http://localhost:3000
+# Админ: admin / admin123
+# ================================================================
 services:
+  db:
+    image: postgres:15
+    container_name: railway_db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: railway
+      POSTGRES_PASSWORD: railway_local
+      POSTGRES_DB: logistics_service
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U railway -d logistics_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: ./backend
     container_name: railway_backend
     restart: unless-stopped
-    networks:
-      - proxy
-    expose:
-      - "8000"
+    ports:
+      - "8001:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://railway:railway_local@db:5432/logistics_service
+      JWT_SECRET: local_dev_secret_change_me_in_production_1234567890abcdef
       CORS_ORIGINS: "*"
-      ADMIN_LOGIN: ${ADMIN_LOGIN:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_LOGIN: admin
+      ADMIN_PASSWORD: admin123
+      SUPPORT_AGENT_URL: http://host.docker.internal:8000
+    depends_on:
+      db:
+        condition: service_healthy
 
   frontend:
     build:
@@ -21,14 +46,11 @@ services:
       args:
         VITE_API_URL: /api
     container_name: railway_frontend
-    expose:
-      - "80"
-    networks:
-      - proxy
+    ports:
+      - "3000:80"
     depends_on:
       - backend
     restart: unless-stopped
 
-networks:
-  proxy:
-    external: true
+volumes:
+  postgres_data:
