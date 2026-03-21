@@ -27,13 +27,14 @@ services:
     container_name: railway_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       DATABASE_URL: postgresql://railway:railway_local@db:5432/logistics_service
       JWT_SECRET: local_dev_secret_change_me_in_production_1234567890abcdef
       CORS_ORIGINS: "*"
       ADMIN_LOGIN: admin
       ADMIN_PASSWORD: admin123
+      SUPPORT_AGENT_URL: http://host.docker.internal:8080
     depends_on:
       db:
         condition: service_healthy

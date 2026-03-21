@@ -10,6 +10,7 @@ from auth import get_current_user, require_role, hash_password
 from routers.auth_router import router as auth_router
 from routers.table_settings_router import router as table_settings_router
 from routers.hierarchy_router import router as hierarchy_router
+from routers.support_router import router as support_router
 from schemas import CreateUserRequest, TrackingWagonTableRowOut
 from wagon_table_service import get_table_wagons
 
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(table_settings_router)
 app.include_router(hierarchy_router)
+app.include_router(support_router)
 
 
 @app.on_event("startup")
