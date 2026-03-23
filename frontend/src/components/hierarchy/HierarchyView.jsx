@@ -322,7 +322,31 @@ export default function HierarchyView({ isActive, refreshKey }) {
                       tabIndex={0}
                       onKeyDown={(e) => e.key === 'Enter' && toggleTrain(trainKey)}
                     >
-                      <td />
+                      <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const groupIds = rows.map((w) => w.id);
+                          const allSelected = groupIds.every((id) => selectedWagonIds.has(id));
+                          const someSelected = !allSelected && groupIds.some((id) => selectedWagonIds.has(id));
+                          return (
+                            <input
+                              type="checkbox"
+                              checked={allSelected}
+                              ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                              onChange={() => {
+                                setSelectedWagonIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (allSelected) {
+                                    groupIds.forEach((id) => next.delete(id));
+                                  } else {
+                                    groupIds.forEach((id) => next.add(id));
+                                  }
+                                  return next;
+                                });
+                              }}
+                            />
+                          );
+                        })()}
+                      </td>
                       <td className="group-col">
                         <span className="group-caret">{collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
                       </td>
