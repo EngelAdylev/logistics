@@ -4,9 +4,11 @@ import OperationsTable from './OperationsTable';
 import TripComments from './TripComments';
 
 function formatTrainIndex(val) {
-  const s = val?.toString?.()?.trim?.() ?? '';
-  if (!s || s.length !== 10) return s || '—';
-  return `${s.slice(0, 4)} ${s.slice(4, 6)} ${s.slice(6, 10)}`;
+  const raw = val?.toString?.()?.trim?.() ?? '';
+  if (!raw) return '—';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) return raw;
+  return `${digits.slice(0, 4)} ${digits.slice(4, 6)} ${digits.slice(6)}`;
 }
 
 function formatDate(val) {
