@@ -475,7 +475,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
                   )}
                 </th>
               ))}
-              <th>Рейсы</th>
+              <th style={{ whiteSpace: 'nowrap' }}>Рейсы</th>
               {visibleCols.slice(1).map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
