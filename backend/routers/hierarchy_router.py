@@ -644,7 +644,15 @@ def sync_v2(
         from services.sync_service_v2 import sync_new_model
         stats = sync_new_model(db)
         _logger.info("sync_v2: done stats=%s", stats)
-        return SyncV2Result(**stats)
+        result = SyncV2Result(**stats)
+        if result.status == "failure":
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "SYNC_V2_FAILED", "message": f"Sync failed with {result.errors} error(s)"},
+            )
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         _logger.exception("sync_v2 failed: %s", e)
         raise HTTPException(

@@ -264,3 +264,4 @@ class SyncV2Result(BaseModel):
     status: str = "success"
     trips_normalized_deactivated: int = 0
     trips_merged: int = 0  # объединённые дубли (один рейс на вагон/день)
+    stale_trips_archived: int = 0  # архивированные рейсы (есть более новый рейс)

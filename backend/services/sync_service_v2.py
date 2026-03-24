@@ -475,7 +475,8 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
         stats["trips_normalized_deactivated"] = deactivated_count
 
         # Шаг 8b. Архивируем рейсы, у которых есть более новый рейс того же вагона.
-        # Если у вагона есть рейс с flight_start_date > текущего, текущий точно архивный.
+        # Условие: у вагона есть другой рейс с более поздней датой рейса,
+        # ИЛИ с той же датой рейса но более поздней последней операцией.
         _t2 = _time.perf_counter()
         stale_result = db.execute(text("""
             UPDATE wagon_trips wt
@@ -484,7 +485,14 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
               AND EXISTS (
                 SELECT 1 FROM wagon_trips wt2
                 WHERE wt2.wagon_id = wt.wagon_id
-                  AND wt2.flight_start_date > wt.flight_start_date
+                  AND wt2.id != wt.id
+                  AND (
+                    wt2.flight_start_date > wt.flight_start_date
+                    OR (
+                      wt2.flight_start_date = wt.flight_start_date
+                      AND wt2.last_operation_date > wt.last_operation_date
+                    )
+                  )
               )
         """))
         stale_count = stale_result.rowcount

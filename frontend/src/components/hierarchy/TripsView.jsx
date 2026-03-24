@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown, MessageSquare, FilterX, MessageSquarePlus, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
+import { ChevronRight, ChevronDown, MessageSquare, MessageSquarePlus, FilterX, ArrowUpDown, ArrowDown, ArrowUp, CheckSquare, XSquare, Search } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
+import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
 import { applyFilters } from '../../table/tableUtils';
+import { TRIPS_COLUMNS } from './tripsColumnsConfig';
 import OperationsTable from './OperationsTable';
 import TripComments from './TripComments';
 
@@ -17,16 +19,16 @@ function formatDateTime(val) {
   });
 }
 
-/** Разбивает строку ввода по пробелу/переносу/запятой → массив токенов */
 function parseTokens(input) {
   return input.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean);
 }
 
-/** Возвращает true, если строка val содержит хотя бы один токен из tokens */
 function matchesAny(val, tokens) {
   const lower = (val || '').toLowerCase();
   return tokens.some((t) => lower.includes(t));
 }
+
+const DEFAULT_VISIBLE_IDS = TRIPS_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
 export default function TripsView({ isActive }) {
   const [trips, setTrips] = useState([]);
@@ -34,22 +36,19 @@ export default function TripsView({ isActive }) {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
 
+  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
   const [columnFilters, setColumnFilters] = useState({});
-
-  // wagonSearch — это только визуальное состояние textarea.
-  // Результат поиска сразу конвертируется в columnFilters.railway_carriage_number.
   const [wagonSearch, setWagonSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  // Сортировка: какая колонка активна + направление
-  const [sortField, setSortField] = useState(null); // null | 'flight_start_date' | 'last_operation_date'
-  const [sortDir, setSortDir] = useState(null);     // null | 'desc' | 'asc'
+  const [sortField, setSortField] = useState(null);
+  const [sortDir, setSortDir] = useState(null);
 
   const [expandedTripIds, setExpandedTripIds] = useState(new Set());
   const [operationsByTripId, setOperationsByTripId] = useState(new Map());
   const [opsLoading, setOpsLoading] = useState(new Map());
   const [commentTrip, setCommentTrip] = useState(null);
 
-  // Групповой комментарий
   const [selectedTripIds, setSelectedTripIds] = useState(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkCommentText, setBulkCommentText] = useState('');
@@ -81,23 +80,24 @@ export default function TripsView({ isActive }) {
     fetchTrips();
   }, [isActive]);
 
-  // Когда textarea меняется — синхронизируем в columnFilters.railway_carriage_number
-  const handleWagonSearch = (value) => {
-    setWagonSearch(value);
-    const tokens = parseTokens(value.toLowerCase());
-    if (!tokens.length) {
-      setColumnFilters((prev) => { const n = { ...prev }; delete n.railway_carriage_number; return n; });
-      return;
-    }
-    // Находим все уникальные номера вагонов которые совпадают с любым токеном
-    const matched = [...new Set(
-      trips.map((t) => t.railway_carriage_number).filter(Boolean).filter((num) => matchesAny(num, tokens)),
-    )];
-    setColumnFilters((prev) => {
-      if (!matched.length) { const n = { ...prev }; delete n.railway_carriage_number; return n; }
-      return { ...prev, railway_carriage_number: matched };
+  const searchedTrips = useMemo(() => {
+    const tokens = parseTokens(wagonSearch.toLowerCase());
+    if (!tokens.length) return trips;
+    return trips.filter((t) => matchesAny(t.railway_carriage_number, tokens));
+  }, [trips, wagonSearch]);
+
+  const filteredTrips = useMemo(() => {
+    const filtered = applyFilters(searchedTrips, columnFilters);
+    if (!sortField || !sortDir) return filtered;
+    return [...filtered].sort((a, b) => {
+      const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
+      const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
+      return sortDir === 'desc' ? tb - ta : ta - tb;
     });
-  };
+  }, [searchedTrips, columnFilters, sortField, sortDir]);
+
+  const hasSearch = wagonSearch.trim().length > 0;
+  const hasFilters = Object.keys(columnFilters).length > 0;
 
   const handleFilterChange = (colId, values) => {
     setColumnFilters((prev) => {
@@ -108,33 +108,17 @@ export default function TripsView({ isActive }) {
     });
   };
 
-  // Переключатель сортировки: null → desc → asc → null
   const handleSort = (field) => {
     if (sortField !== field) { setSortField(field); setSortDir('desc'); return; }
     if (sortDir === 'desc') { setSortDir('asc'); return; }
     setSortField(null); setSortDir(null);
   };
 
-  const sortIcon = (field) => {
-    if (sortField !== field) return <ArrowUpDown size={14} />;
-    return sortDir === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />;
+  const sortIcon = (field, size = 13) => {
+    if (sortField !== field) return <ArrowUpDown size={size} />;
+    return sortDir === 'desc' ? <ArrowDown size={size} /> : <ArrowUp size={size} />;
   };
 
-  // Фильтрация + сортировка
-  const filteredTrips = useMemo(() => {
-    const filtered = applyFilters(trips, columnFilters);
-    if (!sortField || !sortDir) return filtered;
-    return [...filtered].sort((a, b) => {
-      const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
-      const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
-      return sortDir === 'desc' ? tb - ta : ta - tb;
-    });
-  }, [trips, columnFilters, sortField, sortDir]);
-
-  const hasActiveFilters = Object.keys(columnFilters).length > 0;
-  const hasWagonSearch = wagonSearch.trim().length > 0;
-
-  // --- Выбор рейсов ---
   const toggleTripSelect = (id) => {
     setSelectedTripIds((prev) => {
       const next = new Set(prev);
@@ -143,14 +127,9 @@ export default function TripsView({ isActive }) {
       return next;
     });
   };
-
-  const selectAllTrips = () => {
-    setSelectedTripIds(new Set(filteredTrips.map((t) => t.id)));
-  };
-
+  const selectAllTrips = () => setSelectedTripIds(new Set(filteredTrips.map((t) => t.id)));
   const clearTripSelection = () => setSelectedTripIds(new Set());
 
-  // --- Групповой комментарий ---
   const handleBulkCommentApply = async () => {
     const text = bulkCommentText.trim();
     if (!text || selectedTripIds.size === 0) return;
@@ -195,60 +174,9 @@ export default function TripsView({ isActive }) {
     }
   };
 
-  const toolbar = (
-    <div className="h-view-toolbar">
-      {/* Поиск по вагонам — синхронизируется с ColumnFilter */}
-      <div className="h-search-box">
-        <textarea
-          className="h-search-input h-search-textarea"
-          placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
-          value={wagonSearch}
-          onChange={(e) => handleWagonSearch(e.target.value)}
-          rows={2}
-        />
-        {hasWagonSearch && (
-          <button type="button" className="h-search-clear" onClick={() => handleWagonSearch('')} title="Сбросить">✕</button>
-        )}
-      </div>
-
-      {/* Кнопка сброса всех фильтров */}
-      {hasActiveFilters && (
-        <button
-          type="button"
-          className="reset-filters-btn active"
-          onClick={() => { setColumnFilters({}); setWagonSearch(''); }}
-          title="Сбросить все фильтры"
-        >
-          <FilterX size={16} /> Сбросить фильтры
-        </button>
-      )}
-
-      <div className="h-view-meta">
-        Рейсов: {total}
-        {hasActiveFilters && ` (показано: ${filteredTrips.length})`}
-      </div>
-
-      <div className="h-view-toolbar-right">
-        <button type="button" className="h-bulk-select-btn" onClick={selectAllTrips}>
-          Выбрать всё
-        </button>
-        {selectedTripIds.size > 0 && (
-          <button type="button" className="h-bulk-clear-btn" onClick={clearTripSelection}>
-            Сбросить выбор
-          </button>
-        )}
-        <button
-          type="button"
-          className="h-bulk-comment-btn"
-          disabled={selectedTripIds.size === 0}
-          onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
-        >
-          <MessageSquarePlus size={18} />
-          Добавить комментарий{selectedTripIds.size > 0 ? ` (${selectedTripIds.size})` : ''}
-        </button>
-      </div>
-    </div>
-  );
+  const visibleCols = visibleColumnIds.length
+    ? TRIPS_COLUMNS.filter((c) => visibleColumnIds.includes(c.id))
+    : TRIPS_COLUMNS.filter((c) => c.isDefaultVisible !== false);
 
   if (loading) return <div className="data-loading">Загрузка рейсов…</div>;
 
@@ -264,108 +192,210 @@ export default function TripsView({ isActive }) {
   if (trips.length === 0) {
     return (
       <div className="h-view-wrapper">
-        {toolbar}
+        <div className="h-compact-toolbar">
+          <div className="h-compact-toolbar-left">
+            <span className="h-compact-meta">0</span>
+          </div>
+        </div>
         <div className="data-loading">Рейсов не найдено</div>
       </div>
     );
   }
 
+  // +2 for checkbox + expand columns
+  const colCount = 2 + visibleCols.length;
+
+  const renderCell = (col, trip) => {
+    const departure = trip.departure_station_name || trip.departure_station_code || '—';
+    const destination = trip.destination_station_name || trip.destination_station_code || '—';
+
+    switch (col.id) {
+      case 'railway_carriage_number':
+        return <td key={col.id} className="h-wagon-num">{trip.railway_carriage_number || '—'}</td>;
+      case 'flight_start_date':
+        return <td key={col.id} className="h-trip-date">{formatDate(trip.flight_start_date)}</td>;
+      case 'departure_station_name':
+        return <td key={col.id}>{departure}</td>;
+      case 'destination_station_name':
+        return <td key={col.id}>{destination}</td>;
+      case 'number_train':
+        return (
+          <td key={col.id} className="h-trip-train">
+            {trip.number_train || '—'}
+            {trip.train_index && <span className="h-train-index"> / {trip.train_index}</span>}
+          </td>
+        );
+      case 'number_railway_carriage_on_train':
+        return <td key={col.id}>{trip.number_railway_carriage_on_train || '—'}</td>;
+      case 'last_operation_name':
+        return (
+          <td key={col.id} className="h-trip-lastop">
+            <div>{trip.last_operation_name || '—'}</div>
+            {trip.last_station_name && <div className="h-lastop-station">{trip.last_station_name}</div>}
+          </td>
+        );
+      case 'last_operation_date':
+        return <td key={col.id} className="h-trip-lastdt">{formatDateTime(trip.last_operation_date)}</td>;
+      case 'last_station_name':
+        return <td key={col.id}>{trip.last_station_name || '—'}</td>;
+      case 'remaining_distance':
+        return <td key={col.id}>{trip.remaining_distance || '—'}</td>;
+      case 'is_active':
+        return (
+          <td key={col.id} className="h-trip-status">
+            <span className={`h-status-badge ${trip.is_active ? 'h-status-active' : 'h-status-archived'}`}>
+              {trip.is_active ? 'Активен' : 'Архив'}
+            </span>
+            <button
+              type="button"
+              className="h-comment-icon-btn"
+              onClick={() => setCommentTrip(trip)}
+              title="Комментарии к рейсу"
+            >
+              <MessageSquare size={14} />
+            </button>
+          </td>
+        );
+      case 'last_comment_text':
+        return (
+          <td key={col.id} className="h-last-comment">
+            {trip.last_comment_text
+              ? <span className="h-last-comment-text">{trip.last_comment_text}</span>
+              : '—'}
+          </td>
+        );
+      default:
+        return <td key={col.id}>—</td>;
+    }
+  };
+
   return (
     <div className="h-view-wrapper">
-      {toolbar}
+      {/* Compact single-row toolbar */}
+      <div className="h-compact-toolbar">
+        <div className="h-compact-toolbar-left">
+          <button
+            type="button"
+            className={`compact-icon-btn ${searchOpen || hasSearch ? 'active' : ''}`}
+            onClick={() => setSearchOpen((v) => !v)}
+            title="Поиск по номеру вагона"
+          >
+            <Search size={15} />
+          </button>
+          {searchOpen && (
+            <div className="h-compact-search">
+              <input
+                type="text"
+                className="h-compact-search-input"
+                placeholder="Номера через пробел…"
+                value={wagonSearch}
+                onChange={(e) => setWagonSearch(e.target.value)}
+                autoFocus
+              />
+              {hasSearch && (
+                <button type="button" className="h-compact-search-clear" onClick={() => setWagonSearch('')}>✕</button>
+              )}
+            </div>
+          )}
+          <span className="h-compact-meta">
+            {total}{(hasSearch || hasFilters) && filteredTrips.length !== total && ` / ${filteredTrips.length}`}
+          </span>
+        </div>
+        <div className="h-compact-toolbar-right">
+          <button
+            type="button"
+            className={`compact-icon-btn ${hasFilters ? 'warning' : ''}`}
+            onClick={() => { setColumnFilters({}); setWagonSearch(''); }}
+            disabled={!hasFilters && !hasSearch}
+            title="Сбросить все фильтры"
+          >
+            <FilterX size={15} />
+          </button>
+          <ColumnVisibilityPanel
+            visibleColumnIds={visibleColumnIds}
+            onVisibilityChange={setVisibleColumnIds}
+            columns={TRIPS_COLUMNS}
+          />
+          <span className="h-compact-divider" />
+          <button
+            type="button"
+            className="compact-icon-btn"
+            onClick={selectAllTrips}
+            title="Выбрать все рейсы"
+          >
+            <CheckSquare size={15} />
+          </button>
+          {selectedTripIds.size > 0 && (
+            <button
+              type="button"
+              className="compact-icon-btn"
+              onClick={clearTripSelection}
+              title="Сбросить выбор"
+            >
+              <XSquare size={15} />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`compact-icon-btn accent ${selectedTripIds.size === 0 ? '' : 'active'}`}
+            disabled={selectedTripIds.size === 0}
+            onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
+            title={`Массовый комментарий${selectedTripIds.size > 0 ? ` (${selectedTripIds.size})` : ''}`}
+          >
+            <MessageSquarePlus size={15} />
+            {selectedTripIds.size > 0 && <span className="compact-icon-badge">{selectedTripIds.size}</span>}
+          </button>
+        </div>
+      </div>
 
+      {/* Table */}
       <div className="h-table-scroll">
-        <table className="excel-table h-wagon-table">
+        <table className="excel-table h-wagon-table compact-table">
           <thead>
             <tr>
-              <th style={{ width: 32 }} />
-              <th style={{ width: 32 }} />
-              <th>№ рейса</th>
-              {/* Вагон: activeValues отражает и поиск и ColumnFilter */}
-              <th className="th-with-filter">
-                <span className="th-label">Вагон</span>
-                <ColumnFilter
-                  columnId="railway_carriage_number"
-                  label="Вагон"
-                  rows={trips}
-                  activeValues={columnFilters.railway_carriage_number}
-                  onApply={(v) => { setWagonSearch(''); handleFilterChange('railway_carriage_number', v); }}
-                  onClear={() => { setWagonSearch(''); handleFilterChange('railway_carriage_number', []); }}
-                />
-              </th>
-              <th className="th-with-filter">
-                <span className="th-label">Дата рейса</span>
-                <button
-                  type="button"
-                  className={`sort-btn ${sortField === 'flight_start_date' ? 'active' : ''}`}
-                  onClick={() => handleSort('flight_start_date')}
-                  title={sortField === 'flight_start_date' && sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortField === 'flight_start_date' && sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате рейса'}
-                >
-                  {sortIcon('flight_start_date')}
-                </button>
-              </th>
-              <th className="th-with-filter">
-                <span className="th-label">Откуда</span>
-                <ColumnFilter
-                  columnId="departure_station_name"
-                  label="Откуда"
-                  rows={trips}
-                  activeValues={columnFilters.departure_station_name}
-                  onApply={(v) => handleFilterChange('departure_station_name', v)}
-                  onClear={() => handleFilterChange('departure_station_name', [])}
-                />
-              </th>
-              <th className="th-with-filter">
-                <span className="th-label">Куда</span>
-                <ColumnFilter
-                  columnId="destination_station_name"
-                  label="Куда"
-                  rows={trips}
-                  activeValues={columnFilters.destination_station_name}
-                  onApply={(v) => handleFilterChange('destination_station_name', v)}
-                  onClear={() => handleFilterChange('destination_station_name', [])}
-                />
-              </th>
-              <th className="th-with-filter">
-                <span className="th-label">Поезд</span>
-                <ColumnFilter
-                  columnId="number_train"
-                  label="Поезд"
-                  rows={trips}
-                  activeValues={columnFilters.number_train}
-                  onApply={(v) => handleFilterChange('number_train', v)}
-                  onClear={() => handleFilterChange('number_train', [])}
-                />
-              </th>
-              <th>№ ваг. на поезде</th>
-              <th>Последняя операция</th>
-              <th className="th-with-filter">
-                <span className="th-label">Дата операции</span>
-                <button
-                  type="button"
-                  className={`sort-btn ${sortField === 'last_operation_date' ? 'active' : ''}`}
-                  onClick={() => handleSort('last_operation_date')}
-                  title={sortField === 'last_operation_date' && sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortField === 'last_operation_date' && sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате операции'}
-                >
-                  {sortIcon('last_operation_date')}
-                </button>
-              </th>
-              <th>Статус</th>
-              <th>Комментарий</th>
+              <th style={{ width: 28 }} />
+              <th style={{ width: 28 }} />
+              {visibleCols.map((col) => (
+                <th key={col.id} className="th-with-filter">
+                  <span className="th-label">{col.label}</span>
+                  {col.sortable && (
+                    <button
+                      type="button"
+                      className={`sort-btn ${sortField === col.accessorKey ? 'active' : ''}`}
+                      onClick={() => handleSort(col.accessorKey)}
+                      title={
+                        sortField === col.accessorKey && sortDir === 'desc' ? 'Сначала новые → нажми для старых'
+                          : sortField === col.accessorKey && sortDir === 'asc' ? 'Сначала старые → нажми для сброса'
+                            : `Сортировать по ${col.label.toLowerCase()}`
+                      }
+                    >
+                      {sortIcon(col.accessorKey)}
+                    </button>
+                  )}
+                  {col.filterable && (
+                    <ColumnFilter
+                      columnId={col.accessorKey || col.id}
+                      label={col.label}
+                      rows={searchedTrips}
+                      activeValues={columnFilters[col.accessorKey || col.id]}
+                      onApply={(v) => handleFilterChange(col.accessorKey || col.id, v)}
+                      onClear={() => handleFilterChange(col.accessorKey || col.id, [])}
+                    />
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {filteredTrips.length === 0 && (
               <tr>
-                <td colSpan={12} className="empty-table-message">Нет данных по выбранным фильтрам</td>
+                <td colSpan={colCount} className="empty-table-message">Нет данных по выбранным фильтрам</td>
               </tr>
             )}
             {filteredTrips.map((trip) => {
               const isExpanded = expandedTripIds.has(trip.id);
               const ops = operationsByTripId.get(trip.id);
               const opLoading = opsLoading.has(trip.id);
-              const departure = trip.departure_station_name || trip.departure_station_code || '—';
-              const destination = trip.destination_station_name || trip.destination_station_code || '—';
 
               return (
                 <React.Fragment key={trip.id}>
@@ -389,47 +419,13 @@ export default function TripsView({ isActive }) {
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
                     </td>
-                    <td>{trip.flight_number ?? '—'}</td>
-                    <td className="h-wagon-num">{trip.railway_carriage_number || '—'}</td>
-                    <td className="h-trip-date">{formatDate(trip.flight_start_date)}</td>
-                    <td>{departure}</td>
-                    <td>{destination}</td>
-                    <td className="h-trip-train">
-                      {trip.number_train || '—'}
-                      {trip.train_index && <span className="h-train-index"> / {trip.train_index}</span>}
-                    </td>
-                    <td>{trip.number_railway_carriage_on_train || '—'}</td>
-                    <td className="h-trip-lastop">
-                      <div>{trip.last_operation_name || '—'}</div>
-                      {trip.last_station_name && (
-                        <div className="h-lastop-station">{trip.last_station_name}</div>
-                      )}
-                    </td>
-                    <td className="h-trip-lastdt">{formatDateTime(trip.last_operation_date)}</td>
-                    <td className="h-trip-status">
-                      <span className={`h-status-badge ${trip.is_active ? 'h-status-active' : 'h-status-archived'}`}>
-                        {trip.is_active ? 'Активен' : 'Архив'}
-                      </span>
-                      <button
-                        type="button"
-                        className="h-comment-icon-btn"
-                        onClick={() => setCommentTrip(trip)}
-                        title="Комментарии к рейсу"
-                      >
-                        <MessageSquare size={14} />
-                      </button>
-                    </td>
-                    <td className="h-last-comment">
-                      {trip.last_comment_text
-                        ? <span className="h-last-comment-text">{trip.last_comment_text}</span>
-                        : '—'}
-                    </td>
+                    {visibleCols.map((col) => renderCell(col, trip))}
                   </tr>
                   {isExpanded && (
                     <tr className="h-ops-row">
                       <td />
                       <td />
-                      <td colSpan={10} className="h-ops-cell">
+                      <td colSpan={visibleCols.length} className="h-ops-cell">
                         <OperationsTable operations={ops} loading={opLoading} />
                       </td>
                     </tr>

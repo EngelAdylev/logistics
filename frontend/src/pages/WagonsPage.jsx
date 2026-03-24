@@ -17,7 +17,6 @@ export default function WagonsPage() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [hierarchyMeta, setHierarchyMeta] = useState(null);
-  const [tripsMeta, setTripsMeta] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleSync = async () => {
@@ -44,7 +43,8 @@ export default function WagonsPage() {
           return;
         }
         // v2 sync не критичен — показываем предупреждение, но не блокируем
-        setSyncMessage(`Данные загружены, но дислокация не обновилась: ${detail2 || e2.message}`);
+        const errMsg = typeof detail2 === 'object' ? (detail2?.message || JSON.stringify(detail2)) : (detail2 || e2.message);
+        setSyncMessage(`Данные загружены, но дислокация не обновилась: ${errMsg}`);
         return;
       }
 
@@ -175,13 +175,6 @@ export default function WagonsPage() {
                 Все
               </button>
             </div>
-            {tripsMeta != null && (
-              <div className="h-view-meta">
-                Рейсов: {tripsMeta.total}
-                {tripsMeta.hasActiveFilters && ` (показано: ${tripsMeta.filteredCount})`}
-                {tripsMeta.totalPages > 1 && ` · стр. ${tripsMeta.page} из ${tripsMeta.totalPages}`}
-              </div>
-            )}
           </div>
           {!authLoading && (
             <TripsView
@@ -190,7 +183,6 @@ export default function WagonsPage() {
                   : tripsFilter === 'archive' ? false
                     : undefined
               }
-              onMetaChange={setTripsMeta}
             />
           )}
         </div>
