@@ -43,7 +43,12 @@ export default function WagonsPage() {
           return;
         }
         // v2 sync не критичен — показываем предупреждение, но не блокируем
-        const errMsg = typeof detail2 === 'object' ? (detail2?.message || JSON.stringify(detail2)) : (detail2 || e2.message);
+        let errMsg = '';
+        if (detail2 && typeof detail2 === 'object') {
+          errMsg = detail2.message || detail2.detail || detail2.error || JSON.stringify(detail2);
+        } else {
+          errMsg = String(detail2 || e2.message || 'неизвестная ошибка');
+        }
         setSyncMessage(`Данные загружены, но дислокация не обновилась: ${errMsg}`);
         return;
       }
