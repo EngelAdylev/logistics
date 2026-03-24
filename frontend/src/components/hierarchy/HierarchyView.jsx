@@ -445,9 +445,20 @@ export default function HierarchyView({ isActive, refreshKey }) {
       {/* Table */}
       <div className="h-table-scroll">
         <table className="excel-table h-wagon-table compact-table">
+          <colgroup>
+            <col style={{ width: 28 }} />
+            {isAnyGrouping && <col style={{ width: 28 }} />}
+            {visibleCols.slice(0, 1).map((col) => (
+              <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
+            ))}
+            <col style={{ width: 50 }} />
+            {visibleCols.slice(1).map((col) => (
+              <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ width: 28 }} />
+              <th />
               {isAnyGrouping && <th className="group-col" />}
               {visibleCols.slice(0, 1).map((col) => (
                 <th key={col.id} className="th-with-filter">
@@ -464,7 +475,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
                   )}
                 </th>
               ))}
-              <th style={{ width: 60 }}>Рейсы</th>
+              <th>Рейсы</th>
               {visibleCols.slice(1).map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>

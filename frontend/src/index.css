@@ -219,9 +219,8 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   border-radius: 10px; background: var(--active-blue); color: #fff;
   white-space: nowrap; flex-shrink: 0; letter-spacing: 0.01em;
 }
-.th-with-filter { white-space: nowrap; }
-.th-with-filter.th-filter-has-input { white-space: normal; }
-.th-with-filter .th-label { margin-right: 6px; }
+.th-with-filter { white-space: normal; word-break: break-word; }
+.th-with-filter .th-label { margin-right: 4px; display: inline; }
 .th-label-row { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
 .th-label-row .th-label { margin-right: 2px; }
 .th-label-row .column-filter { flex-shrink: 0; }
@@ -405,19 +404,23 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .h-bulk-result--partial { background: #fef9c3; color: #854d0e; }
 .h-bulk-result--failure { background: #fef2f2; color: #991b1b; }
 
-.h-wagon-table { width: 100%; table-layout: auto; border-collapse: separate; border-spacing: 0; overflow: visible; }
-.h-wagon-table thead th { position: sticky; top: 0; z-index: 2; background: #f1f5f9; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-.h-wagon-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.h-wagon-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; overflow: visible; }
+.h-wagon-table thead th {
+  position: sticky; top: 0; z-index: 2; background: #f1f5f9; border-bottom: 2px solid #e2e8f0;
+  white-space: normal; word-break: break-word; line-height: 1.25; vertical-align: middle;
+  overflow: hidden;
+}
+.h-wagon-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .h-wagon-table td.h-wagon-check,
 .h-wagon-table td.h-wagon-trips-count,
-.h-wagon-table td.group-col { max-width: none; overflow: visible; }
+.h-wagon-table td.group-col { overflow: visible; }
 .h-wagon-row { background: #fff; }
 .h-wagon-row--expanded > td { background: #f0f9ff; }
 .h-wagon-row:hover > td { background: #f8fafc; }
 .h-wagon-row--expanded:hover > td { background: #e0f2fe; }
 
 .h-wagon-expand { width: 32px; padding: 8px 4px; text-align: center; }
-.h-wagon-number { padding: 4px 8px; font-size: 0.82rem; max-width: 120px; }
+.h-wagon-number { padding: 4px 8px; font-size: 0.82rem; }
 .h-wagon-status { padding: 4px 8px; }
 .h-wagon-trips { padding: 4px 8px; font-size: 0.78rem; color: #475569; }
 .h-wagon-active-trips { color: #16a34a; font-size: 0.72rem; }
@@ -474,15 +477,15 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 }
 .h-flight-number--empty { background: #cbd5e1; color: #64748b; }
 .h-trip-date { white-space: nowrap; color: #374151; }
-.h-trip-route { min-width: 100px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.h-trip-route { overflow: hidden; text-overflow: ellipsis; }
 .h-route-arrow { color: #9ca3af; }
 .h-trip-train { white-space: nowrap; }
 .h-train-index { color: #6b7280; font-size: 0.8em; }
-.h-trip-lastop { min-width: 100px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.h-trip-lastop { overflow: hidden; text-overflow: ellipsis; }
 .h-lastop-station { font-size: 0.8rem; color: #6b7280; margin-top: 2px; }
 .h-trip-lastdt { white-space: nowrap; font-size: 0.85rem; color: #374151; }
 .h-trip-status { white-space: nowrap; }
-.h-last-comment { min-width: 80px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.h-last-comment { overflow: hidden; text-overflow: ellipsis; }
 .h-last-comment-text { font-size: 0.8rem; color: #374151; line-height: 1.4; word-break: break-word; }
 
 /* Третий уровень — операции */

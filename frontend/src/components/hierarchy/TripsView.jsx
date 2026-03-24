@@ -351,10 +351,17 @@ export default function TripsView({ isActive }) {
       {/* Table */}
       <div className="h-table-scroll">
         <table className="excel-table h-wagon-table compact-table">
+          <colgroup>
+            <col style={{ width: 28 }} />
+            <col style={{ width: 28 }} />
+            {visibleCols.map((col) => (
+              <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ width: 28 }} />
-              <th style={{ width: 28 }} />
+              <th />
+              <th />
               {visibleCols.map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
