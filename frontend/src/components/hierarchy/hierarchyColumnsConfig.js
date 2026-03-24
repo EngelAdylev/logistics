@@ -9,7 +9,7 @@ export const HIERARCHY_COLUMNS = [
   { id: 'number_railway_carriage_on_train', label: '№ ваг.', accessorKey: 'number_railway_carriage_on_train', filterable: true, isRequired: false, isDefaultVisible: true, width: '50px' },
   { id: 'last_station_name', label: 'Станция', accessorKey: 'last_station_name', filterable: true, isRequired: false, isDefaultVisible: true, width: '200px' },
   { id: 'last_operation_name', label: 'Операция', accessorKey: 'last_operation_name', filterable: true, isRequired: false, isDefaultVisible: true, width: '300px' },
-  { id: 'last_operation_date', label: 'Дата опер.', accessorKey: 'last_operation_date', filterable: false, isRequired: false, isDefaultVisible: true, width: '130px' },
+  { id: 'last_operation_date', label: 'Дата опер.', accessorKey: 'last_operation_date', filterable: false, isRequired: false, isDefaultVisible: true, width: '170px' },
   { id: 'remaining_distance', label: 'Ост. км', accessorKey: 'remaining_distance', filterable: true, isRequired: false, isDefaultVisible: false, width: '55px' },
   { id: 'departure_station_name', label: 'Отправление', accessorKey: 'departure_station_name', filterable: true, isRequired: false, isDefaultVisible: false },
   { id: 'destination_station_name', label: 'Назначение', accessorKey: 'destination_station_name', filterable: true, isRequired: false, isDefaultVisible: false },
