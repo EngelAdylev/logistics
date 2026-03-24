@@ -474,6 +474,38 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
             )
         stats["trips_normalized_deactivated"] = deactivated_count
 
+        # Шаг 8b. Архивируем рейсы, у которых есть более новый рейс того же вагона.
+        # Если у вагона есть рейс с flight_start_date > текущего, текущий точно архивный.
+        _t2 = _time.perf_counter()
+        stale_result = db.execute(text("""
+            UPDATE wagon_trips wt
+            SET is_active = false, updated_at = now()
+            WHERE is_active = true
+              AND EXISTS (
+                SELECT 1 FROM wagon_trips wt2
+                WHERE wt2.wagon_id = wt.wagon_id
+                  AND wt2.flight_start_date > wt.flight_start_date
+              )
+        """))
+        stale_count = stale_result.rowcount
+        _t3 = _time.perf_counter()
+        if stale_count > 0:
+            logger.info(
+                "sync_new_model: stale_trips_archived=%d (newer trip exists), duration_ms=%.0f",
+                stale_count, (_t3 - _t2) * 1000,
+            )
+            # Пересчитываем Wagon.is_active после дополнительной архивации
+            db.execute(text("""
+                UPDATE wagons w
+                SET
+                    is_active = EXISTS (
+                        SELECT 1 FROM wagon_trips wt
+                        WHERE wt.wagon_id = w.id AND wt.is_active = true
+                    ),
+                    updated_at = now()
+            """))
+        stats["stale_trips_archived"] = stale_count
+
         db.commit()
         stats["status"] = "success" if stats["errors"] == 0 else "partial_failure"
         logger.info("sync_new_model: done stats=%s", stats)

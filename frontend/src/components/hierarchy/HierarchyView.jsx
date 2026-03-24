@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquarePlus, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp } from 'lucide-react';
+import { MessageSquarePlus, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp, CheckSquare, XSquare, Search } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 import { HIERARCHY_COLUMNS } from './hierarchyColumnsConfig';
@@ -25,21 +25,14 @@ export default function HierarchyView({ isActive, refreshKey }) {
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
 
-  // Search
   const [wagonSearch, setWagonSearch] = useState('');
-
-  // Column config
+  const [searchOpen, setSearchOpen] = useState(false);
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
   const [columnFilters, setColumnFilters] = useState({});
-
-  // Sort by date
-  const [sortDir, setSortDir] = useState(null); // null | 'desc' | 'asc'
-
-  // Group by train
+  const [sortDir, setSortDir] = useState(null);
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
 
-  // Group comment
   const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkCommentText, setBulkCommentText] = useState('');
@@ -69,14 +62,12 @@ export default function HierarchyView({ isActive, refreshKey }) {
     fetchWagons();
   }, [isActive, refreshKey]);
 
-  // Client-side wagon search filter
   const searchedWagons = useMemo(() => {
     const tokens = parseTokens(wagonSearch.toLowerCase());
     if (!tokens.length) return wagons;
     return wagons.filter((w) => matchesAny(w.railway_carriage_number, tokens));
   }, [wagons, wagonSearch]);
 
-  // Column filters + sort
   const filteredWagons = useMemo(() => {
     const filtered = applyFilters(searchedWagons, columnFilters);
     if (!sortDir) return filtered;
@@ -92,11 +83,9 @@ export default function HierarchyView({ isActive, refreshKey }) {
   };
   const handleResetFilters = () => setColumnFilters({});
 
-  // Group by train
   const groups = useMemo(() => {
     const raw = groupByTrain(filteredWagons);
     if (!groupByTrainEnabled) return raw;
-    // Сортировка вагонов внутри каждой группы по номеру вагона (числовая)
     const sorted = new Map();
     for (const [key, rows] of raw.entries()) {
       sorted.set(key, [...rows].sort((a, b) =>
@@ -117,12 +106,10 @@ export default function HierarchyView({ isActive, refreshKey }) {
     });
   };
 
-  // Visible cols
   const visibleCols = visibleColumnIds.length
     ? HIERARCHY_COLUMNS.filter((c) => visibleColumnIds.includes(c.id))
     : HIERARCHY_COLUMNS.filter((c) => c.isDefaultVisible !== false);
 
-  // Selection
   const toggleWagonSelect = (id) => {
     setSelectedWagonIds((prev) => {
       const next = new Set(prev);
@@ -134,7 +121,6 @@ export default function HierarchyView({ isActive, refreshKey }) {
   const selectAllWagons = () => setSelectedWagonIds(new Set(filteredWagons.map((w) => w.id)));
   const clearSelection = () => setSelectedWagonIds(new Set());
 
-  // Bulk comment
   const handleBulkCommentApply = async () => {
     const text = bulkCommentText.trim();
     if (!text || selectedWagonIds.size === 0) return;
@@ -176,7 +162,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
     />
   );
 
-  if (loading) return <div className="data-loading">Загрузка вагонов…</div>;
+  if (loading) return <div className="data-loading">Загрузка…</div>;
   if (error) return (
     <div className="data-error">
       {error}
@@ -184,78 +170,101 @@ export default function HierarchyView({ isActive, refreshKey }) {
     </div>
   );
 
-  const colCountMain = 2 + visibleCols.length; // checkbox + expand + cols
+  const colCountMain = 2 + visibleCols.length;
 
   return (
     <div className="h-view-wrapper">
-      {/* Search + selection + bulk comment toolbar */}
-      <div className="h-view-toolbar">
-        <div className="h-search-box">
-          <textarea
-            className="h-search-input h-search-textarea"
-            placeholder={'Поиск по номеру вагона…\nМожно вставить несколько (через пробел или Enter)'}
-            value={wagonSearch}
-            onChange={(e) => setWagonSearch(e.target.value)}
-            rows={2}
-          />
-          {hasSearch && (
-            <button type="button" className="h-search-clear" onClick={() => setWagonSearch('')} title="Сбросить">✕</button>
+      {/* Compact single-row toolbar */}
+      <div className="h-compact-toolbar">
+        <div className="h-compact-toolbar-left">
+          <button
+            type="button"
+            className={`compact-icon-btn ${searchOpen || hasSearch ? 'active' : ''}`}
+            onClick={() => setSearchOpen((v) => !v)}
+            title="Поиск по номеру вагона"
+          >
+            <Search size={15} />
+          </button>
+          {searchOpen && (
+            <div className="h-compact-search">
+              <input
+                type="text"
+                className="h-compact-search-input"
+                placeholder="Номера через пробел…"
+                value={wagonSearch}
+                onChange={(e) => setWagonSearch(e.target.value)}
+                autoFocus
+              />
+              {hasSearch && (
+                <button type="button" className="h-compact-search-clear" onClick={() => setWagonSearch('')}>✕</button>
+              )}
+            </div>
           )}
+          <span className="h-compact-meta">
+            {total}{(hasSearch || hasFilters) && filteredWagons.length !== total && ` / ${filteredWagons.length}`}
+          </span>
         </div>
-        <div className="h-view-meta">
-          вагонов на слежении: {total}
-          {(hasSearch || hasFilters) && filteredWagons.length !== total && ` (показано: ${filteredWagons.length})`}
-        </div>
-        <div className="h-view-toolbar-right">
-          <button type="button" className="h-bulk-select-btn" onClick={selectAllWagons}>Выбрать всё</button>
+        <div className="h-compact-toolbar-right">
+          <button
+            type="button"
+            className={`compact-icon-btn ${groupByTrainEnabled ? 'active' : ''}`}
+            onClick={() => setGroupByTrainEnabled(!groupByTrainEnabled)}
+            title={groupByTrainEnabled ? 'Убрать группировку' : 'Группировать по поезду'}
+          >
+            <Layers size={15} />
+          </button>
+          <button
+            type="button"
+            className={`compact-icon-btn ${hasFilters ? 'warning' : ''}`}
+            onClick={handleResetFilters}
+            disabled={!hasFilters}
+            title="Сбросить все фильтры"
+          >
+            <FilterX size={15} />
+          </button>
+          <ColumnVisibilityPanel
+            visibleColumnIds={visibleColumnIds}
+            onVisibilityChange={setVisibleColumnIds}
+            columns={HIERARCHY_COLUMNS}
+          />
+          <span className="h-compact-divider" />
+          <button
+            type="button"
+            className="compact-icon-btn"
+            onClick={selectAllWagons}
+            title="Выбрать все вагоны"
+          >
+            <CheckSquare size={15} />
+          </button>
           {selectedWagonIds.size > 0 && (
-            <button type="button" className="h-bulk-clear-btn" onClick={clearSelection}>Сбросить выбор</button>
+            <button
+              type="button"
+              className="compact-icon-btn"
+              onClick={clearSelection}
+              title="Сбросить выбор"
+            >
+              <XSquare size={15} />
+            </button>
           )}
           <button
             type="button"
-            className="h-bulk-comment-btn"
+            className={`compact-icon-btn accent ${selectedWagonIds.size === 0 ? '' : 'active'}`}
             disabled={selectedWagonIds.size === 0}
             onClick={() => { setBulkApplyResult(null); setBulkModalOpen(true); }}
+            title={`Массовый комментарий${selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}`}
           >
-            <MessageSquarePlus size={18} />
-            Добавить комментарий{selectedWagonIds.size > 0 ? ` (${selectedWagonIds.size})` : ''}
+            <MessageSquarePlus size={15} />
+            {selectedWagonIds.size > 0 && <span className="compact-icon-badge">{selectedWagonIds.size}</span>}
           </button>
         </div>
       </div>
 
-      {/* Table controls toolbar */}
-      <div className="table-toolbar">
-        <button
-          type="button"
-          className={`group-toggle ${groupByTrainEnabled ? 'active' : ''}`}
-          onClick={() => setGroupByTrainEnabled(!groupByTrainEnabled)}
-          title="Группировать по поезду"
-        >
-          <Layers size={18} />
-          {groupByTrainEnabled ? 'Группировка по поезду вкл.' : 'Группировать по поезду'}
-        </button>
-        <button
-          type="button"
-          className={`reset-filters-btn ${hasFilters ? 'active' : ''}`}
-          onClick={handleResetFilters}
-          disabled={!hasFilters}
-        >
-          <FilterX size={18} />
-          Сбросить фильтры
-        </button>
-        <ColumnVisibilityPanel
-          visibleColumnIds={visibleColumnIds}
-          onVisibilityChange={setVisibleColumnIds}
-          columns={HIERARCHY_COLUMNS}
-        />
-      </div>
-
       {/* Table */}
       <div className="h-table-scroll">
-        <table className="excel-table h-wagon-table">
+        <table className="excel-table h-wagon-table compact-table">
           <thead>
             <tr>
-              <th style={{ width: 32 }} title="Выбор" />
+              <th style={{ width: 28 }} />
               {groupByTrainEnabled && <th className="group-col" />}
               {visibleCols.slice(0, 1).map((col) => (
                 <th key={col.id} className="th-with-filter">
@@ -272,7 +281,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
                   )}
                 </th>
               ))}
-              <th style={{ width: 80 }}>Рейсы</th>
+              <th style={{ width: 60 }}>Рейсы</th>
               {visibleCols.slice(1).map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
@@ -281,9 +290,9 @@ export default function HierarchyView({ isActive, refreshKey }) {
                       type="button"
                       className={`sort-btn ${sortDir ? 'active' : ''}`}
                       onClick={() => setSortDir((d) => d === null ? 'desc' : d === 'desc' ? 'asc' : null)}
-                      title={sortDir === 'desc' ? 'Сначала новые → нажми для старых' : sortDir === 'asc' ? 'Сначала старые → нажми для сброса' : 'Сортировать по дате'}
+                      title={sortDir === 'desc' ? 'Новые → старые' : sortDir === 'asc' ? 'Старые → сброс' : 'Сортировать'}
                     >
-                      {sortDir === 'desc' ? <ArrowDown size={14} /> : sortDir === 'asc' ? <ArrowUp size={14} /> : <ArrowUpDown size={14} />}
+                      {sortDir === 'desc' ? <ArrowDown size={13} /> : sortDir === 'asc' ? <ArrowUp size={13} /> : <ArrowUpDown size={13} />}
                     </button>
                   )}
                   {col.filterable && (
@@ -348,7 +357,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
                         })()}
                       </td>
                       <td className="group-col">
-                        <span className="group-caret">{collapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+                        <span className="group-caret">{collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
                       </td>
                       <td colSpan={visibleCols.length + 1}>
                         <span className="group-title">{displayLabel} ({count} {wagonWord})</span>

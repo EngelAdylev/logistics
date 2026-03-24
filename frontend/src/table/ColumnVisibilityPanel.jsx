@@ -6,6 +6,7 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
   const columns = columnsProp || TABLE_COLUMNS;
   const [open, setOpen] = useState(false);
   const [localVisible, setLocalVisible] = useState(new Set(visibleColumnIds || []));
+  const [search, setSearch] = useState('');
   const ref = useRef(null);
 
   useEffect(() => {
@@ -33,23 +34,34 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
     });
   };
 
+  const filteredColumns = search.trim()
+    ? columns.filter((c) => c.label.toLowerCase().includes(search.toLowerCase()))
+    : columns;
+
   return (
     <span className="column-visibility" ref={ref}>
       <button
         type="button"
-        className="columns-toggle-btn"
-        onClick={() => setOpen(!open)}
+        className="compact-icon-btn"
+        onClick={() => { setOpen(!open); setSearch(''); }}
         title="Настроить колонки"
         aria-label="Колонки"
       >
-        <Columns3 size={18} />
-        Колонки
+        <Columns3 size={15} />
       </button>
       {open && (
         <div className="column-visibility-popup">
-          <div className="column-visibility-title">Отображаемые поля</div>
+          <div className="filter-search-wrap">
+            <input
+              type="text"
+              className="filter-search-input"
+              placeholder="Поиск колонки…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <div className="column-visibility-list">
-            {columns.map((col) => (
+            {filteredColumns.map((col) => (
               <label
                 key={col.id}
                 className={`column-visibility-item ${col.isRequired ? 'required' : ''}`}
@@ -59,11 +71,10 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
                   checked={localVisible.has(col.id)}
                   disabled={col.isRequired}
                   onChange={() => toggle(col.id)}
-                  title={col.isRequired ? 'Обязательное поле' : undefined}
                 />
                 <span className="column-visibility-label">
                   {col.label}
-                  {col.isRequired && <span className="required-badge">обязательное</span>}
+                  {col.isRequired && <span className="required-badge">*</span>}
                 </span>
               </label>
             ))}
