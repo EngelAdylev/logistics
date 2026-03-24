@@ -5,7 +5,7 @@
 export const HIERARCHY_COLUMNS = [
   { id: 'railway_carriage_number', label: 'Вагон', accessorKey: 'railway_carriage_number', filterable: true, isRequired: true, isDefaultVisible: true, width: '90px' },
   { id: 'number_train', label: '№ поезда', accessorKey: 'number_train', filterable: true, isRequired: false, isDefaultVisible: true, width: '80px' },
-  { id: 'train_index', label: 'Индекс поезда', accessorKey: 'train_index', filterable: true, isRequired: false, isDefaultVisible: false, width: '90px' },
+  { id: 'train_index', label: 'Индекс поезда', accessorKey: 'train_index', filterable: true, isRequired: false, isDefaultVisible: false, width: '130px' },
   { id: 'number_railway_carriage_on_train', label: '№ ваг.', accessorKey: 'number_railway_carriage_on_train', filterable: true, isRequired: false, isDefaultVisible: true, width: '50px' },
   { id: 'last_station_name', label: 'Станция', accessorKey: 'last_station_name', filterable: true, isRequired: false, isDefaultVisible: true, width: '200px' },
   { id: 'last_operation_name', label: 'Операция', accessorKey: 'last_operation_name', filterable: true, isRequired: false, isDefaultVisible: true, width: '300px' },

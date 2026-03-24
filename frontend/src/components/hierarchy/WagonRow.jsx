@@ -9,7 +9,14 @@ function formatDate(v) {
   return v ? new Date(v).toLocaleString() : '—';
 }
 
+function formatTrainIndex(val) {
+  const s = val?.toString?.()?.trim?.() ?? '';
+  if (!s || s.length !== 10) return s || '—';
+  return `${s.slice(0, 4)} ${s.slice(4, 6)} ${s.slice(6, 10)}`;
+}
+
 function renderCell(wagon, col, onShowComments) {
+  if (col.id === 'train_index') return formatTrainIndex(wagon[col.accessorKey]);
   if (col.id === 'last_operation_date') return formatDate(wagon[col.accessorKey]);
   if (col.id === 'last_comment_text') {
     const text = wagon[col.accessorKey]?.toString?.()?.trim?.() ?? '';

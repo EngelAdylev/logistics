@@ -8,6 +8,12 @@ import { TRIPS_COLUMNS } from './tripsColumnsConfig';
 import OperationsTable from './OperationsTable';
 import TripComments from './TripComments';
 
+function formatTrainIndex(val) {
+  const s = val?.toString?.()?.trim?.() ?? '';
+  if (!s || s.length !== 10) return s || '—';
+  return `${s.slice(0, 4)} ${s.slice(4, 6)} ${s.slice(6, 10)}`;
+}
+
 function formatDate(val) {
   if (!val) return '—';
   return new Date(val).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -222,7 +228,7 @@ export default function TripsView({ isActive }) {
         return (
           <td key={col.id} className="h-trip-train">
             {trip.number_train || '—'}
-            {trip.train_index && <span className="h-train-index"> / {trip.train_index}</span>}
+            {trip.train_index && <span className="h-train-index"> / {formatTrainIndex(trip.train_index)}</span>}
           </td>
         );
       case 'number_railway_carriage_on_train':
