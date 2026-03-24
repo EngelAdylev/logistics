@@ -196,6 +196,10 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .excel-table .group-header-row td { border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; }
 .group-caret { display: inline-flex; color: #3b82f6; }
 .group-title { font-size: 0.78rem; letter-spacing: 0.01em; }
+.excel-table .group-header-row--distance { background: #f0fdf4; }
+.excel-table .group-header-row--distance td:first-child { border-left: 3px solid #22c55e; }
+.excel-table .group-header-row--distance:hover { background: #dcfce7; }
+.group-title--distance { color: #166534; }
 
 .th-filter-input-wrap {
   display: flex; align-items: center; gap: 4px; margin-top: 4px;

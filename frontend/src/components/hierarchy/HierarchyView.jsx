@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquarePlus, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp, CheckSquare, XSquare, Search } from 'lucide-react';
+import { MessageSquarePlus, Layers, FilterX, ArrowUpDown, ArrowDown, ArrowUp, CheckSquare, XSquare, Search, Ruler } from 'lucide-react';
 import { api } from '../../api';
 import WagonRow from './WagonRow';
 import { HIERARCHY_COLUMNS } from './hierarchyColumnsConfig';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
-import { applyFilters, groupByTrain, EMPTY_TRAIN_LABEL } from '../../table/tableUtils';
+import { applyFilters, groupByTrain, groupByDistance, EMPTY_TRAIN_LABEL, EMPTY_DISTANCE_LABEL } from '../../table/tableUtils';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 function parseTokens(input) {
@@ -31,7 +31,9 @@ export default function HierarchyView({ isActive, refreshKey }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [sortDir, setSortDir] = useState(null);
   const [groupByTrainEnabled, setGroupByTrainEnabled] = useState(false);
+  const [groupByDistanceEnabled, setGroupByDistanceEnabled] = useState(false);
   const [collapsedTrains, setCollapsedTrains] = useState(new Set());
+  const [collapsedDistances, setCollapsedDistances] = useState(new Set());
 
   const [selectedWagonIds, setSelectedWagonIds] = useState(new Set());
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
@@ -83,9 +85,10 @@ export default function HierarchyView({ isActive, refreshKey }) {
   };
   const handleResetFilters = () => setColumnFilters({});
 
-  const groups = useMemo(() => {
+  // Группы по поезду (плоские)
+  const trainGroups = useMemo(() => {
+    if (!groupByTrainEnabled) return null;
     const raw = groupByTrain(filteredWagons);
-    if (!groupByTrainEnabled) return raw;
     const sorted = new Map();
     for (const [key, rows] of raw.entries()) {
       sorted.set(key, [...rows].sort((a, b) =>
@@ -97,11 +100,47 @@ export default function HierarchyView({ isActive, refreshKey }) {
     return sorted;
   }, [filteredWagons, groupByTrainEnabled]);
 
+  // Группы по расстоянию (плоские)
+  const distanceGroups = useMemo(() => {
+    if (!groupByDistanceEnabled) return null;
+    return groupByDistance(filteredWagons);
+  }, [filteredWagons, groupByDistanceEnabled]);
+
+  // Вложенная группировка: расстояние → поезд
+  const nestedGroups = useMemo(() => {
+    if (!groupByDistanceEnabled || !groupByTrainEnabled) return null;
+    const distGroups = groupByDistance(filteredWagons);
+    const nested = new Map();
+    for (const [distKey, rows] of distGroups.entries()) {
+      const trainMap = groupByTrain(rows);
+      // Сортируем внутри каждого поезда
+      const sortedTrainMap = new Map();
+      for (const [tKey, tRows] of trainMap.entries()) {
+        sortedTrainMap.set(tKey, [...tRows].sort((a, b) =>
+          String(a.number_railway_carriage_on_train || '').localeCompare(
+            String(b.number_railway_carriage_on_train || ''), undefined, { numeric: true }
+          )
+        ));
+      }
+      nested.set(distKey, sortedTrainMap);
+    }
+    return nested;
+  }, [filteredWagons, groupByDistanceEnabled, groupByTrainEnabled]);
+
   const toggleTrain = (trainKey) => {
     setCollapsedTrains((prev) => {
       const next = new Set(prev);
       if (next.has(trainKey)) next.delete(trainKey);
       else next.add(trainKey);
+      return next;
+    });
+  };
+
+  const toggleDistance = (distKey) => {
+    setCollapsedDistances((prev) => {
+      const next = new Set(prev);
+      if (next.has(distKey)) next.delete(distKey);
+      else next.add(distKey);
       return next;
     });
   };
@@ -151,6 +190,8 @@ export default function HierarchyView({ isActive, refreshKey }) {
   const hasSearch = wagonSearch.trim().length > 0;
   const hasFilters = Object.keys(columnFilters).length > 0;
 
+  const isAnyGrouping = groupByTrainEnabled || groupByDistanceEnabled;
+
   const renderWagonRow = (wagon) => (
     <WagonRow
       key={wagon.id}
@@ -158,9 +199,143 @@ export default function HierarchyView({ isActive, refreshKey }) {
       isSelected={selectedWagonIds.has(wagon.id)}
       onToggleSelect={toggleWagonSelect}
       visibleCols={visibleCols}
-      isGrouped={groupByTrainEnabled}
+      isGrouped={isAnyGrouping}
     />
   );
+
+  const wagonWord = (count) => count === 1 ? 'вагон' : count >= 2 && count <= 4 ? 'вагона' : 'вагонов';
+
+  const renderGroupCheckbox = (groupRows) => {
+    const groupIds = groupRows.map((w) => w.id);
+    const allSelected = groupIds.every((id) => selectedWagonIds.has(id));
+    const someSelected = !allSelected && groupIds.some((id) => selectedWagonIds.has(id));
+    return (
+      <input
+        type="checkbox"
+        checked={allSelected}
+        ref={(el) => { if (el) el.indeterminate = someSelected; }}
+        onChange={() => {
+          setSelectedWagonIds((prev) => {
+            const next = new Set(prev);
+            if (allSelected) groupIds.forEach((id) => next.delete(id));
+            else groupIds.forEach((id) => next.add(id));
+            return next;
+          });
+        }}
+      />
+    );
+  };
+
+  const renderTrainGroup = (trainKey, rows, parentCollapsed) => {
+    if (parentCollapsed) return null;
+    const collapsed = collapsedTrains.has(trainKey);
+    const displayLabel = trainKey === EMPTY_TRAIN_LABEL ? trainKey : `Поезд ${trainKey}`;
+    return (
+      <React.Fragment key={trainKey}>
+        <tr
+          className="group-header-row"
+          onClick={() => toggleTrain(trainKey)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && toggleTrain(trainKey)}
+        >
+          <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
+            {renderGroupCheckbox(rows)}
+          </td>
+          <td className="group-col">
+            <span className="group-caret">{collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
+          </td>
+          <td colSpan={visibleCols.length + 1}>
+            <span className="group-title">{displayLabel} ({rows.length} {wagonWord(rows.length)})</span>
+          </td>
+        </tr>
+        {!collapsed && rows.map((wagon) => renderWagonRow(wagon))}
+      </React.Fragment>
+    );
+  };
+
+  const renderTableBody = () => {
+    if (filteredWagons.length === 0) {
+      return (
+        <tr>
+          <td colSpan={colCountMain + (isAnyGrouping ? 1 : 0)} className="empty-table-message">
+            Нет вагонов по запросу
+          </td>
+        </tr>
+      );
+    }
+
+    // Вложенная: расстояние → поезд
+    if (groupByDistanceEnabled && groupByTrainEnabled && nestedGroups) {
+      return Array.from(nestedGroups.entries()).map(([distKey, trainMap]) => {
+        const allRowsInDist = Array.from(trainMap.values()).flat();
+        const distCollapsed = collapsedDistances.has(distKey);
+        return (
+          <React.Fragment key={`dist-${distKey}`}>
+            <tr
+              className="group-header-row group-header-row--distance"
+              onClick={() => toggleDistance(distKey)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && toggleDistance(distKey)}
+            >
+              <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
+                {renderGroupCheckbox(allRowsInDist)}
+              </td>
+              <td className="group-col">
+                <span className="group-caret">{distCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
+              </td>
+              <td colSpan={visibleCols.length + 1}>
+                <span className="group-title group-title--distance">Остаток: {distKey} ({allRowsInDist.length} {wagonWord(allRowsInDist.length)})</span>
+              </td>
+            </tr>
+            {!distCollapsed && Array.from(trainMap.entries()).map(([trainKey, rows]) =>
+              renderTrainGroup(trainKey, rows, false)
+            )}
+          </React.Fragment>
+        );
+      });
+    }
+
+    // Только расстояние
+    if (groupByDistanceEnabled && distanceGroups) {
+      return Array.from(distanceGroups.entries()).map(([distKey, rows]) => {
+        const distCollapsed = collapsedDistances.has(distKey);
+        return (
+          <React.Fragment key={`dist-${distKey}`}>
+            <tr
+              className="group-header-row group-header-row--distance"
+              onClick={() => toggleDistance(distKey)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && toggleDistance(distKey)}
+            >
+              <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
+                {renderGroupCheckbox(rows)}
+              </td>
+              <td className="group-col">
+                <span className="group-caret">{distCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
+              </td>
+              <td colSpan={visibleCols.length + 1}>
+                <span className="group-title group-title--distance">Остаток: {distKey} ({rows.length} {wagonWord(rows.length)})</span>
+              </td>
+            </tr>
+            {!distCollapsed && rows.map((wagon) => renderWagonRow(wagon))}
+          </React.Fragment>
+        );
+      });
+    }
+
+    // Только поезд
+    if (groupByTrainEnabled && trainGroups) {
+      return Array.from(trainGroups.entries()).map(([trainKey, rows]) =>
+        renderTrainGroup(trainKey, rows, false)
+      );
+    }
+
+    // Без группировки
+    return filteredWagons.map((wagon) => renderWagonRow(wagon));
+  };
 
   if (loading) return <div className="data-loading">Загрузка…</div>;
   if (error) return (
@@ -209,9 +384,17 @@ export default function HierarchyView({ isActive, refreshKey }) {
             type="button"
             className={`compact-icon-btn ${groupByTrainEnabled ? 'active' : ''}`}
             onClick={() => setGroupByTrainEnabled(!groupByTrainEnabled)}
-            title={groupByTrainEnabled ? 'Убрать группировку' : 'Группировать по поезду'}
+            title={groupByTrainEnabled ? 'Убрать группировку по поезду' : 'Группировать по поезду'}
           >
             <Layers size={15} />
+          </button>
+          <button
+            type="button"
+            className={`compact-icon-btn ${groupByDistanceEnabled ? 'active' : ''}`}
+            onClick={() => setGroupByDistanceEnabled(!groupByDistanceEnabled)}
+            title={groupByDistanceEnabled ? 'Убрать группировку по расстоянию' : 'Группировать по остатку км'}
+          >
+            <Ruler size={15} />
           </button>
           <button
             type="button"
@@ -265,7 +448,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
           <thead>
             <tr>
               <th style={{ width: 28 }} />
-              {groupByTrainEnabled && <th className="group-col" />}
+              {isAnyGrouping && <th className="group-col" />}
               {visibleCols.slice(0, 1).map((col) => (
                 <th key={col.id} className="th-with-filter">
                   <span className="th-label">{col.label}</span>
@@ -310,66 +493,7 @@ export default function HierarchyView({ isActive, refreshKey }) {
             </tr>
           </thead>
           <tbody>
-            {filteredWagons.length === 0 ? (
-              <tr>
-                <td colSpan={colCountMain + (groupByTrainEnabled ? 1 : 0)} className="empty-table-message">
-                  Нет вагонов по запросу
-                </td>
-              </tr>
-            ) : groupByTrainEnabled ? (
-              Array.from(groups.entries()).map(([trainKey, rows]) => {
-                const displayLabel = trainKey === EMPTY_TRAIN_LABEL ? trainKey : `Поезд ${trainKey}`;
-                const count = rows.length;
-                const wagonWord = count === 1 ? 'вагон' : count >= 2 && count <= 4 ? 'вагона' : 'вагонов';
-                const collapsed = collapsedTrains.has(trainKey);
-                return (
-                  <React.Fragment key={trainKey}>
-                    <tr
-                      className="group-header-row"
-                      onClick={() => toggleTrain(trainKey)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && toggleTrain(trainKey)}
-                    >
-                      <td className="h-wagon-check" onClick={(e) => e.stopPropagation()}>
-                        {(() => {
-                          const groupIds = rows.map((w) => w.id);
-                          const allSelected = groupIds.every((id) => selectedWagonIds.has(id));
-                          const someSelected = !allSelected && groupIds.some((id) => selectedWagonIds.has(id));
-                          return (
-                            <input
-                              type="checkbox"
-                              checked={allSelected}
-                              ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                              onChange={() => {
-                                setSelectedWagonIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (allSelected) {
-                                    groupIds.forEach((id) => next.delete(id));
-                                  } else {
-                                    groupIds.forEach((id) => next.add(id));
-                                  }
-                                  return next;
-                                });
-                              }}
-                            />
-                          );
-                        })()}
-                      </td>
-                      <td className="group-col">
-                        <span className="group-caret">{collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
-                      </td>
-                      <td colSpan={visibleCols.length + 1}>
-                        <span className="group-title">{displayLabel} ({count} {wagonWord})</span>
-                      </td>
-                    </tr>
-                    {!collapsed && rows.map((wagon) => renderWagonRow(wagon))}
-                  </React.Fragment>
-                );
-              })
-            ) : (
-              filteredWagons.map((wagon) => renderWagonRow(wagon))
-            )}
+            {renderTableBody()}
           </tbody>
         </table>
       </div>

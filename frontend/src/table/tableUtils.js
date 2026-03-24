@@ -21,6 +21,36 @@ export function groupByTrain(rows) {
   return groups;
 }
 
+export const EMPTY_DISTANCE_LABEL = 'Нет данных';
+
+/** Нормализует значение remaining_distance для группировки. */
+export function getDistanceGroupKey(value) {
+  const v = value?.toString?.()?.trim?.();
+  if (!v || v === '—') return EMPTY_DISTANCE_LABEL;
+  return `${v} км`;
+}
+
+/** Группирует строки по remaining_distance (точные значения). */
+export function groupByDistance(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = getDistanceGroupKey(row.remaining_distance);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  // Сортируем группы: числа по возрастанию, "Нет данных" в конец
+  const sorted = new Map(
+    [...groups.entries()].sort((a, b) => {
+      if (a[0] === EMPTY_DISTANCE_LABEL) return 1;
+      if (b[0] === EMPTY_DISTANCE_LABEL) return -1;
+      const numA = parseFloat(a[0]) || 0;
+      const numB = parseFloat(b[0]) || 0;
+      return numA - numB;
+    })
+  );
+  return sorted;
+}
+
 /** Нормализует значение для сравнения с фильтром. */
 function getFilterValue(row, colId) {
   if (colId === 'last_comment_text') {
