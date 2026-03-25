@@ -17,6 +17,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/etran", tags=["etran"])
 
+
+@router.get("/health")
+def etran_health():
+    """Проверка что роутер ЭТРАН зарегистрирован и работает."""
+    return {"status": "ok", "service": "etran", "endpoint": "/etran/webhook"}
+
+
 # Допустимые статусы — остальные отсеиваем
 ALLOWED_STATUSES = {
     "в пути",
