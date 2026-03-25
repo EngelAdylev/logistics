@@ -217,12 +217,15 @@ class EtranWaybill(Base):
     departure_station_name = Column(Text)
     destination_station_code = Column(Text)
     destination_station_name = Column(Text)
+    departure_country = Column(Text)
+    destination_country = Column(Text)
     # Участники
     shipper_name = Column(Text)
     consignee_name = Column(Text)
     consignee_address = Column(Text)
     payer = Column(Text)
     payer_code = Column(Text)
+    responsible_person = Column(Text)
     # Даты
     waybill_created_at = Column(DateTime(timezone=True))
     accepted_at = Column(DateTime(timezone=True))
@@ -258,6 +261,11 @@ class EtranWaybillWagon(Base):
     container_length = Column(Text)
     container_owner = Column(Text)
     zpu_number = Column(Text)
+    zpu_type = Column(Text)
+    # Вагон: доп. данные
+    renter = Column(Text)
+    wagon_model = Column(Text)
+    next_repair_date = Column(Text)
     # Груз (первый продукт из накладной — для быстрого доступа)
     cargo_name = Column(Text)
     cargo_weight = Column(Text)

@@ -1,6 +1,11 @@
 """
 Роутер для приёма данных ЭТРАН (накладные ГУ-27).
 POST /etran/webhook — принимает JSON-пакет из DATAREON, дедуплицирует, upsert.
+
+Формат пакета (v2):
+    {"waybill": { "waybill_number": "...", "waybill_status": "...", ..., "MessageId": "...", "Version": 3 }}
+Поддерживается и старый формат:
+    {"GU27": [{"waybill": {...}}], "MessageID": "..."}
 """
 import logging
 from datetime import datetime, timezone
@@ -30,10 +35,11 @@ def etran_health_post():
     return {"status": "ok", "message": "POST works, but send to /etran/webhook"}
 
 
-# Допустимые статусы — остальные отсеиваем
+# Допустимые статусы (lower-case) — остальные отсеиваем
 ALLOWED_STATUSES = {
     "в пути",
-    "работа с документами окончена",
+    "работа с документом окончена",
+    "работа с документами окончена",  # на случай обоих вариантов
     "груз прибыл",
     "получатель уведомлен",
     "раскредитован",
@@ -42,11 +48,10 @@ ALLOWED_STATUSES = {
 
 def _parse_datetime(val) -> Optional[datetime]:
     """Парсим дату из JSON ЭТРАН. Возвращает None для пустых/нулевых дат."""
-    if not val or val == "0001-01-01T00:00:00Z":
+    if not val or str(val).startswith("0001-01-01"):
         return None
     try:
         if isinstance(val, str):
-            # Поддерживаем формат ISO 8601
             val = val.replace("Z", "+00:00")
             return datetime.fromisoformat(val)
         return val
@@ -54,25 +59,33 @@ def _parse_datetime(val) -> Optional[datetime]:
         return None
 
 
+def _s(val) -> str:
+    """Безопасно превращает значение в stripped строку."""
+    return (str(val) if val is not None else "").strip()
+
+
 def _extract_waybill_data(waybill: dict) -> dict:
     """Извлекает плоские поля накладной из JSON."""
     return {
-        "waybill_number": (waybill.get("waybill_number") or "").strip(),
-        "waybill_identifier": (waybill.get("waybill_identifier") or "").strip(),
-        "status": (waybill.get("waybill_status") or "").strip(),
-        "departure_station_code": (waybill.get("departure_station_code") or "").strip(),
-        "departure_station_name": (waybill.get("departure_station") or "").strip(),
-        "destination_station_code": (waybill.get("destination_station_code") or "").strip(),
-        "destination_station_name": (waybill.get("destination_station") or "").strip(),
-        "shipper_name": (waybill.get("shipper_name") or "").strip(),
-        "consignee_name": (waybill.get("consignee_name") or "").strip(),
-        "consignee_address": (waybill.get("consignee_address") or "").strip(),
-        "payer": (waybill.get("payer") or "").strip(),
-        "payer_code": (waybill.get("payer_code") or "").strip(),
-        "waybill_type": (waybill.get("waybill_type") or "").strip(),
-        "shipment_type": (waybill.get("shipment_type") or "").strip(),
-        "shipment_speed": (waybill.get("shipment_speed") or "").strip(),
-        "form_type": (waybill.get("form_type") or "").strip(),
+        "waybill_number": _s(waybill.get("waybill_number")),
+        "waybill_identifier": _s(waybill.get("waybill_identifier")),
+        "status": _s(waybill.get("waybill_status")),
+        "departure_station_code": _s(waybill.get("departure_station_code")),
+        "departure_station_name": _s(waybill.get("departure_station")),
+        "destination_station_code": _s(waybill.get("destination_station_code")),
+        "destination_station_name": _s(waybill.get("destination_station")),
+        "departure_country": _s(waybill.get("departure_country")),
+        "destination_country": _s(waybill.get("destination_country")),
+        "shipper_name": _s(waybill.get("shipper_name")),
+        "consignee_name": _s(waybill.get("consignee_name")),
+        "consignee_address": _s(waybill.get("consignee_address")),
+        "payer": _s(waybill.get("payer")),
+        "payer_code": _s(waybill.get("payer_code")),
+        "waybill_type": _s(waybill.get("waybill_type")),
+        "shipment_type": _s(waybill.get("shipment_type")),
+        "shipment_speed": _s(waybill.get("shipment_speed")),
+        "form_type": _s(waybill.get("form_type")),
+        "responsible_person": _s(waybill.get("responsible_person")),
         "waybill_created_at": _parse_datetime(waybill.get("waybill_created_at")),
         "accepted_at": _parse_datetime(waybill.get("accepted_at")),
         "departure_at": _parse_datetime(waybill.get("departure_at")),
@@ -93,14 +106,14 @@ def _extract_wagons(waybill: dict) -> list[dict]:
     # Индексируем контейнеры по номеру вагона (1:N)
     container_map: dict[str, list[dict]] = {}
     for c in containers:
-        cn = (c.get("carriage_number") or "").strip()
+        cn = _s(c.get("carriage_number"))
         if cn:
             container_map.setdefault(cn, []).append(c)
 
-    # ZPU по номеру контейнера
+    # ZPU по номеру контейнера (может быть container_number_zpu или container_number)
     zpu_map = {}
     for z in zpu_list:
-        zn = (z.get("container_number") or z.get("zpu_container_number") or "").strip()
+        zn = _s(z.get("container_number_zpu") or z.get("container_number") or z.get("zpu_container_number"))
         if zn:
             zpu_map[zn] = z
 
@@ -109,45 +122,60 @@ def _extract_wagons(waybill: dict) -> list[dict]:
 
     result = []
     for carr in carriages:
-        rn = (carr.get("railway_number") or "").strip()
+        rn = _s(carr.get("railway_number"))
         if not rn:
             continue
 
         base = {
             "railway_carriage_number": rn,
-            "lifting_capacity": str(carr.get("railway_lifting_capacity") or ""),
+            "lifting_capacity": _s(carr.get("railway_lifting_capacity")),
             "axles_count": carr.get("axles_count"),
-            "ownership": (carr.get("ownership") or "").strip(),
-            "weight_net": str(carr.get("railway_weight_net") or ""),
-            "cargo_name": (first_product.get("etsng_name") or first_product.get("cargo_full_name") or "").strip(),
-            "cargo_weight": str(first_product.get("cargo_weight") or ""),
+            "ownership": _s(carr.get("ownership")),
+            "renter": _s(carr.get("renter")),
+            "weight_net": _s(carr.get("railway_weight_net")),
+            "wagon_model": _s(carr.get("model")),
+            "next_repair_date": _s(carr.get("date_of_next_repair")),
+            "cargo_name": _s(first_product.get("etsng_name") or first_product.get("cargo_full_name")),
+            "cargo_weight": _s(first_product.get("cargo_weight")),
         }
 
         wagon_containers = container_map.get(rn, [])
         if wagon_containers:
-            # Один вагон → N контейнеров → N строк
             for cont in wagon_containers:
-                cont_num = (cont.get("container_number") or "").strip()
+                cont_num = _s(cont.get("container_number"))
                 zpu = zpu_map.get(cont_num, {})
                 row = {
                     **base,
                     "container_number": cont_num,
-                    "container_length": str(cont.get("container_length") or ""),
-                    "container_owner": (cont.get("owner") or "").strip(),
-                    "zpu_number": (zpu.get("zpu_number") or zpu.get("number") or "").strip(),
+                    "container_length": _s(cont.get("container_length")),
+                    "container_owner": _s(cont.get("owner")),
+                    # ZPU: поле может называться "zpu", "zpu_number", "number"
+                    "zpu_number": _s(zpu.get("zpu") or zpu.get("zpu_number") or zpu.get("number")),
+                    "zpu_type": _s(zpu.get("zpu_type") or zpu.get("type")),
                 }
                 result.append(row)
         else:
-            # Вагон без контейнера → 1 строка
             result.append({
                 **base,
                 "container_number": "",
                 "container_length": "",
                 "container_owner": "",
                 "zpu_number": "",
+                "zpu_type": "",
             })
 
     return result
+
+
+def _extract_message_id(payload: dict, waybill: dict) -> str:
+    """Извлекает MessageId из любого формата пакета."""
+    return (
+        payload.get("MessageID")
+        or payload.get("MessageId")
+        or waybill.get("MessageId")
+        or waybill.get("MessageID")
+        or ""
+    )
 
 
 def _log_incoming(db: Session, message_id: str, waybill_number: str,
@@ -164,11 +192,113 @@ def _log_incoming(db: Session, message_id: str, waybill_number: str,
     db.add(entry)
 
 
+def _process_one_waybill(db: Session, waybill: dict, message_id: str,
+                         payload: dict, stats: dict):
+    """Обрабатывает одну накладную: дедупликация, upsert."""
+    data = _extract_waybill_data(waybill)
+    waybill_number = data["waybill_number"]
+    status = data["status"]
+
+    if not waybill_number:
+        logger.warning("etran_webhook: empty waybill_number, skipping")
+        return
+
+    stats["processed"] += 1
+
+    # Фильтр по статусу
+    if status.lower() not in ALLOWED_STATUSES:
+        _log_incoming(db, message_id, waybill_number, status, "filtered_out",
+                      f"Статус '{status}' не в допустимых")
+        stats["filtered_out"] += 1
+        return
+
+    # Ищем существующую накладную
+    existing = db.query(models.EtranWaybill).filter(
+        models.EtranWaybill.waybill_number == waybill_number
+    ).first()
+
+    if existing:
+        if existing.status == status:
+            _log_incoming(db, message_id, waybill_number, status, "skipped",
+                          f"Статус не изменился: '{status}'")
+            stats["skipped"] += 1
+            return
+
+        old_status = existing.status
+        existing.status = status
+        existing.status_updated_at = datetime.now(timezone.utc)
+        existing.raw_data = payload
+        existing.updated_at = datetime.now(timezone.utc)
+
+        for field in ["departure_station_code", "departure_station_name",
+                      "destination_station_code", "destination_station_name",
+                      "departure_country", "destination_country",
+                      "shipper_name", "consignee_name", "consignee_address",
+                      "payer", "payer_code", "responsible_person",
+                      "accepted_at", "departure_at", "delivery_deadline"]:
+            if data.get(field):
+                setattr(existing, field, data[field])
+
+        wagon_data = _extract_wagons(waybill)
+        _upsert_wagons(db, existing.id, wagon_data)
+
+        _log_incoming(db, message_id, waybill_number, status, "updated",
+                      f"Статус: '{old_status}' → '{status}'")
+        stats["updated"] += 1
+        logger.info("etran_webhook: updated waybill=%s status='%s'->'%s'",
+                    waybill_number, old_status, status)
+    else:
+        new_wb = models.EtranWaybill(
+            waybill_number=data["waybill_number"],
+            waybill_identifier=data["waybill_identifier"],
+            status=data["status"],
+            status_updated_at=datetime.now(timezone.utc),
+            departure_station_code=data["departure_station_code"],
+            departure_station_name=data["departure_station_name"],
+            destination_station_code=data["destination_station_code"],
+            destination_station_name=data["destination_station_name"],
+            departure_country=data["departure_country"],
+            destination_country=data["destination_country"],
+            shipper_name=data["shipper_name"],
+            consignee_name=data["consignee_name"],
+            consignee_address=data["consignee_address"],
+            payer=data["payer"],
+            payer_code=data["payer_code"],
+            waybill_type=data["waybill_type"],
+            shipment_type=data["shipment_type"],
+            shipment_speed=data["shipment_speed"],
+            form_type=data["form_type"],
+            responsible_person=data["responsible_person"],
+            waybill_created_at=data["waybill_created_at"],
+            accepted_at=data["accepted_at"],
+            departure_at=data["departure_at"],
+            delivery_deadline=data["delivery_deadline"],
+            raw_data=payload,
+            is_relevant=True,
+        )
+        db.add(new_wb)
+        db.flush()
+
+        wagon_data = _extract_wagons(waybill)
+        for w in wagon_data:
+            wg = models.EtranWaybillWagon(waybill_id=new_wb.id, **w)
+            db.add(wg)
+
+        _log_incoming(db, message_id, waybill_number, status, "created",
+                      f"Новая накладная, вагонов: {len(wagon_data)}")
+        stats["created"] += 1
+        logger.info("etran_webhook: created waybill=%s status='%s' wagons=%d",
+                    waybill_number, status, len(wagon_data))
+
+
 @router.post("/webhook")
 @router.post("/webhook/")
 async def etran_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Приём JSON-пакета ГУ-27 из DATAREON.
+    Поддерживает два формата:
+      1) Новый: {"waybill": {..., "MessageId": "..."}}
+      2) Старый: {"GU27": [{"waybill": {...}}], "MessageID": "..."}
     Дедупликация по waybill_number: если накладная уже есть — обновляем статус.
     Всегда возвращает 200 OK (чтобы DATAREON не ретраил).
     """
@@ -178,116 +308,32 @@ async def etran_webhook(request: Request, db: Session = Depends(get_db)):
         logger.warning("etran_webhook: invalid JSON: %s", e)
         return {"status": "error", "message": "Invalid JSON", "processed": 0}
 
-    message_id = payload.get("MessageID", "")
-    gu27_list = payload.get("GU27") or []
-
-    if not gu27_list:
-        logger.info("etran_webhook: empty GU27 array, message_id=%s", message_id)
-        return {"status": "ok", "message": "No GU27 data", "processed": 0}
-
     stats = {"processed": 0, "created": 0, "updated": 0, "skipped": 0, "filtered_out": 0}
 
-    for item in gu27_list:
-        waybill = item.get("waybill") or item  # на случай если структура без обёртки
-        data = _extract_waybill_data(waybill)
-        waybill_number = data["waybill_number"]
-        status = data["status"]
+    # ─── Определяем формат пакета ──────────────────────────────────────────
+    if "waybill" in payload and isinstance(payload["waybill"], dict):
+        # Новый формат: {"waybill": {...}}
+        waybill = payload["waybill"]
+        message_id = _extract_message_id(payload, waybill)
+        _process_one_waybill(db, waybill, message_id, payload, stats)
 
-        if not waybill_number:
-            logger.warning("etran_webhook: empty waybill_number, skipping")
-            continue
+    elif "GU27" in payload:
+        # Старый формат: {"GU27": [...], "MessageID": "..."}
+        message_id = payload.get("MessageID", "")
+        gu27_list = payload.get("GU27") or []
+        for item in gu27_list:
+            waybill = item.get("waybill") or item
+            _process_one_waybill(db, waybill, message_id, payload, stats)
 
-        stats["processed"] += 1
-
-        # Фильтр по статусу
-        if status.lower() not in ALLOWED_STATUSES:
-            _log_incoming(db, message_id, waybill_number, status, "filtered_out",
-                          f"Статус '{status}' не в допустимых")
-            stats["filtered_out"] += 1
-            continue
-
-        # Ищем существующую накладную
-        existing = db.query(models.EtranWaybill).filter(
-            models.EtranWaybill.waybill_number == waybill_number
-        ).first()
-
-        if existing:
-            # Проверяем изменился ли статус
-            if existing.status == status:
-                _log_incoming(db, message_id, waybill_number, status, "skipped",
-                              f"Статус не изменился: '{status}'")
-                stats["skipped"] += 1
-                continue
-
-            # Статус изменился — обновляем
-            old_status = existing.status
-            existing.status = status
-            existing.status_updated_at = datetime.now(timezone.utc)
-            existing.raw_data = payload
-            existing.updated_at = datetime.now(timezone.utc)
-
-            # Обновляем поля которые могли измениться
-            for field in ["departure_station_code", "departure_station_name",
-                          "destination_station_code", "destination_station_name",
-                          "shipper_name", "consignee_name", "consignee_address",
-                          "payer", "payer_code", "accepted_at", "departure_at",
-                          "delivery_deadline"]:
-                if data.get(field):
-                    setattr(existing, field, data[field])
-
-            # Пересоздаём вагоны (состав мог измениться)
-            wagon_data = _extract_wagons(waybill)
-            _upsert_wagons(db, existing.id, wagon_data)
-
-            _log_incoming(db, message_id, waybill_number, status, "updated",
-                          f"Статус: '{old_status}' → '{status}'")
-            stats["updated"] += 1
-            logger.info("etran_webhook: updated waybill=%s status='%s'->'%s'",
-                        waybill_number, old_status, status)
+    else:
+        # Неизвестный формат — пробуем как голый waybill
+        message_id = _extract_message_id(payload, payload)
+        if payload.get("waybill_number"):
+            _process_one_waybill(db, payload, message_id, payload, stats)
         else:
-            # Новая накладная
-            new_wb = models.EtranWaybill(
-                waybill_number=data["waybill_number"],
-                waybill_identifier=data["waybill_identifier"],
-                status=data["status"],
-                status_updated_at=datetime.now(timezone.utc),
-                departure_station_code=data["departure_station_code"],
-                departure_station_name=data["departure_station_name"],
-                destination_station_code=data["destination_station_code"],
-                destination_station_name=data["destination_station_name"],
-                shipper_name=data["shipper_name"],
-                consignee_name=data["consignee_name"],
-                consignee_address=data["consignee_address"],
-                payer=data["payer"],
-                payer_code=data["payer_code"],
-                waybill_type=data["waybill_type"],
-                shipment_type=data["shipment_type"],
-                shipment_speed=data["shipment_speed"],
-                form_type=data["form_type"],
-                waybill_created_at=data["waybill_created_at"],
-                accepted_at=data["accepted_at"],
-                departure_at=data["departure_at"],
-                delivery_deadline=data["delivery_deadline"],
-                raw_data=payload,
-                is_relevant=True,
-            )
-            db.add(new_wb)
-            db.flush()  # Получаем id для вагонов
-
-            # Вагоны
-            wagon_data = _extract_wagons(waybill)
-            for w in wagon_data:
-                wg = models.EtranWaybillWagon(
-                    waybill_id=new_wb.id,
-                    **w,
-                )
-                db.add(wg)
-
-            _log_incoming(db, message_id, waybill_number, status, "created",
-                          f"Новая накладная, вагонов: {len(wagon_data)}")
-            stats["created"] += 1
-            logger.info("etran_webhook: created waybill=%s status='%s' wagons=%d",
-                        waybill_number, status, len(wagon_data))
+            logger.warning("etran_webhook: unknown payload format, keys=%s", list(payload.keys()))
+            _log_incoming(db, "", "", "", "error",
+                          f"Unknown format, keys: {list(payload.keys())}", payload)
 
     try:
         db.commit()
@@ -318,26 +364,25 @@ def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
             new_wg = models.EtranWaybillWagon(waybill_id=waybill_id, **w)
             db.add(new_wg)
 
-    # Удаляем строки которых больше нет
     for key, ew in existing_map.items():
         if key not in incoming_keys:
             db.delete(ew)
 
 
-# ─── Чтение данных (для фронтенда, потом) ────────────────────────────────────
+# ─── Чтение данных (для фронтенда) ──────────────────────────────────────────
 
 @router.get("/waybills")
 def list_waybills(
     status: Optional[str] = None,
     search: Optional[str] = None,
-    limit: int = 100,
+    limit: int = 200,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
     """Список накладных ЭТРАН с вложенными вагонами."""
     q = db.query(models.EtranWaybill).filter(models.EtranWaybill.is_relevant == True)
     if status:
-        q = q.filter(models.EtranWaybill.status == status)
+        q = q.filter(models.EtranWaybill.status.ilike(f"%{status}%"))
     if search:
         q = q.filter(
             models.EtranWaybill.waybill_number.ilike(f"%{search}%")
@@ -346,7 +391,6 @@ def list_waybills(
     total = q.count()
     waybills = q.offset(offset).limit(limit).all()
 
-    # Собираем вагоны пачкой
     wb_ids = [wb.id for wb in waybills]
     all_wagons = []
     if wb_ids:
@@ -362,9 +406,12 @@ def list_waybills(
             "container_length": w.container_length or "",
             "container_owner": w.container_owner or "",
             "zpu_number": w.zpu_number or "",
+            "zpu_type": getattr(w, "zpu_type", "") or "",
             "lifting_capacity": w.lifting_capacity or "",
             "ownership": w.ownership or "",
+            "renter": getattr(w, "renter", "") or "",
             "weight_net": w.weight_net or "",
+            "wagon_model": getattr(w, "wagon_model", "") or "",
             "cargo_name": w.cargo_name or "",
             "cargo_weight": w.cargo_weight or "",
         })
@@ -381,9 +428,13 @@ def list_waybills(
             "departure_station_name": wb.departure_station_name or "",
             "destination_station_code": wb.destination_station_code or "",
             "destination_station_name": wb.destination_station_name or "",
+            "departure_country": getattr(wb, "departure_country", "") or "",
+            "destination_country": getattr(wb, "destination_country", "") or "",
             "shipper_name": wb.shipper_name or "",
             "consignee_name": wb.consignee_name or "",
             "payer": wb.payer or "",
+            "shipment_type": wb.shipment_type or "",
+            "responsible_person": getattr(wb, "responsible_person", "") or "",
             "cargo_name": wagons_by_wb.get(str(wb.id), [{}])[0].get("cargo_name", ""),
             "wagon_count": len(wagons_by_wb.get(str(wb.id), [])),
             "wagons": wagons_by_wb.get(str(wb.id), []),

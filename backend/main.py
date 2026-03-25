@@ -156,6 +156,14 @@ def startup_event():
                         raw_payload JSONB
                     )
                 """),
+                # Новые поля ЭТРАН v2
+                ("etran_wb_departure_country", "ALTER TABLE etran_waybills ADD COLUMN IF NOT EXISTS departure_country TEXT"),
+                ("etran_wb_destination_country", "ALTER TABLE etran_waybills ADD COLUMN IF NOT EXISTS destination_country TEXT"),
+                ("etran_wb_responsible_person", "ALTER TABLE etran_waybills ADD COLUMN IF NOT EXISTS responsible_person TEXT"),
+                ("etran_wbw_zpu_type", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS zpu_type TEXT"),
+                ("etran_wbw_renter", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS renter TEXT"),
+                ("etran_wbw_wagon_model", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS wagon_model TEXT"),
+                ("etran_wbw_next_repair_date", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS next_repair_date TEXT"),
             ]:
                 try:
                     conn.execute(text(sql))
