@@ -21,7 +21,13 @@ router = APIRouter(prefix="/etran", tags=["etran"])
 @router.get("/health")
 def etran_health():
     """Проверка что роутер ЭТРАН зарегистрирован и работает."""
-    return {"status": "ok", "service": "etran", "endpoint": "/etran/webhook"}
+    return {"status": "ok", "service": "etran", "endpoint": "/etran/webhook", "method": "POST"}
+
+
+@router.post("/health")
+def etran_health_post():
+    """POST на health — для диагностики если DATAREON шлёт не туда."""
+    return {"status": "ok", "message": "POST works, but send to /etran/webhook"}
 
 
 # Допустимые статусы — остальные отсеиваем
@@ -126,6 +132,7 @@ def _log_incoming(db: Session, message_id: str, waybill_number: str,
 
 
 @router.post("/webhook")
+@router.post("/webhook/")
 async def etran_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Приём JSON-пакета ГУ-27 из DATAREON.

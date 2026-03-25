@@ -17,7 +17,7 @@ from wagon_table_service import get_table_wagons
 # Автоматическое создание таблиц
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Logistics Monitoring Service")
+app = FastAPI(title="Logistics Monitoring Service", redirect_slashes=True)
 
 settings = get_settings()
 origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
