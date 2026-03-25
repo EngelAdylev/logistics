@@ -626,16 +626,15 @@ def comment_constructor_apply(
     )
 
 
-# ─── Синхронизация (admin) ───────────────────────────────────────────────────
+# ─── Синхронизация ────────────────────────────────────────────────────────────
 
 @router.post("/sync", response_model=SyncV2Result)
 def sync_v2(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Полная пересборка иерархической модели из dislocation.
-    Только для администратора.
     """
     import logging
     _logger = logging.getLogger(__name__)
