@@ -200,3 +200,84 @@ class CommentHistory(Base):
     changed_at = Column(DateTime(timezone=True), server_default=func.now())
     old_text = Column(Text)
     new_text = Column(Text, nullable=False)
+
+
+# ─── ЭТРАН: накладные ГУ-27 ──────────────────────────────────────────────────
+
+class EtranWaybill(Base):
+    """Накладная ЭТРАН. Одна запись = один waybill_number (дедупликация)."""
+    __tablename__ = "etran_waybills"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    waybill_number = Column(Text, unique=True, nullable=False, index=True)
+    waybill_identifier = Column(Text)
+    status = Column(Text, nullable=False)              # "В пути", "Груз прибыл", ...
+    status_updated_at = Column(DateTime(timezone=True))
+    # Маршрут
+    departure_station_code = Column(Text)
+    departure_station_name = Column(Text)
+    destination_station_code = Column(Text)
+    destination_station_name = Column(Text)
+    # Участники
+    shipper_name = Column(Text)
+    consignee_name = Column(Text)
+    consignee_address = Column(Text)
+    payer = Column(Text)
+    payer_code = Column(Text)
+    # Даты
+    waybill_created_at = Column(DateTime(timezone=True))
+    accepted_at = Column(DateTime(timezone=True))
+    departure_at = Column(DateTime(timezone=True))
+    delivery_deadline = Column(DateTime(timezone=True))
+    # Тип
+    waybill_type = Column(Text)
+    shipment_type = Column(Text)
+    shipment_speed = Column(Text)
+    form_type = Column(Text)
+    # Сырой JSON (весь пакет для аудита)
+    raw_data = Column(JSONB)
+    # Служебные
+    is_relevant = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    wagons = relationship("EtranWaybillWagon", back_populates="waybill", cascade="all, delete-orphan")
+
+
+class EtranWaybillWagon(Base):
+    """Вагон из накладной ЭТРАН. Одна накладная → много вагонов."""
+    __tablename__ = "etran_waybill_wagons"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="CASCADE"), nullable=False, index=True)
+    railway_carriage_number = Column(Text, nullable=False)
+    lifting_capacity = Column(Text)
+    axles_count = Column(Integer)
+    ownership = Column(Text)
+    weight_net = Column(Text)
+    # Контейнер (если есть)
+    container_number = Column(Text)
+    container_length = Column(Text)
+    container_owner = Column(Text)
+    # Груз (первый продукт из накладной — для быстрого доступа)
+    cargo_name = Column(Text)
+    cargo_weight = Column(Text)
+    # Связь с нашей системой (заполняется при матчинге)
+    wagon_id = Column(UUID(as_uuid=True), ForeignKey("wagons.id"), nullable=True)
+    # Служебные
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("waybill_id", "railway_carriage_number", name="_etran_wb_wagon_uc"),)
+
+    waybill = relationship("EtranWaybill", back_populates="wagons")
+
+
+class EtranIncomingLog(Base):
+    """Лог входящих пакетов ЭТРАН (аудит)."""
+    __tablename__ = "etran_incoming_log"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id = Column(Text)
+    waybill_number = Column(Text)
+    status_received = Column(Text)
+    action_taken = Column(Text)    # "created" / "updated" / "skipped" / "filtered_out"
+    details = Column(Text)
+    received_at = Column(DateTime(timezone=True), server_default=func.now())
+    raw_payload = Column(JSONB)

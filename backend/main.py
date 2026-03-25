@@ -10,6 +10,7 @@ from auth import get_current_user, require_role, hash_password
 from routers.auth_router import router as auth_router
 from routers.table_settings_router import router as table_settings_router
 from routers.hierarchy_router import router as hierarchy_router
+from routers.etran_router import router as etran_router
 from schemas import CreateUserRequest, TrackingWagonTableRowOut
 from wagon_table_service import get_table_wagons
 
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(table_settings_router)
 app.include_router(hierarchy_router)
+app.include_router(etran_router)
 
 
 @app.on_event("startup")
@@ -87,6 +89,70 @@ def startup_event():
                 ("wagon_trips_carriage_on_train", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS number_railway_carriage_on_train TEXT"),
                 ("wagon_trips_waybill_number", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS waybill_number TEXT"),
                 ("wagon_trips_remaining_distance", "ALTER TABLE wagon_trips ADD COLUMN IF NOT EXISTS remaining_distance TEXT"),
+                # ЭТРАН таблицы
+                ("etran_waybills_table", """
+                    CREATE TABLE IF NOT EXISTS etran_waybills (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        waybill_number TEXT NOT NULL UNIQUE,
+                        waybill_identifier TEXT,
+                        status TEXT NOT NULL,
+                        status_updated_at TIMESTAMPTZ,
+                        departure_station_code TEXT,
+                        departure_station_name TEXT,
+                        destination_station_code TEXT,
+                        destination_station_name TEXT,
+                        shipper_name TEXT,
+                        consignee_name TEXT,
+                        consignee_address TEXT,
+                        payer TEXT,
+                        payer_code TEXT,
+                        waybill_created_at TIMESTAMPTZ,
+                        accepted_at TIMESTAMPTZ,
+                        departure_at TIMESTAMPTZ,
+                        delivery_deadline TIMESTAMPTZ,
+                        waybill_type TEXT,
+                        shipment_type TEXT,
+                        shipment_speed TEXT,
+                        form_type TEXT,
+                        raw_data JSONB,
+                        is_relevant BOOLEAN DEFAULT true,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """),
+                ("etran_waybills_idx", "CREATE INDEX IF NOT EXISTS idx_etran_wb_number ON etran_waybills(waybill_number)"),
+                ("etran_waybill_wagons_table", """
+                    CREATE TABLE IF NOT EXISTS etran_waybill_wagons (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        waybill_id UUID NOT NULL REFERENCES etran_waybills(id) ON DELETE CASCADE,
+                        railway_carriage_number TEXT NOT NULL,
+                        lifting_capacity TEXT,
+                        axles_count INTEGER,
+                        ownership TEXT,
+                        weight_net TEXT,
+                        container_number TEXT,
+                        container_length TEXT,
+                        container_owner TEXT,
+                        cargo_name TEXT,
+                        cargo_weight TEXT,
+                        wagon_id UUID REFERENCES wagons(id),
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        UNIQUE(waybill_id, railway_carriage_number)
+                    )
+                """),
+                ("etran_waybill_wagons_idx", "CREATE INDEX IF NOT EXISTS idx_etran_wbw_waybill ON etran_waybill_wagons(waybill_id)"),
+                ("etran_incoming_log_table", """
+                    CREATE TABLE IF NOT EXISTS etran_incoming_log (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        message_id TEXT,
+                        waybill_number TEXT,
+                        status_received TEXT,
+                        action_taken TEXT,
+                        details TEXT,
+                        received_at TIMESTAMPTZ DEFAULT now(),
+                        raw_payload JSONB
+                    )
+                """),
             ]:
                 try:
                     conn.execute(text(sql))
@@ -377,6 +443,9 @@ def admin_clear_data(
     _logger.info("admin_clear_data: started by login=%s", current_user.login)
     try:
         tables_to_clear = [
+            "etran_incoming_log",
+            "etran_waybill_wagons",
+            "etran_waybills",
             "dislocation",
             "tracking_wagons",   # CASCADE -> wagon_comments
             "wagons",            # CASCADE -> wagon_trips, wagon_entity_comments, wagon_trip_operations, trip_comments
