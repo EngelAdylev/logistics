@@ -81,17 +81,28 @@ def _extract_waybill_data(waybill: dict) -> dict:
 
 
 def _extract_wagons(waybill: dict) -> list[dict]:
-    """Извлекает вагоны + контейнеры из JSON накладной."""
+    """Извлекает вагоны + контейнеры из JSON накладной.
+    Один вагон с N контейнерами → N строк.
+    Вагон без контейнера → 1 строка с пустым container_number.
+    """
     carriages = waybill.get("waybill_railway_carriage") or []
     containers = waybill.get("waybill_container") or []
     products = waybill.get("waybill_product") or []
+    zpu_list = waybill.get("waybill_zpu") or []
 
-    # Индексируем контейнеры по номеру вагона
-    container_map = {}
+    # Индексируем контейнеры по номеру вагона (1:N)
+    container_map: dict[str, list[dict]] = {}
     for c in containers:
         cn = (c.get("carriage_number") or "").strip()
         if cn:
-            container_map[cn] = c
+            container_map.setdefault(cn, []).append(c)
+
+    # ZPU по номеру контейнера
+    zpu_map = {}
+    for z in zpu_list:
+        zn = (z.get("container_number") or z.get("zpu_container_number") or "").strip()
+        if zn:
+            zpu_map[zn] = z
 
     # Первый продукт — для cargo_name / cargo_weight
     first_product = products[0] if products else {}
@@ -101,19 +112,41 @@ def _extract_wagons(waybill: dict) -> list[dict]:
         rn = (carr.get("railway_number") or "").strip()
         if not rn:
             continue
-        cont = container_map.get(rn, {})
-        result.append({
+
+        base = {
             "railway_carriage_number": rn,
             "lifting_capacity": str(carr.get("railway_lifting_capacity") or ""),
             "axles_count": carr.get("axles_count"),
             "ownership": (carr.get("ownership") or "").strip(),
             "weight_net": str(carr.get("railway_weight_net") or ""),
-            "container_number": (cont.get("container_number") or "").strip(),
-            "container_length": str(cont.get("container_length") or ""),
-            "container_owner": (cont.get("owner") or "").strip(),
             "cargo_name": (first_product.get("etsng_name") or first_product.get("cargo_full_name") or "").strip(),
             "cargo_weight": str(first_product.get("cargo_weight") or ""),
-        })
+        }
+
+        wagon_containers = container_map.get(rn, [])
+        if wagon_containers:
+            # Один вагон → N контейнеров → N строк
+            for cont in wagon_containers:
+                cont_num = (cont.get("container_number") or "").strip()
+                zpu = zpu_map.get(cont_num, {})
+                row = {
+                    **base,
+                    "container_number": cont_num,
+                    "container_length": str(cont.get("container_length") or ""),
+                    "container_owner": (cont.get("owner") or "").strip(),
+                    "zpu_number": (zpu.get("zpu_number") or zpu.get("number") or "").strip(),
+                }
+                result.append(row)
+        else:
+            # Вагон без контейнера → 1 строка
+            result.append({
+                **base,
+                "container_number": "",
+                "container_length": "",
+                "container_owner": "",
+                "zpu_number": "",
+            })
+
     return result
 
 
@@ -267,29 +300,27 @@ async def etran_webhook(request: Request, db: Session = Depends(get_db)):
 
 
 def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
-    """Upsert вагонов: обновляем существующие, добавляем новые, удаляем лишние."""
+    """Upsert вагонов: ключ = (railway_carriage_number, container_number)."""
     existing_wagons = db.query(models.EtranWaybillWagon).filter(
         models.EtranWaybillWagon.waybill_id == waybill_id
     ).all()
-    existing_map = {w.railway_carriage_number: w for w in existing_wagons}
+    existing_map = {(w.railway_carriage_number, w.container_number or ""): w for w in existing_wagons}
 
-    incoming_numbers = set()
+    incoming_keys = set()
     for w in wagon_data:
-        rn = w["railway_carriage_number"]
-        incoming_numbers.add(rn)
-        if rn in existing_map:
-            # Обновляем
-            ew = existing_map[rn]
+        key = (w["railway_carriage_number"], w.get("container_number", ""))
+        incoming_keys.add(key)
+        if key in existing_map:
+            ew = existing_map[key]
             for field, val in w.items():
                 setattr(ew, field, val)
         else:
-            # Новый вагон
             new_wg = models.EtranWaybillWagon(waybill_id=waybill_id, **w)
             db.add(new_wg)
 
-    # Удаляем вагоны которых больше нет в накладной
-    for rn, ew in existing_map.items():
-        if rn not in incoming_numbers:
+    # Удаляем строки которых больше нет
+    for key, ew in existing_map.items():
+        if key not in incoming_keys:
             db.delete(ew)
 
 
@@ -298,17 +329,68 @@ def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
 @router.get("/waybills")
 def list_waybills(
     status: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    """Список накладных ЭТРАН (для будущего UI)."""
+    """Список накладных ЭТРАН с вложенными вагонами."""
     q = db.query(models.EtranWaybill).filter(models.EtranWaybill.is_relevant == True)
     if status:
         q = q.filter(models.EtranWaybill.status == status)
+    if search:
+        q = q.filter(
+            models.EtranWaybill.waybill_number.ilike(f"%{search}%")
+        )
     q = q.order_by(models.EtranWaybill.updated_at.desc())
     total = q.count()
-    items = q.offset(offset).limit(limit).all()
+    waybills = q.offset(offset).limit(limit).all()
+
+    # Собираем вагоны пачкой
+    wb_ids = [wb.id for wb in waybills]
+    all_wagons = []
+    if wb_ids:
+        all_wagons = db.query(models.EtranWaybillWagon).filter(
+            models.EtranWaybillWagon.waybill_id.in_(wb_ids)
+        ).all()
+    wagons_by_wb = {}
+    for w in all_wagons:
+        wagons_by_wb.setdefault(str(w.waybill_id), []).append({
+            "id": str(w.id),
+            "railway_carriage_number": w.railway_carriage_number,
+            "container_number": w.container_number or "",
+            "container_length": w.container_length or "",
+            "container_owner": w.container_owner or "",
+            "zpu_number": w.zpu_number or "",
+            "lifting_capacity": w.lifting_capacity or "",
+            "ownership": w.ownership or "",
+            "weight_net": w.weight_net or "",
+            "cargo_name": w.cargo_name or "",
+            "cargo_weight": w.cargo_weight or "",
+        })
+
+    items = []
+    for wb in waybills:
+        items.append({
+            "id": str(wb.id),
+            "waybill_number": wb.waybill_number,
+            "waybill_identifier": wb.waybill_identifier or "",
+            "status": wb.status,
+            "status_updated_at": wb.status_updated_at.isoformat() if wb.status_updated_at else None,
+            "departure_station_code": wb.departure_station_code or "",
+            "departure_station_name": wb.departure_station_name or "",
+            "destination_station_code": wb.destination_station_code or "",
+            "destination_station_name": wb.destination_station_name or "",
+            "shipper_name": wb.shipper_name or "",
+            "consignee_name": wb.consignee_name or "",
+            "payer": wb.payer or "",
+            "cargo_name": wagons_by_wb.get(str(wb.id), [{}])[0].get("cargo_name", ""),
+            "wagon_count": len(wagons_by_wb.get(str(wb.id), [])),
+            "wagons": wagons_by_wb.get(str(wb.id), []),
+            "created_at": wb.created_at.isoformat() if wb.created_at else None,
+            "updated_at": wb.updated_at.isoformat() if wb.updated_at else None,
+        })
+
     return {"total": total, "items": items}
 
 

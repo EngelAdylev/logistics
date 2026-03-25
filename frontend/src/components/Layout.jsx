@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, PanelLeftClose, PanelLeft, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout() {
@@ -27,6 +27,10 @@ export default function Layout() {
           <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : '')} end title="Слежение" onClick={() => setSidebarCollapsed(true)}>
             <LayoutDashboard size={20} />
             {!sidebarCollapsed && <span>Слежение</span>}
+          </NavLink>
+          <NavLink to="/waybills" className={({ isActive }) => (isActive ? 'active' : '')} title="Накладные" onClick={() => setSidebarCollapsed(true)}>
+            <FileText size={20} />
+            {!sidebarCollapsed && <span>Накладные</span>}
           </NavLink>
           {user?.role === 'admin' && (
             <NavLink to="/admin" className={({ isActive }) => (isActive ? 'active' : '')} title="Админка" onClick={() => setSidebarCollapsed(true)}>

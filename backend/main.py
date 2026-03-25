@@ -137,10 +137,13 @@ def startup_event():
                         cargo_weight TEXT,
                         wagon_id UUID REFERENCES wagons(id),
                         created_at TIMESTAMPTZ DEFAULT now(),
-                        UNIQUE(waybill_id, railway_carriage_number)
+                        UNIQUE(waybill_id, railway_carriage_number, container_number)
                     )
                 """),
                 ("etran_waybill_wagons_idx", "CREATE INDEX IF NOT EXISTS idx_etran_wbw_waybill ON etran_waybill_wagons(waybill_id)"),
+                ("etran_wbw_drop_old_uc", "ALTER TABLE etran_waybill_wagons DROP CONSTRAINT IF EXISTS _etran_wb_wagon_uc"),
+                ("etran_wbw_new_uc", "ALTER TABLE etran_waybill_wagons ADD CONSTRAINT _etran_wb_wagon_uc UNIQUE (waybill_id, railway_carriage_number, container_number)"),
+                ("etran_wbw_zpu_number", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS zpu_number TEXT"),
                 ("etran_incoming_log_table", """
                     CREATE TABLE IF NOT EXISTS etran_incoming_log (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

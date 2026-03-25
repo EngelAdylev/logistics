@@ -257,6 +257,7 @@ class EtranWaybillWagon(Base):
     container_number = Column(Text)
     container_length = Column(Text)
     container_owner = Column(Text)
+    zpu_number = Column(Text)
     # Груз (первый продукт из накладной — для быстрого доступа)
     cargo_name = Column(Text)
     cargo_weight = Column(Text)
@@ -265,7 +266,7 @@ class EtranWaybillWagon(Base):
     # Служебные
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (UniqueConstraint("waybill_id", "railway_carriage_number", name="_etran_wb_wagon_uc"),)
+    __table_args__ = (UniqueConstraint("waybill_id", "railway_carriage_number", "container_number", name="_etran_wb_wagon_uc"),)
 
     waybill = relationship("EtranWaybill", back_populates="wagons")
 

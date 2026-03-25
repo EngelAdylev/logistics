@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import WagonsPage from './pages/WagonsPage';
 import AdminPage from './pages/AdminPage';
+import WaybillsPage from './pages/WaybillsPage';
 import './index.css';
 
 function ProtectedRoute({ children, requireAdmin }) {
@@ -38,6 +39,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<WagonsPage />} />
+        <Route path="waybills" element={<WaybillsPage />} />
         <Route
           path="admin"
           element={
