@@ -708,3 +708,115 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .cc-result h3 { margin: 0 0 8px 0; font-size: 1rem; }
 .cc-result p { margin: 4px 0; font-size: 0.9rem; }
 .cc-confirm-modal { max-width: 420px; }
+
+/* ─── Накладные ЭТРАН — карточный стиль ──────────────────────────────────── */
+
+.wb-cards-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 0 2px;
+}
+
+.wb-cards-list {
+  display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px;
+}
+
+.wb-empty {
+  padding: 40px 20px; text-align: center; color: #94a3b8; font-size: 14px;
+}
+
+/* ─ Карточка накладной ─ */
+.wb-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.wb-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+.wb-card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer;
+  user-select: none;
+}
+.wb-card-header:hover { background: #f8fafc; }
+
+.wb-card-expand {
+  flex-shrink: 0; color: #94a3b8; display: flex; align-items: center;
+  transition: color 0.15s;
+}
+.wb-card-header:hover .wb-card-expand { color: #3b82f6; }
+
+.wb-card-title {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+
+.wb-card-number {
+  font-weight: 700; font-size: 14px; color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-card-meta {
+  display: flex; align-items: center; gap: 16px; margin-left: auto;
+  font-size: 12px; color: #64748b; white-space: nowrap;
+}
+
+.wb-card-route {
+  max-width: 350px; overflow: hidden; text-overflow: ellipsis;
+}
+
+.wb-card-count {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #f1f5f9; padding: 2px 8px; border-radius: 10px;
+  font-weight: 600; font-size: 11px; color: #475569;
+}
+
+.wb-card-date { color: #94a3b8; font-size: 11px; }
+
+/* ─ Раскрытая часть ─ */
+.wb-card-body {
+  border-top: 1px solid #e2e8f0; background: #fafbfc;
+}
+
+.wb-card-info {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; padding: 10px 14px 6px 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.wb-info-item {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 4px 0;
+}
+.wb-info-label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.wb-info-value { font-size: 13px; color: #1e293b; }
+
+/* ─ Список вагонов ─ */
+.wb-wagons-list { padding: 0 14px 10px 14px; }
+
+.wb-wagons-header {
+  display: flex; align-items: center; gap: 0;
+  padding: 6px 0; border-bottom: 1px solid #e2e8f0;
+  font-size: 10px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.wb-wagons-header > span { padding: 0 6px; }
+
+.wb-wagon-row {
+  display: flex; align-items: center; gap: 0;
+  padding: 6px 0; border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.wb-wagon-row:last-child { border-bottom: none; }
+.wb-wagon-row > span {
+  padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wb-wagon-row:hover { background: #f0f4ff; border-radius: 4px; }
+
+/* ─ Поле поиска ─ */
+.wb-search-input {
+  padding: 4px 10px; font-size: 12px;
+  border: 1px solid #d0d5dd; border-radius: 6px;
+  width: 220px; outline: none;
+  transition: border-color 0.15s;
+}
+.wb-search-input:focus { border-color: var(--active-blue); box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }

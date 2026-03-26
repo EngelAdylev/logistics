@@ -1,14 +1,129 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, Search, Package, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, FileText, Box, Train } from 'lucide-react';
 import { api } from '../api';
 
-const STATUS_COLORS = {
-  'в пути': '#e3f2fd',
-  'работа с документами окончена': '#fff3e0',
-  'груз прибыл': '#e8f5e9',
-  'получатель уведомлен': '#f3e5f5',
-  'раскредитован': '#fce4ec',
+const STATUS_MAP = {
+  'в пути':                        { color: '#1976d2', bg: '#e3f2fd',  label: 'В пути' },
+  'работа с документами окончена':  { color: '#e65100', bg: '#fff3e0',  label: 'Документы' },
+  'груз прибыл':                    { color: '#2e7d32', bg: '#e8f5e9',  label: 'Прибыл' },
+  'получатель уведомлен':           { color: '#7b1fa2', bg: '#f3e5f5',  label: 'Уведомлён' },
+  'раскредитован':                  { color: '#c62828', bg: '#fce4ec',  label: 'Раскредитован' },
 };
+
+function StatusBadge({ status }) {
+  const s = STATUS_MAP[status?.toLowerCase()] || { color: '#555', bg: '#f5f5f5', label: status };
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 10px',
+      borderRadius: 12,
+      fontSize: 11,
+      fontWeight: 600,
+      color: s.color,
+      background: s.bg,
+      border: `1px solid ${s.color}22`,
+      whiteSpace: 'nowrap',
+    }}>
+      {s.label}
+    </span>
+  );
+}
+
+function WaybillCard({ wb, isExpanded, onToggle }) {
+  return (
+    <div className="wb-card">
+      {/* ── Шапка карточки ── */}
+      <div className="wb-card-header" onClick={onToggle}>
+        <div className="wb-card-expand">
+          {isExpanded
+            ? <ChevronDown size={16} strokeWidth={2} />
+            : <ChevronRight size={16} strokeWidth={2} />
+          }
+        </div>
+        <div className="wb-card-title">
+          <FileText size={14} style={{ color: '#64748b', flexShrink: 0 }} />
+          <span className="wb-card-number">{wb.waybill_number}</span>
+          <StatusBadge status={wb.status} />
+        </div>
+        <div className="wb-card-meta">
+          <span className="wb-card-route" title={`${wb.departure_station_name} → ${wb.destination_station_name}`}>
+            {wb.departure_station_name || '?'} → {wb.destination_station_name || '?'}
+          </span>
+          <span className="wb-card-count">
+            <Train size={12} /> {wb.wagon_count || 0} ваг.
+          </span>
+          <span className="wb-card-date">
+            {wb.updated_at ? new Date(wb.updated_at).toLocaleDateString('ru-RU') : ''}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Раскрытая часть — детали + вагоны ── */}
+      {isExpanded && (
+        <div className="wb-card-body">
+          {/* Информация по накладной */}
+          <div className="wb-card-info">
+            <div className="wb-info-item">
+              <span className="wb-info-label">Грузоотправитель</span>
+              <span className="wb-info-value">{wb.shipper_name || '—'}</span>
+            </div>
+            <div className="wb-info-item">
+              <span className="wb-info-label">Грузополучатель</span>
+              <span className="wb-info-value">{wb.consignee_name || '—'}</span>
+            </div>
+            <div className="wb-info-item">
+              <span className="wb-info-label">Ст. отправления</span>
+              <span className="wb-info-value">{wb.departure_station_name || '—'}</span>
+            </div>
+            <div className="wb-info-item">
+              <span className="wb-info-label">Ст. назначения</span>
+              <span className="wb-info-value">{wb.destination_station_name || '—'}</span>
+            </div>
+          </div>
+
+          {/* Таблица вагонов */}
+          {wb.wagons && wb.wagons.length > 0 ? (
+            <div className="wb-wagons-list">
+              <div className="wb-wagons-header">
+                <span style={{ width: 130 }}>Вагон</span>
+                <span style={{ width: 160 }}>Контейнер</span>
+                <span style={{ width: 50, textAlign: 'center' }}>КТК</span>
+                <span style={{ flex: 1 }}>Груз</span>
+                <span style={{ width: 90, textAlign: 'right' }}>Вес</span>
+                <span style={{ width: 100 }}>Владелец</span>
+                <span style={{ width: 130 }}>ЗПУ</span>
+              </div>
+              {wb.wagons.map((w, idx) => (
+                <div className="wb-wagon-row" key={w.id || idx}>
+                  <span style={{ width: 130, fontWeight: 600, color: '#1e293b' }}>
+                    <Box size={12} style={{ color: '#94a3b8', marginRight: 4 }} />
+                    {w.railway_carriage_number}
+                  </span>
+                  <span style={{ width: 160, fontFamily: 'monospace', fontSize: 12 }}>
+                    {w.container_number || '—'}
+                  </span>
+                  <span style={{ width: 50, textAlign: 'center', color: '#64748b' }}>
+                    {w.container_length || '—'}
+                  </span>
+                  <span style={{ flex: 1, color: '#475569' }}>{w.cargo_name || '—'}</span>
+                  <span style={{ width: 90, textAlign: 'right', color: '#475569' }}>
+                    {w.cargo_weight ? `${w.cargo_weight} т` : '—'}
+                  </span>
+                  <span style={{ width: 100, color: '#64748b', fontSize: 11 }}>{w.ownership || '—'}</span>
+                  <span style={{ width: 130, color: '#64748b', fontSize: 11 }}>{w.zpu_number || '—'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '8px 12px', color: '#94a3b8', fontSize: 12 }}>
+              Нет данных по вагонам
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function WaybillsPage() {
   const [waybills, setWaybills] = useState([]);
@@ -82,21 +197,14 @@ export default function WaybillsPage() {
               </button>
             ))}
           </div>
-          <div className="wb-search-block" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            <Search size={14} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            <Search size={14} style={{ color: '#94a3b8' }} />
             <input
               type="text"
               placeholder="Поиск по номеру накладной..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{
-                padding: '3px 8px',
-                fontSize: '12px',
-                border: '1px solid #d0d5dd',
-                borderRadius: 4,
-                width: 200,
-                outline: 'none',
-              }}
+              className="wb-search-input"
             />
           </div>
           <div className="h-view-meta" style={{ marginLeft: 12 }}>
@@ -105,102 +213,22 @@ export default function WaybillsPage() {
         </div>
 
         <div className="h-view-wrapper">
-          <div className="h-table-scroll">
+          <div className="wb-cards-scroll">
             {loading ? (
-              <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>Загрузка...</div>
+              <div className="wb-empty">Загрузка...</div>
             ) : waybills.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>Нет накладных</div>
+              <div className="wb-empty">Нет накладных</div>
             ) : (
-              <table className="h-wagon-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 30 }}></th>
-                    <th style={{ width: 130 }}>Накладная</th>
-                    <th style={{ width: 110 }}>Статус</th>
-                    <th>Ст. отправления</th>
-                    <th>Ст. назначения</th>
-                    <th>Грузоотправитель</th>
-                    <th>Грузополучатель</th>
-                    <th style={{ width: 50 }}>Вагонов</th>
-                    <th style={{ width: 140 }}>Обновлено</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {waybills.map(wb => (
-                    <React.Fragment key={wb.id}>
-                      <tr
-                        className="h-wagon-row"
-                        onClick={() => toggleExpand(wb.id)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <td style={{ textAlign: 'center', padding: '2px 4px' }}>
-                          {expandedIds.has(wb.id)
-                            ? <ChevronDown size={14} />
-                            : <ChevronRight size={14} />
-                          }
-                        </td>
-                        <td style={{ fontWeight: 600 }}>{wb.waybill_number}</td>
-                        <td>
-                          <span
-                            className="wb-status-badge"
-                            style={{
-                              background: STATUS_COLORS[wb.status?.toLowerCase()] || '#f5f5f5',
-                              padding: '1px 6px',
-                              borderRadius: 4,
-                              fontSize: '11px',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {wb.status}
-                          </span>
-                        </td>
-                        <td>{wb.departure_station_name}</td>
-                        <td>{wb.destination_station_name}</td>
-                        <td>{wb.shipper_name}</td>
-                        <td>{wb.consignee_name}</td>
-                        <td style={{ textAlign: 'center' }}>{wb.wagon_count}</td>
-                        <td style={{ fontSize: '11px', color: '#666' }}>
-                          {wb.updated_at ? new Date(wb.updated_at).toLocaleString('ru-RU') : '—'}
-                        </td>
-                      </tr>
-                      {expandedIds.has(wb.id) && wb.wagons && wb.wagons.length > 0 && (
-                        <tr className="wb-wagons-expanded">
-                          <td colSpan={9} style={{ padding: 0 }}>
-                            <div style={{ padding: '4px 8px 4px 40px', background: '#fafbfc' }}>
-                              <table className="h-wagon-table" style={{ margin: 0 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ width: 130 }}>№ вагона</th>
-                                    <th style={{ width: 150 }}>№ контейнера</th>
-                                    <th style={{ width: 60 }}>Длина КТК</th>
-                                    <th>Груз</th>
-                                    <th style={{ width: 100 }}>Вес груза</th>
-                                    <th style={{ width: 100 }}>Владелец</th>
-                                    <th style={{ width: 100 }}>ЗПУ</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {wb.wagons.map((w, idx) => (
-                                    <tr key={w.id || idx}>
-                                      <td style={{ fontWeight: 500 }}>{w.railway_carriage_number}</td>
-                                      <td>{w.container_number || '—'}</td>
-                                      <td style={{ textAlign: 'center' }}>{w.container_length || '—'}</td>
-                                      <td>{w.cargo_name || '—'}</td>
-                                      <td>{w.cargo_weight || '—'}</td>
-                                      <td>{w.ownership || '—'}</td>
-                                      <td>{w.zpu_number || '—'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
+              <div className="wb-cards-list">
+                {waybills.map(wb => (
+                  <WaybillCard
+                    key={wb.id}
+                    wb={wb}
+                    isExpanded={expandedIds.has(wb.id)}
+                    onToggle={() => toggleExpand(wb.id)}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </div>
