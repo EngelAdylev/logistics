@@ -11,6 +11,7 @@ from routers.auth_router import router as auth_router
 from routers.table_settings_router import router as table_settings_router
 from routers.hierarchy_router import router as hierarchy_router
 from routers.etran_router import router as etran_router
+from routers.dislocation_webhook_router import router as dislocation_webhook_router
 from schemas import CreateUserRequest, TrackingWagonTableRowOut
 from wagon_table_service import get_table_wagons
 
@@ -33,6 +34,7 @@ app.include_router(auth_router)
 app.include_router(table_settings_router)
 app.include_router(hierarchy_router)
 app.include_router(etran_router)
+app.include_router(dislocation_webhook_router)
 
 
 @app.on_event("startup")
@@ -75,6 +77,44 @@ def startup_event():
                 ("container_number10", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number10 TEXT"),
                 ("container_number11", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number11 TEXT"),
                 ("container_number12", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS container_number12 TEXT"),
+                ("number_railway_carriage_on_train_col", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_railway_carriage_on_train TEXT"),
+                # Новые поля дислокации (из пакета DATAREON)
+                ("disl_country_start_flight", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS country_start_flight TEXT"),
+                ("disl_flight_start_road", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS flight_start_road TEXT"),
+                ("disl_flight_end_date", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS flight_end_date TIMESTAMPTZ"),
+                ("disl_country_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS country_code TEXT"),
+                ("disl_destination_road_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS destination_road_code TEXT"),
+                ("disl_shipper", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS shipper TEXT"),
+                ("disl_shipper_okpo", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS shipper_okpo TEXT"),
+                ("disl_consignee", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS consignee TEXT"),
+                ("disl_consignee_okpo", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS consignee_okpo TEXT"),
+                ("disl_gng_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS gng_code TEXT"),
+                ("disl_cargo_weight", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS cargo_weight TEXT"),
+                ("disl_mileage_loaded_condition", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS mileage_loaded_condition TEXT"),
+                ("disl_empty_mileage", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS empty_mileage TEXT"),
+                ("disl_mileage_standard", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS mileage_standard TEXT"),
+                ("disl_mileage_indicator", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS mileage_indicator TEXT"),
+                ("disl_special_mark_1", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS special_mark_1 TEXT"),
+                ("disl_special_mark_2", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS special_mark_2 TEXT"),
+                ("disl_special_mark_3", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS special_mark_3 TEXT"),
+                ("disl_senders_payers_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS senders_payers_code TEXT"),
+                ("disl_code_unloaded_cargo", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS code_unloaded_cargo TEXT"),
+                ("disl_operation_cost_code", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS operation_cost_code TEXT"),
+                ("disl_park_number", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS park_number TEXT"),
+                ("disl_path_number", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS path_number TEXT"),
+                ("disl_number_of_seals", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_of_seals TEXT"),
+                ("disl_number_loaded_containers", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_loaded_containers TEXT"),
+                ("disl_number_empty_containers", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS number_empty_containers TEXT"),
+                ("disl_standard_delivery_time", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS standard_delivery_time TIMESTAMPTZ"),
+                ("disl_distance_traveled", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS distance_traveled TEXT"),
+                ("disl_total_distance", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS total_distance TEXT"),
+                ("disl_last_op_downtime_day", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS last_operation_downtime_per_day TEXT"),
+                ("disl_idle_hours", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS idle_time_last_operation_hours TEXT"),
+                ("disl_idle_minutes", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS idle_time_last_minute_operation TEXT"),
+                ("disl_dt_departure_cargo", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS date_time_departure_cargo_receiving_station TIMESTAMPTZ"),
+                ("disl_dt_arrival_dest", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS date_time_arrival_destination_station TIMESTAMPTZ"),
+                ("disl_sending_number", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS sending_number TEXT"),
+                ("disl_created_at", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ"),
                 # Иерархическая модель v2 — прямая ссылка на рейс
                 ("flight_id_col", "ALTER TABLE dislocation ADD COLUMN IF NOT EXISTS flight_id UUID"),
                 ("flight_id_idx", "CREATE INDEX IF NOT EXISTS idx_dislocation_flight_id ON dislocation(flight_id, date_time_of_operation DESC)"),
