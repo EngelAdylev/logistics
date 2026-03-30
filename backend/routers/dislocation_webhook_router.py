@@ -137,16 +137,19 @@ async def dislocation_webhook(request: Request, db: Session = Depends(get_db)):
     for rec in records:
         try:
             columns = ["_id", "created_at"]
-            values = {"_id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc)}
+            values = {"_id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc).isoformat()}
 
             for json_key, (col_name, col_type) in FIELD_MAP.items():
                 raw_val = rec.get(json_key)
                 if raw_val is None and json_key not in rec:
                     continue
-                if col_type == "dt":
-                    values[col_name] = _parse_dt(raw_val)
-                else:
-                    values[col_name] = _str(raw_val)
+                # Всё передаём как строки — PostgreSQL сам кастит в TIMESTAMPTZ
+                val = _str(raw_val)
+                if col_type == "dt" and val:
+                    # Убираем невалидные даты
+                    if val in ("null", "None", "0001-01-01T00:00:00"):
+                        val = None
+                values[col_name] = val
                 columns.append(col_name)
 
             cols_sql = ", ".join(columns)
