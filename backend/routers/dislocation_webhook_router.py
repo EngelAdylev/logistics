@@ -24,12 +24,20 @@ def dislocation_webhook_health():
 
 
 def _parse_dt(val) -> Optional[datetime]:
-    if not val:
+    if val is None:
         return None
     try:
+        if isinstance(val, datetime):
+            return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
         s = str(val).strip()
         if not s or s in ("null", "None", "0001-01-01T00:00:00"):
             return None
+        # fromisoformat обрабатывает большинство ISO-форматов включая +03:00
+        try:
+            dt = datetime.fromisoformat(s)
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except (ValueError, AttributeError):
+            pass
         for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
             try:
                 return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
@@ -146,7 +154,7 @@ async def dislocation_webhook(request: Request, db: Session = Depends(get_db)):
             db.execute(text(f"INSERT INTO dislocation ({cols_sql}) VALUES ({vals_sql})"), values)
             inserted += 1
         except Exception as e:
-            logger.error("dislocation_webhook: insert error: %s", e)
+            logger.error("dislocation_webhook: insert error: %s | wagon=%s", e, rec.get("railway_carriage_number"))
             errors += 1
 
     db.commit()
