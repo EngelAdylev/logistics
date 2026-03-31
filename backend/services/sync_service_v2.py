@@ -376,6 +376,9 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
         """))
 
         # Шаг 5. Batch UPDATE: денормализованные поля последней операции + is_active
+        # Спец-правило архивирования:
+        # если рейс стартовал со станции 648400 (Круглое Поле), станция назначения не 648400
+        # и остаточное расстояние стало 0, такой рейс сразу архивируем.
         # date_time_of_operation в dislocation — character varying, нужен явный каст
         db.execute(text("""
             UPDATE wagon_trips wt
@@ -394,6 +397,11 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 is_active             = NOT (
                     last_op.op_code = '96'
                     OR (last_op.rem <= 0 AND last_op.op_code IN ('20'))
+                    OR (
+                        TRIM(COALESCE(wt.departure_station_code, '')) = '648400'
+                        AND TRIM(COALESCE(last_op.dst_code, '')) != '648400'
+                        AND last_op.rem <= 0
+                    )
                 ),
                 updated_at            = now()
             FROM (
