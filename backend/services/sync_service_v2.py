@@ -397,6 +397,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 is_active             = NOT (
                     last_op.op_code = '96'
                     OR (last_op.rem <= 0 AND last_op.op_code IN ('20'))
+                    OR (last_op.rem <= 0 AND last_op.op_code IN ('43', '58', '81'))
                     OR (
                         TRIM(COALESCE(wt.departure_station_code, '')) = '648400'
                         AND TRIM(COALESCE(last_op.dst_code, '')) != '648400'
