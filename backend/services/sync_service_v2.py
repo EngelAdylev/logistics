@@ -25,37 +25,35 @@ logger = logging.getLogger(__name__)
 
 def _sync_trip_waybill_links(db: Session) -> int:
     """
-    Перестраивает связи wagon_trip -> etran_waybill по данным dislocation.flight_id.
-    Источник истины для связки — dislocation, но хранится она отдельно в trip_waybills.
+    Перестраивает связи wagon_trip -> etran_waybill через уже сформированные рейсы.
+    Источник истины для связи — active wagon_trip + wagon_number + etran_waybill_wagons.
+    Не опираемся на dislocation.waybill_number, потому что в живых данных там много мусорных значений.
     """
     db.execute(text("""
-        DELETE FROM trip_waybills tw
-        USING (
-            SELECT DISTINCT d.flight_id AS trip_id
-            FROM dislocation d
-            WHERE d.flight_id IS NOT NULL
-        ) affected
-        WHERE tw.wagon_trip_id = affected.trip_id
+        DELETE FROM trip_waybills
+        WHERE wagon_trip_id IN (
+            SELECT id
+            FROM wagon_trips
+            WHERE is_active = true
+        )
     """))
 
     insert_result = db.execute(text("""
         INSERT INTO trip_waybills (id, wagon_trip_id, waybill_id, created_at)
         SELECT
             gen_random_uuid(),
-            src.trip_id,
+            wt.id,
             ew.id,
             now()
-        FROM (
-            SELECT DISTINCT
-                d.flight_id AS trip_id,
-                TRIM(d.waybill_number) AS waybill_number
-            FROM dislocation d
-            WHERE d.flight_id IS NOT NULL
-              AND d.waybill_number IS NOT NULL
-              AND TRIM(d.waybill_number) != ''
-        ) src
+        FROM wagon_trips wt
+        JOIN wagons w
+            ON w.id = wt.wagon_id
+        JOIN etran_waybill_wagons eww
+            ON eww.railway_carriage_number = w.railway_carriage_number
         JOIN etran_waybills ew
-            ON ew.waybill_number = src.waybill_number
+            ON ew.id = eww.waybill_id
+        WHERE wt.is_active = true
+          AND ew.is_relevant = true
         ON CONFLICT (wagon_trip_id, waybill_id) DO NOTHING
     """))
     return insert_result.rowcount or 0
