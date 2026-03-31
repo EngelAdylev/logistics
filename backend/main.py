@@ -204,6 +204,17 @@ def startup_event():
                 ("etran_wbw_renter", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS renter TEXT"),
                 ("etran_wbw_wagon_model", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS wagon_model TEXT"),
                 ("etran_wbw_next_repair_date", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS next_repair_date TEXT"),
+                ("trip_waybills_table", """
+                    CREATE TABLE IF NOT EXISTS trip_waybills (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        wagon_trip_id UUID NOT NULL REFERENCES wagon_trips(id) ON DELETE CASCADE,
+                        waybill_id UUID NOT NULL REFERENCES etran_waybills(id) ON DELETE CASCADE,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        UNIQUE(wagon_trip_id, waybill_id)
+                    )
+                """),
+                ("trip_waybills_trip_idx", "CREATE INDEX IF NOT EXISTS idx_trip_waybills_trip ON trip_waybills(wagon_trip_id)"),
+                ("trip_waybills_waybill_idx", "CREATE INDEX IF NOT EXISTS idx_trip_waybills_waybill ON trip_waybills(waybill_id)"),
             ]:
                 try:
                     conn.execute(text(sql))

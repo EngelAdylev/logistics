@@ -22,6 +22,44 @@ from scheduler import _fetch_qualifying_rows, _parse_flight_start_date
 
 logger = logging.getLogger(__name__)
 
+
+def _sync_trip_waybill_links(db: Session) -> int:
+    """
+    Перестраивает связи wagon_trip -> etran_waybill по данным dislocation.flight_id.
+    Источник истины для связки — dislocation, но хранится она отдельно в trip_waybills.
+    """
+    db.execute(text("""
+        DELETE FROM trip_waybills tw
+        USING (
+            SELECT DISTINCT d.flight_id AS trip_id
+            FROM dislocation d
+            WHERE d.flight_id IS NOT NULL
+        ) affected
+        WHERE tw.wagon_trip_id = affected.trip_id
+    """))
+
+    insert_result = db.execute(text("""
+        INSERT INTO trip_waybills (id, wagon_trip_id, waybill_id, created_at)
+        SELECT
+            gen_random_uuid(),
+            src.trip_id,
+            ew.id,
+            now()
+        FROM (
+            SELECT DISTINCT
+                d.flight_id AS trip_id,
+                TRIM(d.waybill_number) AS waybill_number
+            FROM dislocation d
+            WHERE d.flight_id IS NOT NULL
+              AND d.waybill_number IS NOT NULL
+              AND TRIM(d.waybill_number) != ''
+        ) src
+        JOIN etran_waybills ew
+            ON ew.waybill_number = src.waybill_number
+        ON CONFLICT (wagon_trip_id, waybill_id) DO NOTHING
+    """))
+    return insert_result.rowcount or 0
+
 def _business_date(dt: datetime) -> date:
     """Дата в МСК (UTC+3) для группировки: один рейс = один вагон на один календарный день."""
     if dt.tzinfo is None:
@@ -159,6 +197,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
         "trips_updated": 0,
         "operations_inserted": 0,
         "trips_merged": 0,
+        "trip_waybills_synced": 0,
         "errors": 0,
     }
 
@@ -408,6 +447,10 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                   AND TRIM(d.waybill_number) != ''
               )
         """))
+
+        # Шаг 5c. Пересобираем связи trip -> waybill отдельно от денормализованного поля.
+        stats["trip_waybills_synced"] = _sync_trip_waybill_links(db)
+        logger.info("sync_new_model: synced %d trip-waybill links", stats["trip_waybills_synced"])
 
         # Шаг 6. Присваиваем flight_number тем рейсам, у которых его ещё нет.
         # Номера глобально уникальны по всей таблице wagon_trips (как номер документа в 1С):

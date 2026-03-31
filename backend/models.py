@@ -140,6 +140,7 @@ class WagonTrip(Base):
     wagon = relationship("Wagon", back_populates="trips")
     operations = relationship("WagonTripOperation", back_populates="trip", cascade="all, delete-orphan")
     comments = relationship("TripComment", back_populates="trip", cascade="all, delete-orphan")
+    trip_waybills = relationship("TripWaybill", back_populates="trip", cascade="all, delete-orphan")
 
 
 class WagonTripOperation(Base):
@@ -244,6 +245,7 @@ class EtranWaybill(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     wagons = relationship("EtranWaybillWagon", back_populates="waybill", cascade="all, delete-orphan")
+    trip_waybills = relationship("TripWaybill", back_populates="waybill", cascade="all, delete-orphan")
 
 
 class EtranWaybillWagon(Base):
@@ -277,6 +279,20 @@ class EtranWaybillWagon(Base):
     __table_args__ = (UniqueConstraint("waybill_id", "railway_carriage_number", "container_number", name="_etran_wb_wagon_uc"),)
 
     waybill = relationship("EtranWaybill", back_populates="wagons")
+
+
+class TripWaybill(Base):
+    """Связь накладной с рейсом вагона. Один рейс может иметь несколько накладных."""
+    __tablename__ = "trip_waybills"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    wagon_trip_id = Column(UUID(as_uuid=True), ForeignKey("wagon_trips.id", ondelete="CASCADE"), nullable=False, index=True)
+    waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("wagon_trip_id", "waybill_id", name="_trip_waybill_uc"),)
+
+    trip = relationship("WagonTrip", back_populates="trip_waybills")
+    waybill = relationship("EtranWaybill", back_populates="trip_waybills")
 
 
 class EtranIncomingLog(Base):

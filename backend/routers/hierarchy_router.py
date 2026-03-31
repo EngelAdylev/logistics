@@ -74,6 +74,7 @@ def list_wagons(
     active_trip_counts: dict = {}
     wagon_last_comment: dict = {}
     wagon_last_trip: dict = {}
+    wagon_last_trip_waybills: dict = {}
     if wagon_ids:
         for row in db.query(WagonTrip.wagon_id, func.count()).filter(
             WagonTrip.wagon_id.in_(wagon_ids)
@@ -98,6 +99,7 @@ def list_wagons(
         # Батч-загрузка полей последнего активного рейса
         for row in db.execute(text("""
             SELECT DISTINCT ON (wagon_id)
+                id,
                 wagon_id,
                 last_station_name,
                 last_operation_name,
@@ -113,8 +115,21 @@ def list_wagons(
             WHERE wagon_id = ANY(:ids)
               AND is_active = true
             ORDER BY wagon_id, last_operation_date DESC NULLS LAST
-        """), {"ids": wagon_ids}):
-            wagon_last_trip[row[0]] = row
+        """), {"ids": wagon_ids}).mappings():
+            wagon_last_trip[row["wagon_id"]] = row
+
+        trip_ids = [row["id"] for row in wagon_last_trip.values() if row.get("id")]
+        if trip_ids:
+            for row in db.execute(text("""
+                SELECT
+                    tw.wagon_trip_id,
+                    STRING_AGG(DISTINCT ew.waybill_number, ', ' ORDER BY ew.waybill_number) AS waybill_numbers
+                FROM trip_waybills tw
+                JOIN etran_waybills ew ON ew.id = tw.waybill_id
+                WHERE tw.wagon_trip_id = ANY(:trip_ids)
+                GROUP BY tw.wagon_trip_id
+            """), {"trip_ids": trip_ids}).mappings():
+                wagon_last_trip_waybills[row["wagon_trip_id"]] = row["waybill_numbers"]
 
     items = []
     for w in wagons:
@@ -127,16 +142,16 @@ def list_wagons(
                 trip_count=trip_counts.get(w.id, 0),
                 active_trip_count=active_trip_counts.get(w.id, 0),
                 last_comment_text=wagon_last_comment.get(w.id),
-                number_train=last_trip[4] if last_trip else None,
-                train_index=last_trip[5] if last_trip else None,
-                number_railway_carriage_on_train=last_trip[6] if last_trip else None,
-                last_station_name=last_trip[1] if last_trip else None,
-                last_operation_name=last_trip[2] if last_trip else None,
-                last_operation_date=last_trip[3] if last_trip else None,
-                departure_station_name=last_trip[7] if last_trip else None,
-                destination_station_name=last_trip[8] if last_trip else None,
-                waybill_number=last_trip[9] if last_trip else None,
-                remaining_distance=last_trip[10] if last_trip else None,
+                number_train=last_trip["number_train"] if last_trip else None,
+                train_index=last_trip["train_index"] if last_trip else None,
+                number_railway_carriage_on_train=last_trip["number_railway_carriage_on_train"] if last_trip else None,
+                last_station_name=last_trip["last_station_name"] if last_trip else None,
+                last_operation_name=last_trip["last_operation_name"] if last_trip else None,
+                last_operation_date=last_trip["last_operation_date"] if last_trip else None,
+                departure_station_name=last_trip["departure_station_name"] if last_trip else None,
+                destination_station_name=last_trip["destination_station_name"] if last_trip else None,
+                waybill_number=wagon_last_trip_waybills.get(last_trip["id"]) if last_trip else None,
+                remaining_distance=last_trip["remaining_distance"] if last_trip else None,
                 created_at=w.created_at,
                 updated_at=w.updated_at,
             )

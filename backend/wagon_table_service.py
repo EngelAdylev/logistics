@@ -26,7 +26,6 @@ QUERY_FULL = text("""
             rs.name as station_name,
             rs_dest.name as destination_station_name,
             rs_dep.name as departure_station_name,
-            d.waybill_number,
             d.type_railway_carriage,
             d.owners_administration,
             d.remaining_mileage::text,
@@ -56,13 +55,28 @@ QUERY_FULL = text("""
         LEFT JOIN railway_station rs_dest ON d.destination_station_code::text = rs_dest.esr_code
         LEFT JOIN railway_station rs_dep ON d.flight_start_station_code::text = rs_dep.esr_code
     ),
-    LastWaybill AS (
-        SELECT DISTINCT ON (railway_carriage_number)
-            railway_carriage_number,
-            waybill_number
-        FROM dislocation
-        WHERE waybill_number IS NOT NULL AND TRIM(waybill_number) != ''
-        ORDER BY railway_carriage_number, date_time_of_operation::timestamptz DESC NULLS LAST
+    TripKeys AS (
+        SELECT
+            wt.id as wagon_trip_id,
+            w.railway_carriage_number,
+            ((wt.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date AS bus_date,
+            TRIM(COALESCE(wt.departure_station_code, '')) AS dep_st,
+            ROW_NUMBER() OVER (
+                PARTITION BY w.railway_carriage_number,
+                    ((wt.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date,
+                    TRIM(COALESCE(wt.departure_station_code, ''))
+                ORDER BY wt.flight_start_date ASC, wt.id ASC
+            ) as rn
+        FROM wagon_trips wt
+        JOIN wagons w ON w.id = wt.wagon_id
+    ),
+    TripWaybillAgg AS (
+        SELECT
+            tw.wagon_trip_id,
+            STRING_AGG(DISTINCT ew.waybill_number, ', ' ORDER BY ew.waybill_number) AS waybill_number
+        FROM trip_waybills tw
+        JOIN etran_waybills ew ON ew.id = tw.waybill_id
+        GROUP BY tw.wagon_trip_id
     ),
     LastComments AS (
         SELECT
@@ -84,7 +98,7 @@ QUERY_FULL = text("""
         lc.last_comment_text,
         le.remaining_distance,
         le.remaining_mileage,
-        COALESCE(le.waybill_number, lw.waybill_number) AS waybill_number,
+        twa.waybill_number,
         le.type_railway_carriage,
         le.owners_administration,
         le.container_numbers,
@@ -94,13 +108,17 @@ QUERY_FULL = text("""
     LEFT JOIN (
         SELECT railway_carriage_number, bus_date, dep_st,
             number_train, train_index, station_name,
-            destination_station_name, departure_station_name, waybill_number, type_railway_carriage,
+            destination_station_name, departure_station_name, type_railway_carriage,
             owners_administration, remaining_mileage, remaining_distance, container_numbers
         FROM LastEvents WHERE rn = 1
     ) le ON tw.railway_carriage_number = le.railway_carriage_number
         AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = le.bus_date
         AND TRIM(COALESCE(tw.departure_station_code, '')) = le.dep_st
-    LEFT JOIN LastWaybill lw ON tw.railway_carriage_number = lw.railway_carriage_number
+    LEFT JOIN TripKeys tk ON tw.railway_carriage_number = tk.railway_carriage_number
+        AND ((tw.flight_start_date AT TIME ZONE 'UTC') + INTERVAL '3 hours')::date = tk.bus_date
+        AND TRIM(COALESCE(tw.departure_station_code, '')) = tk.dep_st
+        AND tk.rn = 1
+    LEFT JOIN TripWaybillAgg twa ON tk.wagon_trip_id = twa.wagon_trip_id
     LEFT JOIN (
         SELECT tracking_id, last_comment_text
         FROM LastComments WHERE rn = 1
