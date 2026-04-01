@@ -312,9 +312,7 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         db.flush()
 
         wagon_data = _extract_wagons(waybill)
-        for w in wagon_data:
-            wg = models.EtranWaybillWagon(waybill_id=new_wb.id, **w)
-            db.add(wg)
+        _upsert_wagons(db, new_wb.id, wagon_data)
 
         for sibling in siblings:
             sibling.status = status
@@ -405,14 +403,18 @@ async def etran_webhook(request: Request, db: Session = Depends(get_db)):
 
 def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
     """Upsert вагонов: ключ = (railway_carriage_number, container_number)."""
+    deduped_wagons: dict[tuple[str, str], dict] = {}
+    for wagon in wagon_data:
+        key = (wagon["railway_carriage_number"], wagon.get("container_number", ""))
+        deduped_wagons[key] = wagon
+
     existing_wagons = db.query(models.EtranWaybillWagon).filter(
         models.EtranWaybillWagon.waybill_id == waybill_id
     ).all()
     existing_map = {(w.railway_carriage_number, w.container_number or ""): w for w in existing_wagons}
 
     incoming_keys = set()
-    for w in wagon_data:
-        key = (w["railway_carriage_number"], w.get("container_number", ""))
+    for key, w in deduped_wagons.items():
         incoming_keys.add(key)
         if key in existing_map:
             ew = existing_map[key]
@@ -421,6 +423,7 @@ def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
         else:
             new_wg = models.EtranWaybillWagon(waybill_id=waybill_id, **w)
             db.add(new_wg)
+            existing_map[key] = new_wg
 
     for key, ew in existing_map.items():
         if key not in incoming_keys:
