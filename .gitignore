@@ -38,3 +38,4 @@ postgres_data/
 
 # Git keepouts
 *.sqlite3
+.aider*

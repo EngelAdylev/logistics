@@ -8,6 +8,7 @@ POST /etran/webhook — принимает JSON-пакет из DATAREON, дед
     {"GU27": [{"waybill": {...}}], "MessageID": "..."}
 """
 import logging
+import traceback
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -62,6 +63,15 @@ def _parse_datetime(val) -> Optional[datetime]:
 def _s(val) -> str:
     """Безопасно превращает значение в stripped строку."""
     return (str(val) if val is not None else "").strip()
+
+
+def _clean_date_str(val) -> Optional[str]:
+    """Для Text-полей дат: возвращает строку или None.
+    '0001-01-01...' — нулевая дата в системе ЭТРАН, трактуем как None."""
+    s = _s(val)
+    if not s or s.startswith("0001-01-01"):
+        return None
+    return s
 
 
 def _extract_waybill_data(waybill: dict) -> dict:
@@ -134,7 +144,7 @@ def _extract_wagons(waybill: dict) -> list[dict]:
             "renter": _s(carr.get("renter")),
             "weight_net": _s(carr.get("railway_weight_net")),
             "wagon_model": _s(carr.get("model")),
-            "next_repair_date": _s(carr.get("date_of_next_repair")),
+            "next_repair_date": _clean_date_str(carr.get("date_of_next_repair")),
             "cargo_name": _s(first_product.get("etsng_name") or first_product.get("cargo_full_name")),
             "cargo_weight": _s(first_product.get("cargo_weight")),
         }
@@ -291,6 +301,27 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
                     waybill_number, status, len(wagon_data))
 
 
+def _safe_process(db: Session, waybill: dict, message_id: str,
+                  payload: dict, stats: dict):
+    """Обёртка над _process_one_waybill с перехватом ошибок.
+    При исключении пишем в аудит-лог и продолжаем — не роняем весь запрос."""
+    wb_number = _s(waybill.get("waybill_number"))
+    try:
+        _process_one_waybill(db, waybill, message_id, payload, stats)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("etran_webhook: error processing waybill=%s: %s", wb_number, exc)
+        try:
+            _log_incoming(db, message_id, wb_number,
+                          _s(waybill.get("waybill_status")), "error",
+                          f"{type(exc).__name__}: {exc}\n{tb}", payload)
+            db.flush()
+        except Exception:
+            pass  # логирование не должно порождать новую ошибку
+        stats.setdefault("errors", 0)
+        stats["errors"] += 1
+
+
 @router.post("/webhook")
 @router.post("/webhook/")
 async def etran_webhook(request: Request, db: Session = Depends(get_db)):
@@ -315,7 +346,7 @@ async def etran_webhook(request: Request, db: Session = Depends(get_db)):
         # Новый формат: {"waybill": {...}}
         waybill = payload["waybill"]
         message_id = _extract_message_id(payload, waybill)
-        _process_one_waybill(db, waybill, message_id, payload, stats)
+        _safe_process(db, waybill, message_id, payload, stats)
 
     elif "GU27" in payload:
         # Старый формат: {"GU27": [...], "MessageID": "..."}
@@ -323,13 +354,13 @@ async def etran_webhook(request: Request, db: Session = Depends(get_db)):
         gu27_list = payload.get("GU27") or []
         for item in gu27_list:
             waybill = item.get("waybill") or item
-            _process_one_waybill(db, waybill, message_id, payload, stats)
+            _safe_process(db, waybill, message_id, payload, stats)
 
     else:
         # Неизвестный формат — пробуем как голый waybill
         message_id = _extract_message_id(payload, payload)
         if payload.get("waybill_number"):
-            _process_one_waybill(db, payload, message_id, payload, stats)
+            _safe_process(db, payload, message_id, payload, stats)
         else:
             logger.warning("etran_webhook: unknown payload format, keys=%s", list(payload.keys()))
             _log_incoming(db, "", "", "", "error",
