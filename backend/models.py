@@ -206,10 +206,11 @@ class CommentHistory(Base):
 # ─── ЭТРАН: накладные ГУ-27 ──────────────────────────────────────────────────
 
 class EtranWaybill(Base):
-    """Накладная ЭТРАН. Одна запись = один waybill_number (дедупликация)."""
+    """Накладная ЭТРАН. Один waybill_number может повторяться в нескольких пакетах."""
     __tablename__ = "etran_waybills"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    waybill_number = Column(Text, unique=True, nullable=False, index=True)
+    waybill_number = Column(Text, nullable=False, index=True)
+    source_message_id = Column(Text, index=True)
     waybill_identifier = Column(Text)
     status = Column(Text, nullable=False)              # "В пути", "Груз прибыл", ...
     status_updated_at = Column(DateTime(timezone=True))
@@ -243,6 +244,8 @@ class EtranWaybill(Base):
     is_relevant = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("waybill_number", "source_message_id", name="_etran_waybill_message_uc"),)
 
     wagons = relationship("EtranWaybillWagon", back_populates="waybill", cascade="all, delete-orphan")
     trip_waybills = relationship("TripWaybill", back_populates="waybill", cascade="all, delete-orphan")

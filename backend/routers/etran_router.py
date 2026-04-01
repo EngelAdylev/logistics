@@ -204,7 +204,7 @@ def _log_incoming(db: Session, message_id: str, waybill_number: str,
 
 def _process_one_waybill(db: Session, waybill: dict, message_id: str,
                          payload: dict, stats: dict):
-    """Обрабатывает одну накладную: дедупликация, upsert."""
+    """Обрабатывает одну накладную: upsert пакета + синхронизация статуса по номеру."""
     data = _extract_waybill_data(waybill)
     waybill_number = data["waybill_number"]
     status = data["status"]
@@ -222,23 +222,31 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         stats["filtered_out"] += 1
         return
 
-    # Ищем существующую накладную
-    existing = db.query(models.EtranWaybill).filter(
+    existing = None
+    if message_id:
+        existing = db.query(models.EtranWaybill).filter(
+            models.EtranWaybill.waybill_number == waybill_number,
+            models.EtranWaybill.source_message_id == message_id,
+        ).first()
+
+    if not existing and data.get("waybill_identifier"):
+        existing = db.query(models.EtranWaybill).filter(
+            models.EtranWaybill.waybill_number == waybill_number,
+            models.EtranWaybill.waybill_identifier == data["waybill_identifier"],
+        ).order_by(models.EtranWaybill.updated_at.desc()).first()
+
+    siblings = db.query(models.EtranWaybill).filter(
         models.EtranWaybill.waybill_number == waybill_number
-    ).first()
+    ).all()
 
     if existing:
-        if existing.status == status:
-            _log_incoming(db, message_id, waybill_number, status, "skipped",
-                          f"Статус не изменился: '{status}'")
-            stats["skipped"] += 1
-            return
-
         old_status = existing.status
         existing.status = status
         existing.status_updated_at = datetime.now(timezone.utc)
         existing.raw_data = payload
         existing.updated_at = datetime.now(timezone.utc)
+        if message_id:
+            existing.source_message_id = message_id
 
         for field in ["departure_station_code", "departure_station_name",
                       "destination_station_code", "destination_station_name",
@@ -252,14 +260,28 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         wagon_data = _extract_wagons(waybill)
         _upsert_wagons(db, existing.id, wagon_data)
 
-        _log_incoming(db, message_id, waybill_number, status, "updated",
-                      f"Статус: '{old_status}' → '{status}'")
-        stats["updated"] += 1
-        logger.info("etran_webhook: updated waybill=%s status='%s'->'%s'",
-                    waybill_number, old_status, status)
+        # Статус должен оставаться единым по одному номеру накладной,
+        # даже если один номер хранится в нескольких пакетах.
+        for sibling in siblings:
+            if sibling.id == existing.id:
+                continue
+            sibling.status = status
+            sibling.status_updated_at = datetime.now(timezone.utc)
+            sibling.updated_at = datetime.now(timezone.utc)
+
+        action = "updated" if old_status != status else "refreshed"
+        _log_incoming(db, message_id, waybill_number, status, action,
+                      f"Статус: '{old_status}' → '{status}', вагонов в пакете: {len(wagon_data)}")
+        if old_status != status:
+            stats["updated"] += 1
+        else:
+            stats["skipped"] += 1
+        logger.info("etran_webhook: %s waybill=%s message_id=%s wagons=%d",
+                    action, waybill_number, message_id or "", len(wagon_data))
     else:
         new_wb = models.EtranWaybill(
             waybill_number=data["waybill_number"],
+            source_message_id=message_id or None,
             waybill_identifier=data["waybill_identifier"],
             status=data["status"],
             status_updated_at=datetime.now(timezone.utc),
@@ -293,6 +315,11 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         for w in wagon_data:
             wg = models.EtranWaybillWagon(waybill_id=new_wb.id, **w)
             db.add(wg)
+
+        for sibling in siblings:
+            sibling.status = status
+            sibling.status_updated_at = datetime.now(timezone.utc)
+            sibling.updated_at = datetime.now(timezone.utc)
 
         _log_incoming(db, message_id, waybill_number, status, "created",
                       f"Новая накладная, вагонов: {len(wagon_data)}")

@@ -133,7 +133,8 @@ def startup_event():
                 ("etran_waybills_table", """
                     CREATE TABLE IF NOT EXISTS etran_waybills (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        waybill_number TEXT NOT NULL UNIQUE,
+                        waybill_number TEXT NOT NULL,
+                        source_message_id TEXT,
                         waybill_identifier TEXT,
                         status TEXT NOT NULL,
                         status_updated_at TIMESTAMPTZ,
@@ -161,6 +162,11 @@ def startup_event():
                     )
                 """),
                 ("etran_waybills_idx", "CREATE INDEX IF NOT EXISTS idx_etran_wb_number ON etran_waybills(waybill_number)"),
+                ("etran_waybills_message_id", "ALTER TABLE etran_waybills ADD COLUMN IF NOT EXISTS source_message_id TEXT"),
+                ("etran_waybills_message_idx", "CREATE INDEX IF NOT EXISTS idx_etran_wb_message_id ON etran_waybills(source_message_id)"),
+                ("etran_waybills_drop_old_uc", "ALTER TABLE etran_waybills DROP CONSTRAINT IF EXISTS etran_waybills_waybill_number_key"),
+                ("etran_waybills_drop_old_uc2", "ALTER TABLE etran_waybills DROP CONSTRAINT IF EXISTS _etran_waybill_message_uc"),
+                ("etran_waybills_new_uc", "ALTER TABLE etran_waybills ADD CONSTRAINT _etran_waybill_message_uc UNIQUE (waybill_number, source_message_id)"),
                 ("etran_waybill_wagons_table", """
                     CREATE TABLE IF NOT EXISTS etran_waybill_wagons (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
