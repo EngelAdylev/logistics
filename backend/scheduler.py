@@ -543,7 +543,7 @@ def check_and_create_route_snapshots():
                     'waybill_number',     ew.waybill_number,
                     'consignee_name',     ew.consignee_name,
                     'shipper_name',       ew.shipper_name,
-                    'cargo_name',         ew.cargo_name,
+                    'cargo_name',         eww.cargo_name,
                     'remaining_distance', wt.remaining_distance,
                     'last_station_name',  wt.last_station_name,
                     'last_operation_name', wt.last_operation_name
@@ -552,6 +552,9 @@ def check_and_create_route_snapshots():
             JOIN wagons w ON w.id = wt.wagon_id
             LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
             LEFT JOIN etran_waybills ew ON ew.id = tw.waybill_id
+            LEFT JOIN etran_waybill_wagons eww
+                   ON eww.waybill_id = ew.id
+                  AND eww.railway_carriage_number = w.railway_carriage_number
             WHERE wt.is_active = true
               AND wt.number_train IS NOT NULL
               AND TRIM(COALESCE(wt.destination_station_code, '')) = '648400'
