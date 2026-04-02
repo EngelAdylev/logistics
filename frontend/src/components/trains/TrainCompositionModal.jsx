@@ -321,7 +321,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                         gap: 6,
                       }}
                     >
-                      <span style={{ fontWeight: 600 }}>{o.client_name || 'Без клиента'}</span>
+                      <span style={{ fontWeight: 600 }}>№{o.order_number}{o.client_name ? ` · ${o.client_name}` : ''}</span>
                       <OrderBadge status={o.status} />
                       <span style={{ color: '#64748b' }}>{o.items?.length || 0} ваг.</span>
                       {!isClosed && (
@@ -410,10 +410,8 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                           {/* Статус заявки */}
                           <td>
                             {order ? (
-                              <span style={{ fontSize: 12 }}>
-                                {order.client_name
-                                  ? <strong>{order.client_name}</strong>
-                                  : <span className="text-muted">без клиента</span>}
+                              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                                №{order.order_number}
                               </span>
                             ) : (
                               <span className="text-muted" style={{ fontSize: 12 }}>

@@ -70,6 +70,7 @@ def _item_out(item: models.ReceivingOrderItem) -> dict:
 def _order_out(o: models.ReceivingOrder) -> dict:
     return {
         "id": str(o.id),
+        "order_number": o.order_number,
         "route_id": str(o.route_id),
         "client_name": o.client_name or "",
         "contract_number": o.contract_number or "",

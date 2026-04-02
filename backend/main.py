@@ -237,9 +237,13 @@ def startup_event():
                         updated_at TIMESTAMPTZ DEFAULT now()
                     )
                 """),
+                # Sequence для номеров заявок (глобальный, начинается с 1)
+                ("receiving_orders_number_seq",
+                 "CREATE SEQUENCE IF NOT EXISTS receiving_orders_number_seq START 1"),
                 ("receiving_orders", """
                     CREATE TABLE IF NOT EXISTS receiving_orders (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        order_number INTEGER NOT NULL DEFAULT nextval('receiving_orders_number_seq'),
                         route_id UUID NOT NULL REFERENCES railway_routes(id) ON DELETE CASCADE,
                         client_name TEXT,
                         contract_number TEXT,
@@ -251,6 +255,21 @@ def startup_event():
                     )
                 """),
                 ("receiving_orders_route_idx", "CREATE INDEX IF NOT EXISTS idx_receiving_orders_route ON receiving_orders(route_id)"),
+                # Добавить order_number для уже существующих таблиц
+                ("receiving_orders_add_order_number", """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='receiving_orders' AND column_name='order_number'
+                        ) THEN
+                            CREATE SEQUENCE IF NOT EXISTS receiving_orders_number_seq START 1;
+                            ALTER TABLE receiving_orders
+                                ADD COLUMN order_number INTEGER NOT NULL
+                                DEFAULT nextval('receiving_orders_number_seq');
+                        END IF;
+                    END$$
+                """),
                 # Удалить устаревший waybill_id если остался от старой схемы
                 ("drop_receiving_orders_waybill_id",
                  "ALTER TABLE receiving_orders DROP COLUMN IF EXISTS waybill_id"),
