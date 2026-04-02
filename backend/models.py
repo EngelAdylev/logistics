@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, Integer, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -331,7 +331,8 @@ class ReceivingOrder(Base):
     """Заявка на получение груза. Одна заявка = несколько вагонов/накладных (строки в items)."""
     __tablename__ = "receiving_orders"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    order_number = Column(Integer, nullable=False)   # глобальный порядковый номер, из sequence
+    order_number = Column(Integer, nullable=False,
+                          server_default=text("nextval('receiving_orders_number_seq')"))  # автоинкремент
     route_id = Column(UUID(as_uuid=True), ForeignKey("railway_routes.id", ondelete="CASCADE"), nullable=False, index=True)
     client_name = Column(Text)
     contract_number = Column(Text)
