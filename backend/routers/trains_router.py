@@ -106,13 +106,14 @@ def snapshot_debug(
                     'wagon_number',       w.railway_carriage_number,
                     'waybill_id',         tw.waybill_id::text,
                     'waybill_number',     ew.waybill_number,
+                    'container_number',   eww.container_number,
                     'consignee_name',     ew.consignee_name,
                     'shipper_name',       ew.shipper_name,
                     'cargo_name',         eww.cargo_name,
                     'remaining_distance', wt.remaining_distance,
                     'last_station_name',  wt.last_station_name,
                     'last_operation_name', wt.last_operation_name
-                ) ORDER BY w.railway_carriage_number) AS snapshot
+                ) ORDER BY w.railway_carriage_number, ew.waybill_number) AS snapshot
             FROM wagon_trips wt
             JOIN wagons w ON w.id = wt.wagon_id
             LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
@@ -237,21 +238,24 @@ def get_route(
     # Если snapshot ещё не сформирован — берём живые данные
     snapshot = route.snapshot_data or _build_snapshot(db, route.train_number)
 
-    # Строим карту: wagon_number → {order, item_id}
-    wagon_order_map: dict = {}
+    # Строим карту: ключ → {order, item_id}
+    # Ключ = waybill_id (str) если есть, иначе "wagon:<wagon_number>" (вагон без накладной)
+    item_order_map: dict = {}
     for order in route.orders:
         for item in order.items:
-            wagon_order_map[item.wagon_number] = {
+            key = str(item.waybill_id) if item.waybill_id else f"wagon:{item.wagon_number}"
+            item_order_map[key] = {
                 "order": _order_out(order),
                 "item_id": str(item.id),
             }
 
     wagons_out = []
-    for item in snapshot:
-        wn = item.get("wagon_number")
-        assigned = wagon_order_map.get(wn)
+    for snap in snapshot:
+        wb_id = snap.get("waybill_id")
+        key = str(wb_id) if wb_id else f"wagon:{snap.get('wagon_number')}"
+        assigned = item_order_map.get(key)
         wagons_out.append({
-            **item,
+            **snap,
             "order": assigned["order"] if assigned else None,
             "item_id": assigned["item_id"] if assigned else None,
         })
@@ -268,7 +272,10 @@ def get_route(
 
 
 def _build_snapshot(db: Session, train_number: str) -> list:
-    """Строит снимок состава поезда из живых данных wagon_trips."""
+    """Строит снимок состава поезда из живых данных wagon_trips.
+    Одна строка = один (вагон + накладная). Вагон с 2 накладными → 2 строки.
+    Вагон без накладной → 1 строка с waybill_id=null.
+    """
     rows = db.execute(text("""
         SELECT
             wt.id           AS trip_id,
@@ -280,7 +287,8 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             ew.waybill_number,
             ew.consignee_name,
             ew.shipper_name,
-            eww.cargo_name
+            eww.cargo_name,
+            eww.container_number
         FROM wagon_trips wt
         JOIN wagons w ON w.id = wt.wagon_id
         LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
@@ -291,7 +299,7 @@ def _build_snapshot(db: Session, train_number: str) -> list:
         WHERE wt.is_active = true
           AND wt.number_train = :tn
           AND TRIM(COALESCE(wt.destination_station_code, '')) = :dst
-        ORDER BY w.railway_carriage_number
+        ORDER BY w.railway_carriage_number, ew.waybill_number
     """), {"tn": train_number, "dst": DELIVERY_STATION}).mappings().all()
 
     return [
@@ -303,6 +311,7 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             "last_operation_name": r["last_operation_name"] or "",
             "waybill_id": str(r["waybill_id"]) if r["waybill_id"] else None,
             "waybill_number": r["waybill_number"] or "",
+            "container_number": r["container_number"] or "",
             "consignee_name": r["consignee_name"] or "",
             "shipper_name": r["shipper_name"] or "",
             "cargo_name": r["cargo_name"] or "",
@@ -326,19 +335,30 @@ def create_order(
         raise HTTPException(status_code=404, detail="Маршрут не найден")
 
     if not body.items:
-        raise HTTPException(status_code=422, detail="Необходимо выбрать хотя бы один вагон")
+        raise HTTPException(status_code=422, detail="Необходимо выбрать хотя бы одну накладную")
 
-    # Проверить что ни один вагон уже не занят другой заявкой
-    wagon_numbers = [i.wagon_number for i in body.items]
-    conflict = db.query(models.ReceivingOrderItem).filter(
-        models.ReceivingOrderItem.route_id == route_id,
-        models.ReceivingOrderItem.wagon_number.in_(wagon_numbers),
-    ).first()
-    if conflict:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Вагон {conflict.wagon_number} уже входит в другую заявку"
-        )
+    # Проверить что ни одна накладная (или вагон без накладной) уже не занята другой заявкой
+    waybill_ids = [i.waybill_id for i in body.items if i.waybill_id]
+    no_wb_wagons = [i.wagon_number for i in body.items if not i.waybill_id]
+
+    if waybill_ids:
+        conflict = db.query(models.ReceivingOrderItem).filter(
+            models.ReceivingOrderItem.route_id == route_id,
+            models.ReceivingOrderItem.waybill_id.in_(waybill_ids),
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=409,
+                detail=f"Накладная уже входит в другую заявку")
+
+    if no_wb_wagons:
+        conflict = db.query(models.ReceivingOrderItem).filter(
+            models.ReceivingOrderItem.route_id == route_id,
+            models.ReceivingOrderItem.waybill_id.is_(None),
+            models.ReceivingOrderItem.wagon_number.in_(no_wb_wagons),
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=409,
+                detail=f"Вагон {conflict.wagon_number} (без накладной) уже в другой заявке")
 
     order = models.ReceivingOrder(
         route_id=route_id,
@@ -423,15 +443,20 @@ def add_order_item(
     if not order:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
 
-    conflict = db.query(models.ReceivingOrderItem).filter(
-        models.ReceivingOrderItem.route_id == order.route_id,
-        models.ReceivingOrderItem.wagon_number == body.wagon_number,
-    ).first()
+    if body.waybill_id:
+        conflict = db.query(models.ReceivingOrderItem).filter(
+            models.ReceivingOrderItem.route_id == order.route_id,
+            models.ReceivingOrderItem.waybill_id == body.waybill_id,
+        ).first()
+    else:
+        conflict = db.query(models.ReceivingOrderItem).filter(
+            models.ReceivingOrderItem.route_id == order.route_id,
+            models.ReceivingOrderItem.waybill_id.is_(None),
+            models.ReceivingOrderItem.wagon_number == body.wagon_number,
+        ).first()
     if conflict:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Вагон {body.wagon_number} уже входит в другую заявку"
-        )
+        raise HTTPException(status_code=409,
+            detail="Эта накладная/вагон уже входит в другую заявку")
 
     item = models.ReceivingOrderItem(
         order_id=order_id,

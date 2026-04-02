@@ -260,12 +260,26 @@ def startup_event():
                         order_id UUID NOT NULL REFERENCES receiving_orders(id) ON DELETE CASCADE,
                         route_id UUID NOT NULL REFERENCES railway_routes(id) ON DELETE CASCADE,
                         waybill_id UUID REFERENCES etran_waybills(id) ON DELETE SET NULL,
-                        wagon_number TEXT NOT NULL,
-                        CONSTRAINT _order_item_route_wagon_uc UNIQUE (route_id, wagon_number)
+                        wagon_number TEXT NOT NULL
                     )
                 """),
                 ("receiving_order_items_order_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_order ON receiving_order_items(order_id)"),
                 ("receiving_order_items_route_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_route ON receiving_order_items(route_id)"),
+                # Старый уникальный индекс по wagon_number — удалить если остался
+                ("drop_old_wagon_uc",
+                 "ALTER TABLE receiving_order_items DROP CONSTRAINT IF EXISTS _order_item_route_wagon_uc"),
+                # Partial unique: одна накладная — одна заявка в маршруте
+                ("order_item_waybill_uidx", """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_waybill
+                    ON receiving_order_items(route_id, waybill_id)
+                    WHERE waybill_id IS NOT NULL
+                """),
+                # Partial unique: вагон без накладной — только в одной заявке
+                ("order_item_no_waybill_uidx", """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_no_waybill
+                    ON receiving_order_items(route_id, wagon_number)
+                    WHERE waybill_id IS NULL
+                """),
             ]:
                 try:
                     conn.execute(text(sql))

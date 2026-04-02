@@ -345,7 +345,10 @@ class ReceivingOrder(Base):
 
 
 class ReceivingOrderItem(Base):
-    """Строка заявки — один вагон + накладная (необязательно). Вагон может быть только в одной заявке маршрута."""
+    """Строка заявки — одна накладная (+ вагон для отображения).
+    Уникальность: одна накладная может быть только в одной заявке маршрута.
+    Вагон без накладной тоже может быть только в одной заявке.
+    """
     __tablename__ = "receiving_order_items"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_id = Column(UUID(as_uuid=True), ForeignKey("receiving_orders.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -353,7 +356,10 @@ class ReceivingOrderItem(Base):
     waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="SET NULL"), nullable=True, index=True)
     wagon_number = Column(Text, nullable=False)
 
-    __table_args__ = (UniqueConstraint("route_id", "wagon_number", name="_order_item_route_wagon_uc"),)
+    # Partial unique indexes (созданы вручную в миграции):
+    # UNIQUE(route_id, waybill_id)  WHERE waybill_id IS NOT NULL
+    # UNIQUE(route_id, wagon_number) WHERE waybill_id IS NULL
+    __table_args__ = ()
 
     order = relationship("ReceivingOrder", back_populates="items")
     waybill = relationship("EtranWaybill")

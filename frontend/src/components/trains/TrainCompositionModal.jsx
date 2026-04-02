@@ -39,16 +39,21 @@ function OrderFormPanel({ routeId, existing, selectedWagons, allWagons, onSaved,
 
   const handleSave = async () => {
     if (isCreate && selectedWagons.size === 0) {
-      setErr('Выберите хотя бы один вагон');
+      setErr('Выберите хотя бы одну накладную');
       return;
     }
     setSaving(true);
     setErr('');
     try {
       if (isCreate) {
-        const items = [...selectedWagons].map((wn) => {
-          const wagon = allWagons.find((w) => w.wagon_number === wn);
-          return { wagon_number: wn, waybill_id: wagon?.waybill_id || null };
+        // selectedWagons содержит ключи: waybill_id или "wagon:NUMBER"
+        const items = [...selectedWagons].map((key) => {
+          if (key.startsWith('wagon:')) {
+            const wn = key.slice(6);
+            return { wagon_number: wn, waybill_id: null };
+          }
+          const wagon = allWagons.find((w) => w.waybill_id === key);
+          return { wagon_number: wagon?.wagon_number || '', waybill_id: key };
         });
         await api.post(`/v2/routes/${routeId}/orders`, { ...form, items });
       } else {
@@ -184,11 +189,15 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
     }
   };
 
-  const toggleWagon = (wagonNumber) => {
+  // Ключ строки для чекбокса: waybill_id если есть, иначе "wagon:NUMBER"
+  const rowKey = (wagon) =>
+    wagon.waybill_id ? wagon.waybill_id : `wagon:${wagon.wagon_number}`;
+
+  const toggleWagon = (key) => {
     setSelectedWagons((prev) => {
       const next = new Set(prev);
-      if (next.has(wagonNumber)) next.delete(wagonNumber);
-      else next.add(wagonNumber);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -339,6 +348,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                       {mode === 'create' && <th style={{ width: 32 }}></th>}
                       <th>Вагон</th>
                       <th>Накладная</th>
+                      <th>Контейнер</th>
                       <th>Отправитель</th>
                       <th>Получатель</th>
                       <th>Груз</th>
@@ -352,18 +362,19 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                       const order = wagon.order;
                       const orderId = order?.id;
                       const rowBg = orderId ? orderColors[orderId] : undefined;
-                      const isSelected = selectedWagons.has(wagon.wagon_number);
+                      const key = rowKey(wagon);
+                      const isSelected = selectedWagons.has(key);
                       const canSelect = mode === 'create' && !order;
 
                       return (
                         <tr
-                          key={wagon.wagon_number}
+                          key={key}
                           className={order ? 'wagon-row wagon-row--has-order' : 'wagon-row'}
                           style={{
                             background: isSelected ? '#bfdbfe' : rowBg,
                             cursor: canSelect ? 'pointer' : 'default',
                           }}
-                          onClick={canSelect ? () => toggleWagon(wagon.wagon_number) : undefined}
+                          onClick={canSelect ? () => toggleWagon(key) : undefined}
                         >
                           {/* Чекбокс (только в режиме создания) */}
                           {mode === 'create' && (
@@ -372,7 +383,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
-                                  onChange={() => toggleWagon(wagon.wagon_number)}
+                                  onChange={() => toggleWagon(key)}
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               )}
@@ -381,6 +392,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
 
                           <td><strong>{wagon.wagon_number}</strong></td>
                           <td>{wagon.waybill_number || <span className="text-muted">—</span>}</td>
+                          <td>{wagon.container_number || <span className="text-muted">—</span>}</td>
                           <td className="cell-truncate" title={wagon.shipper_name}>{wagon.shipper_name || '—'}</td>
                           <td className="cell-truncate" title={wagon.consignee_name}>{wagon.consignee_name || '—'}</td>
                           <td className="cell-truncate" title={wagon.cargo_name}>{wagon.cargo_name || '—'}</td>
@@ -425,7 +437,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
 
               {mode === 'create' && (
                 <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-                  Отметьте вагоны которые войдут в заявку, затем заполните форму выше и нажмите «Создать заявку».
+                  Отметьте строки (накладные) которые войдут в заявку. Один вагон с двумя накладными = две строки, можно включить в разные заявки.
                 </div>
               )}
             </>
