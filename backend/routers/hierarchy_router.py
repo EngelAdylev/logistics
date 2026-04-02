@@ -689,6 +689,13 @@ def sync_v2(
                 status_code=500,
                 detail={"error": "SYNC_V2_FAILED", "message": f"Sync failed with {result.errors} error(s)"},
             )
+        # Создаём болванки маршрутов для поездов ≤ 150 км
+        try:
+            from scheduler import check_and_create_route_snapshots
+            check_and_create_route_snapshots()
+            _logger.info("sync_v2: route snapshots checked/created")
+        except Exception as snap_err:
+            _logger.warning("sync_v2: route snapshots failed (non-critical): %s", snap_err)
         return result
     except HTTPException:
         raise
