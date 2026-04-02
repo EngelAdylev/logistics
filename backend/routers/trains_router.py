@@ -253,8 +253,8 @@ def get_route(
                 for r in container_rows
             }
             snapshot = [
-                {**s, "container_number": container_map.get(
-                    (s.get("waybill_id"), s.get("wagon_number")), s.get("container_number", "")
+                {**s, "container_number": s.get("container_number") or container_map.get(
+                    (s.get("waybill_id"), s.get("wagon_number")), ""
                 )}
                 for s in snapshot
             ]
