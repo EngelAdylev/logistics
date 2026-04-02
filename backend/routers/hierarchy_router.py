@@ -96,8 +96,11 @@ def list_wagons(
         ):
             wagon_last_comment[row[0]] = row[1]
 
-        # Батч-загрузка полей последнего активного рейса
-        for row in db.execute(text("""
+        # Батч-загрузка полей последнего рейса.
+        # Для активных вагонов — только активные рейсы.
+        # Для архивных — любой последний рейс (все рейсы неактивны).
+        active_filter = "AND is_active = true" if is_active else ""
+        for row in db.execute(text(f"""
             SELECT DISTINCT ON (wagon_id)
                 id,
                 wagon_id,
@@ -113,7 +116,7 @@ def list_wagons(
                 remaining_distance
             FROM wagon_trips
             WHERE wagon_id = ANY(:ids)
-              AND is_active = true
+              {active_filter}
             ORDER BY wagon_id, last_operation_date DESC NULLS LAST
         """), {"ids": wagon_ids}).mappings():
             wagon_last_trip[row["wagon_id"]] = row

@@ -396,6 +396,8 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 remaining_distance    = last_op.remaining_distance_raw,
                 is_active             = NOT (
                     last_op.op_code = '96'
+                    OR last_op.op_code = '85'
+                    OR TRIM(COALESCE(last_op.stn_code, '')) = '628406'
                     OR (last_op.rem <= 0 AND last_op.op_code IN ('20'))
                     OR (last_op.rem <= 0 AND last_op.op_code IN ('43', '58', '81'))
                     OR (
@@ -410,6 +412,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                     d.flight_id,
                     d.date_time_of_operation           AS dto,
                     d.operation_code_railway_carriage  AS op_code,
+                    d.station_code_performing_operation AS stn_code,
                     d.destination_station_code         AS dst_code,
                     COALESCE(CAST(NULLIF(TRIM(COALESCE(d.remaining_distance::text,'')), '') AS NUMERIC), 1) AS rem,
                     d.number_train,
