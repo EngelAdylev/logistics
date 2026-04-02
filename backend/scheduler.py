@@ -267,15 +267,17 @@ def sync_dislocation_to_tracking():
             return db.query(TrackingWagon).filter(TrackingWagon.id == tid).first() if tid else None
 
         for row in results:
+            flight_dt = _parse_flight_start_date(row.get("flight_start_date"))
+            if flight_dt is None:
+                # NULL дата — просто пропуск, не ошибка
+                continue
+            bus_d = _business_date(flight_dt)
+            dep_st = _norm_station(row.get("flight_start_station_code"))
+            if (str(row["railway_carriage_number"]), bus_d, dep_st) in to_archive_keys:
+                continue
+            # Savepoint на каждую строку: ошибка одного вагона не убивает всю транзакцию
+            sp = db.begin_nested()
             try:
-                flight_dt = _parse_flight_start_date(row.get("flight_start_date"))
-                if flight_dt is None:
-                    stats["errors"] += 1
-                    continue
-                bus_d = _business_date(flight_dt)
-                dep_st = _norm_station(row.get("flight_start_station_code"))
-                if (str(row["railway_carriage_number"]), bus_d, dep_st) in to_archive_keys:
-                    continue
                 track_entry = _find_track(str(row["railway_carriage_number"]), bus_d, dep_st)
                 row_dt_raw = row.get("date_time_of_operation")
                 row_dt = _parse_flight_start_date(row_dt_raw)
@@ -300,7 +302,9 @@ def sync_dislocation_to_tracking():
                     stats["updated"] += 1
                 else:
                     track_entry.is_active = True
+                sp.commit()
             except Exception as e:
+                sp.rollback()
                 stats["errors"] += 1
                 logger.warning(
                     "sync_dislocation_to_tracking: row error wagon=%s flight_start=%s: %s",
