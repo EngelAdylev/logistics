@@ -265,16 +265,28 @@ def startup_event():
                 """),
                 ("receiving_order_items_order_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_order ON receiving_order_items(order_id)"),
                 ("receiving_order_items_route_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_route ON receiving_order_items(route_id)"),
-                # Старый уникальный индекс по wagon_number — удалить если остался
+                # Добавить container_number если колонки ещё нет
+                ("order_items_add_container",
+                 "ALTER TABLE receiving_order_items ADD COLUMN IF NOT EXISTS container_number TEXT"),
+                # Удалить старые уникальные индексы/ограничения если остались
                 ("drop_old_wagon_uc",
                  "ALTER TABLE receiving_order_items DROP CONSTRAINT IF EXISTS _order_item_route_wagon_uc"),
-                # Partial unique: одна накладная — одна заявка в маршруте
-                ("order_item_waybill_uidx", """
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_waybill
-                    ON receiving_order_items(route_id, waybill_id)
-                    WHERE waybill_id IS NOT NULL
+                ("drop_old_waybill_uidx",
+                 "DROP INDEX IF EXISTS idx_order_item_waybill"),
+                ("drop_old_no_waybill_uidx",
+                 "DROP INDEX IF EXISTS idx_order_item_no_waybill"),
+                # Накладная + КТК (порожний вагон: накладная без КТК)
+                ("order_item_waybill_container_uidx", """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_wb_container
+                    ON receiving_order_items(route_id, waybill_id, container_number)
+                    WHERE waybill_id IS NOT NULL AND container_number IS NOT NULL
                 """),
-                # Partial unique: вагон без накладной — только в одной заявке
+                ("order_item_waybill_no_container_uidx", """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_wb_no_container
+                    ON receiving_order_items(route_id, waybill_id)
+                    WHERE waybill_id IS NOT NULL AND container_number IS NULL
+                """),
+                # Вагон без накладной
                 ("order_item_no_waybill_uidx", """
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_no_waybill
                     ON receiving_order_items(route_id, wagon_number)

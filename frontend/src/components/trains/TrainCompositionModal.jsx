@@ -2,6 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Download, Plus, Pencil, Trash2, Minus } from 'lucide-react';
 import { api } from '../../api';
 
+// Ключ строки: накладная+КТК / накладная без КТК / вагон без накладной
+function rowKey(wagon) {
+  if (wagon.waybill_id) {
+    return `wb:${wagon.waybill_id}:ktk:${wagon.container_number || ''}`;
+  }
+  return `wagon:${wagon.wagon_number}`;
+}
+
 const STATUS_LABELS = {
   new: 'Новая',
   in_progress: 'В работе',
@@ -46,14 +54,19 @@ function OrderFormPanel({ routeId, existing, selectedWagons, allWagons, onSaved,
     setErr('');
     try {
       if (isCreate) {
-        // selectedWagons содержит ключи: waybill_id или "wagon:NUMBER"
+        // selectedWagons содержит ключи вида "wb:{wid}:ktk:{ktk}" или "wagon:NUMBER"
         const items = [...selectedWagons].map((key) => {
           if (key.startsWith('wagon:')) {
             const wn = key.slice(6);
-            return { wagon_number: wn, waybill_id: null };
+            return { wagon_number: wn, waybill_id: null, container_number: null };
           }
-          const wagon = allWagons.find((w) => w.waybill_id === key);
-          return { wagon_number: wagon?.wagon_number || '', waybill_id: key };
+          // ключ "wb:{waybill_id}:ktk:{container}"
+          const wagon = allWagons.find((w) => rowKey(w) === key);
+          return {
+            wagon_number: wagon?.wagon_number || '',
+            waybill_id: wagon?.waybill_id || null,
+            container_number: wagon?.container_number || null,
+          };
         });
         await api.post(`/v2/routes/${routeId}/orders`, { ...form, items });
       } else {
@@ -188,10 +201,6 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
       alert('Ошибка удаления строки');
     }
   };
-
-  // Ключ строки для чекбокса: waybill_id если есть, иначе "wagon:NUMBER"
-  const rowKey = (wagon) =>
-    wagon.waybill_id ? wagon.waybill_id : `wagon:${wagon.wagon_number}`;
 
   const toggleWagon = (key) => {
     setSelectedWagons((prev) => {

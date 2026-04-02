@@ -345,9 +345,10 @@ class ReceivingOrder(Base):
 
 
 class ReceivingOrderItem(Base):
-    """Строка заявки — одна накладная (+ вагон для отображения).
-    Уникальность: одна накладная может быть только в одной заявке маршрута.
-    Вагон без накладной тоже может быть только в одной заявке.
+    """Строка заявки — один КТК (накладная + вагон + контейнер).
+    Если вагон порожний (нет КТК) — ключ: накладная + вагон.
+    Если нет накладной — ключ: вагон.
+    Partial unique indexes создаются в миграции.
     """
     __tablename__ = "receiving_order_items"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -355,10 +356,12 @@ class ReceivingOrderItem(Base):
     route_id = Column(UUID(as_uuid=True), ForeignKey("railway_routes.id", ondelete="CASCADE"), nullable=False, index=True)
     waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="SET NULL"), nullable=True, index=True)
     wagon_number = Column(Text, nullable=False)
+    container_number = Column(Text, nullable=True)   # None = порожний вагон
 
     # Partial unique indexes (созданы вручную в миграции):
-    # UNIQUE(route_id, waybill_id)  WHERE waybill_id IS NOT NULL
-    # UNIQUE(route_id, wagon_number) WHERE waybill_id IS NULL
+    # UNIQUE(route_id, waybill_id, container_number) WHERE waybill_id IS NOT NULL AND container_number IS NOT NULL
+    # UNIQUE(route_id, waybill_id)                   WHERE waybill_id IS NOT NULL AND container_number IS NULL
+    # UNIQUE(route_id, wagon_number)                  WHERE waybill_id IS NULL
     __table_args__ = ()
 
     order = relationship("ReceivingOrder", back_populates="items")

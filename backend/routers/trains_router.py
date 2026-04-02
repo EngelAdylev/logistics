@@ -36,6 +36,7 @@ DELIVERY_STATION = "648400"
 class OrderItemInput(BaseModel):
     wagon_number: str
     waybill_id: Optional[UUID] = None
+    container_number: Optional[str] = None
 
 
 class OrderCreate(BaseModel):
@@ -62,6 +63,7 @@ def _item_out(item: models.ReceivingOrderItem) -> dict:
         "wagon_number": item.wagon_number,
         "waybill_id": str(item.waybill_id) if item.waybill_id else None,
         "waybill_number": item.waybill.waybill_number if item.waybill else None,
+        "container_number": item.container_number or "",
     }
 
 
@@ -260,11 +262,22 @@ def get_route(
             ]
 
     # Строим карту: ключ → {order, item_id}
-    # Ключ = waybill_id (str) если есть, иначе "wagon:<wagon_number>" (вагон без накладной)
+    # Ключ = "wb:{waybill_id}:ktk:{container}" если есть накладная+КТК
+    #         "wb:{waybill_id}:"                если накладная без КТК (порожний)
+    #         "wagon:{wagon_number}"            если нет накладной
+    def _item_key(waybill_id, container_number, wagon_number):
+        if waybill_id:
+            return f"wb:{waybill_id}:ktk:{container_number or ''}"
+        return f"wagon:{wagon_number}"
+
     item_order_map: dict = {}
     for order in route.orders:
         for item in order.items:
-            key = str(item.waybill_id) if item.waybill_id else f"wagon:{item.wagon_number}"
+            key = _item_key(
+                str(item.waybill_id) if item.waybill_id else None,
+                item.container_number,
+                item.wagon_number,
+            )
             item_order_map[key] = {
                 "order": _order_out(order),
                 "item_id": str(item.id),
@@ -273,7 +286,7 @@ def get_route(
     wagons_out = []
     for snap in snapshot:
         wb_id = snap.get("waybill_id")
-        key = str(wb_id) if wb_id else f"wagon:{snap.get('wagon_number')}"
+        key = _item_key(wb_id, snap.get("container_number"), snap.get("wagon_number"))
         assigned = item_order_map.get(key)
         wagons_out.append({
             **snap,
@@ -358,28 +371,28 @@ def create_order(
     if not body.items:
         raise HTTPException(status_code=422, detail="Необходимо выбрать хотя бы одну накладную")
 
-    # Проверить что ни одна накладная (или вагон без накладной) уже не занята другой заявкой
-    waybill_ids = [i.waybill_id for i in body.items if i.waybill_id]
-    no_wb_wagons = [i.wagon_number for i in body.items if not i.waybill_id]
-
-    if waybill_ids:
-        conflict = db.query(models.ReceivingOrderItem).filter(
-            models.ReceivingOrderItem.route_id == route_id,
-            models.ReceivingOrderItem.waybill_id.in_(waybill_ids),
-        ).first()
-        if conflict:
-            raise HTTPException(status_code=409,
-                detail=f"Накладная уже входит в другую заявку")
-
-    if no_wb_wagons:
-        conflict = db.query(models.ReceivingOrderItem).filter(
-            models.ReceivingOrderItem.route_id == route_id,
-            models.ReceivingOrderItem.waybill_id.is_(None),
-            models.ReceivingOrderItem.wagon_number.in_(no_wb_wagons),
-        ).first()
-        if conflict:
-            raise HTTPException(status_code=409,
-                detail=f"Вагон {conflict.wagon_number} (без накладной) уже в другой заявке")
+    # Проверить что ни одна строка уже не занята другой заявкой
+    for it in body.items:
+        if it.waybill_id:
+            q = db.query(models.ReceivingOrderItem).filter(
+                models.ReceivingOrderItem.route_id == route_id,
+                models.ReceivingOrderItem.waybill_id == it.waybill_id,
+            )
+            if it.container_number:
+                q = q.filter(models.ReceivingOrderItem.container_number == it.container_number)
+            else:
+                q = q.filter(models.ReceivingOrderItem.container_number.is_(None))
+            if q.first():
+                raise HTTPException(status_code=409,
+                    detail="Эта накладная/КТК уже входит в другую заявку")
+        else:
+            if db.query(models.ReceivingOrderItem).filter(
+                models.ReceivingOrderItem.route_id == route_id,
+                models.ReceivingOrderItem.waybill_id.is_(None),
+                models.ReceivingOrderItem.wagon_number == it.wagon_number,
+            ).first():
+                raise HTTPException(status_code=409,
+                    detail=f"Вагон {it.wagon_number} (без накладной) уже в другой заявке")
 
     order = models.ReceivingOrder(
         route_id=route_id,
@@ -398,6 +411,7 @@ def create_order(
             route_id=route_id,
             waybill_id=it.waybill_id,
             wagon_number=it.wagon_number,
+            container_number=it.container_number or None,
         ))
 
     db.commit()
@@ -465,10 +479,15 @@ def add_order_item(
         raise HTTPException(status_code=404, detail="Заявка не найдена")
 
     if body.waybill_id:
-        conflict = db.query(models.ReceivingOrderItem).filter(
+        q = db.query(models.ReceivingOrderItem).filter(
             models.ReceivingOrderItem.route_id == order.route_id,
             models.ReceivingOrderItem.waybill_id == body.waybill_id,
-        ).first()
+        )
+        if body.container_number:
+            q = q.filter(models.ReceivingOrderItem.container_number == body.container_number)
+        else:
+            q = q.filter(models.ReceivingOrderItem.container_number.is_(None))
+        conflict = q.first()
     else:
         conflict = db.query(models.ReceivingOrderItem).filter(
             models.ReceivingOrderItem.route_id == order.route_id,
@@ -477,13 +496,14 @@ def add_order_item(
         ).first()
     if conflict:
         raise HTTPException(status_code=409,
-            detail="Эта накладная/вагон уже входит в другую заявку")
+            detail="Эта накладная/КТК уже входит в другую заявку")
 
     item = models.ReceivingOrderItem(
         order_id=order_id,
         route_id=order.route_id,
         waybill_id=body.waybill_id,
         wagon_number=body.wagon_number,
+        container_number=body.container_number or None,
     )
     db.add(item)
     db.commit()
