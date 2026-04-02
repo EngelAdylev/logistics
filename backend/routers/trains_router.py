@@ -61,6 +61,92 @@ def _order_out(o: models.ReceivingOrder) -> dict:
     }
 
 
+# ─── POST /v2/routes/snapshot-debug ──────────────────────────────────────────
+
+@router.post("/routes/snapshot-debug")
+def snapshot_debug(
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """
+    Диагностика: показывает какие поезда готовы к созданию болванки
+    и пытается их создать. Возвращает подробный результат/ошибку.
+    """
+    import traceback
+    try:
+        rows = db.execute(text("""
+            SELECT
+                wt.number_train,
+                wt.train_index,
+                MIN(
+                    CASE WHEN wt.remaining_distance ~ '^[0-9]+$'
+                    THEN wt.remaining_distance::int ELSE NULL END
+                ) AS min_km,
+                json_agg(json_build_object(
+                    'trip_id',            wt.id::text,
+                    'wagon_number',       w.railway_carriage_number,
+                    'waybill_id',         tw.waybill_id::text,
+                    'waybill_number',     ew.waybill_number,
+                    'consignee_name',     ew.consignee_name,
+                    'shipper_name',       ew.shipper_name,
+                    'cargo_name',         ew.cargo_name,
+                    'remaining_distance', wt.remaining_distance,
+                    'last_station_name',  wt.last_station_name,
+                    'last_operation_name', wt.last_operation_name
+                ) ORDER BY w.railway_carriage_number) AS snapshot
+            FROM wagon_trips wt
+            JOIN wagons w ON w.id = wt.wagon_id
+            LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
+            LEFT JOIN etran_waybills ew ON ew.id = tw.waybill_id
+            WHERE wt.is_active = true
+              AND wt.number_train IS NOT NULL
+              AND TRIM(COALESCE(wt.destination_station_code, '')) = :dst
+            GROUP BY wt.number_train, wt.train_index
+            HAVING MIN(
+                CASE WHEN wt.remaining_distance ~ '^[0-9]+$'
+                THEN wt.remaining_distance::int ELSE NULL END
+            ) <= 150
+        """), {"dst": DELIVERY_STATION}).mappings().all()
+
+        candidates = [{"train_number": r["number_train"], "min_km": r["min_km"]} for r in rows]
+        created = []
+        skipped = []
+
+        for row in rows:
+            existing = db.query(models.RailwayRoute).filter_by(
+                train_number=row["number_train"]
+            ).first()
+            if existing:
+                skipped.append(row["number_train"])
+            else:
+                route = models.RailwayRoute(
+                    train_number=row["number_train"],
+                    train_index=row["train_index"],
+                    snapshot_data=row["snapshot"],
+                    status="open",
+                )
+                db.add(route)
+                created.append(row["number_train"])
+
+        if created:
+            db.commit()
+
+        return {
+            "candidates": candidates,
+            "created": created,
+            "skipped": skipped,
+            "error": None,
+        }
+    except Exception as e:
+        db.rollback()
+        return {
+            "candidates": [],
+            "created": [],
+            "skipped": [],
+            "error": traceback.format_exc(),
+        }
+
+
 # ─── GET /v2/trains ────────────────────────────────────────────────────────────
 
 @router.get("/trains")
