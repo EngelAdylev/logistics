@@ -241,7 +241,6 @@ def startup_event():
                     CREATE TABLE IF NOT EXISTS receiving_orders (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                         route_id UUID NOT NULL REFERENCES railway_routes(id) ON DELETE CASCADE,
-                        waybill_id UUID REFERENCES etran_waybills(id) ON DELETE SET NULL,
                         client_name TEXT,
                         contract_number TEXT,
                         status TEXT DEFAULT 'new',
@@ -252,6 +251,21 @@ def startup_event():
                     )
                 """),
                 ("receiving_orders_route_idx", "CREATE INDEX IF NOT EXISTS idx_receiving_orders_route ON receiving_orders(route_id)"),
+                # Удалить устаревший waybill_id если остался от старой схемы
+                ("drop_receiving_orders_waybill_id",
+                 "ALTER TABLE receiving_orders DROP COLUMN IF EXISTS waybill_id"),
+                ("receiving_order_items", """
+                    CREATE TABLE IF NOT EXISTS receiving_order_items (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        order_id UUID NOT NULL REFERENCES receiving_orders(id) ON DELETE CASCADE,
+                        route_id UUID NOT NULL REFERENCES railway_routes(id) ON DELETE CASCADE,
+                        waybill_id UUID REFERENCES etran_waybills(id) ON DELETE SET NULL,
+                        wagon_number TEXT NOT NULL,
+                        CONSTRAINT _order_item_route_wagon_uc UNIQUE (route_id, wagon_number)
+                    )
+                """),
+                ("receiving_order_items_order_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_order ON receiving_order_items(order_id)"),
+                ("receiving_order_items_route_idx", "CREATE INDEX IF NOT EXISTS idx_order_items_route ON receiving_order_items(route_id)"),
             ]:
                 try:
                     conn.execute(text(sql))

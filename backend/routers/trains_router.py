@@ -2,15 +2,18 @@
 Роутер «Поезда» — только для поставки (destination_station_code = 648400).
 
 Эндпоинты:
-  GET  /v2/trains                    — список активных поездов
-  GET  /v2/routes/{route_id}         — маршрут + состав + заявки
-  POST /v2/routes/{route_id}/orders  — создать заявку
-  PATCH /v2/orders/{order_id}        — обновить заявку
-  DELETE /v2/orders/{order_id}       — удалить заявку
-  GET  /v2/routes/{route_id}/export  — JSON для 1С
+  POST /v2/routes/snapshot-debug       — диагностика создания болванок
+  GET  /v2/trains                      — список активных поездов
+  GET  /v2/routes/{route_id}           — маршрут + состав + заявки
+  POST /v2/routes/{route_id}/orders    — создать заявку (с несколькими вагонами)
+  PATCH /v2/orders/{order_id}          — обновить шапку заявки
+  DELETE /v2/orders/{order_id}         — удалить заявку целиком
+  POST /v2/orders/{order_id}/items     — добавить вагон в существующую заявку
+  DELETE /v2/order-items/{item_id}     — убрать вагон из заявки
+  GET  /v2/routes/{route_id}/export    — JSON для 1С
 """
 import logging
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,12 +33,17 @@ DELIVERY_STATION = "648400"
 
 # ─── Pydantic schemas ──────────────────────────────────────────────────────────
 
+class OrderItemInput(BaseModel):
+    wagon_number: str
+    waybill_id: Optional[UUID] = None
+
+
 class OrderCreate(BaseModel):
-    waybill_id: UUID
     client_name: Optional[str] = None
     contract_number: Optional[str] = None
     status: Optional[str] = "new"
     comment: Optional[str] = None
+    items: List[OrderItemInput] = []
 
 
 class OrderUpdate(BaseModel):
@@ -45,12 +53,22 @@ class OrderUpdate(BaseModel):
     comment: Optional[str] = None
 
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _item_out(item: models.ReceivingOrderItem) -> dict:
+    return {
+        "id": str(item.id),
+        "order_id": str(item.order_id),
+        "wagon_number": item.wagon_number,
+        "waybill_id": str(item.waybill_id) if item.waybill_id else None,
+        "waybill_number": item.waybill.waybill_number if item.waybill else None,
+    }
+
+
 def _order_out(o: models.ReceivingOrder) -> dict:
     return {
         "id": str(o.id),
         "route_id": str(o.route_id),
-        "waybill_id": str(o.waybill_id) if o.waybill_id else None,
-        "waybill_number": o.waybill.waybill_number if o.waybill else None,
         "client_name": o.client_name or "",
         "contract_number": o.contract_number or "",
         "status": o.status or "new",
@@ -58,6 +76,7 @@ def _order_out(o: models.ReceivingOrder) -> dict:
         "created_by": o.created_by or "",
         "created_at": o.created_at.isoformat() if o.created_at else None,
         "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+        "items": [_item_out(i) for i in o.items],
     }
 
 
@@ -210,7 +229,7 @@ def get_route(
     db: Session = Depends(get_db),
     _user: models.User = Depends(get_current_user),
 ):
-    """Маршрут: снимок состава + список уже созданных заявок."""
+    """Маршрут: снимок состава + список заявок с вложенными строками."""
     route = db.query(models.RailwayRoute).filter(models.RailwayRoute.id == route_id).first()
     if not route:
         raise HTTPException(status_code=404, detail="Маршрут не найден")
@@ -218,14 +237,23 @@ def get_route(
     # Если snapshot ещё не сформирован — берём живые данные
     snapshot = route.snapshot_data or _build_snapshot(db, route.train_number)
 
-    orders_by_waybill = {str(o.waybill_id): _order_out(o) for o in route.orders if o.waybill_id}
+    # Строим карту: wagon_number → {order, item_id}
+    wagon_order_map: dict = {}
+    for order in route.orders:
+        for item in order.items:
+            wagon_order_map[item.wagon_number] = {
+                "order": _order_out(order),
+                "item_id": str(item.id),
+            }
 
     wagons_out = []
     for item in snapshot:
-        wb_id = item.get("waybill_id")
+        wn = item.get("wagon_number")
+        assigned = wagon_order_map.get(wn)
         wagons_out.append({
             **item,
-            "order": orders_by_waybill.get(str(wb_id)) if wb_id else None,
+            "order": assigned["order"] if assigned else None,
+            "item_id": assigned["item_id"] if assigned else None,
         })
 
     return {
@@ -292,21 +320,28 @@ def create_order(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
+    """Создать заявку с набором вагонов (items)."""
     route = db.query(models.RailwayRoute).filter(models.RailwayRoute.id == route_id).first()
     if not route:
         raise HTTPException(status_code=404, detail="Маршрут не найден")
 
-    # Один заказ на накладную в рамках маршрута
-    existing = db.query(models.ReceivingOrder).filter(
-        models.ReceivingOrder.route_id == route_id,
-        models.ReceivingOrder.waybill_id == body.waybill_id,
+    if not body.items:
+        raise HTTPException(status_code=422, detail="Необходимо выбрать хотя бы один вагон")
+
+    # Проверить что ни один вагон уже не занят другой заявкой
+    wagon_numbers = [i.wagon_number for i in body.items]
+    conflict = db.query(models.ReceivingOrderItem).filter(
+        models.ReceivingOrderItem.route_id == route_id,
+        models.ReceivingOrderItem.wagon_number.in_(wagon_numbers),
     ).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Заявка для этой накладной уже существует")
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Вагон {conflict.wagon_number} уже входит в другую заявку"
+        )
 
     order = models.ReceivingOrder(
         route_id=route_id,
-        waybill_id=body.waybill_id,
         client_name=body.client_name,
         contract_number=body.contract_number,
         status=body.status or "new",
@@ -314,6 +349,16 @@ def create_order(
         created_by=user.login,
     )
     db.add(order)
+    db.flush()  # получаем order.id
+
+    for it in body.items:
+        db.add(models.ReceivingOrderItem(
+            order_id=order.id,
+            route_id=route_id,
+            waybill_id=it.waybill_id,
+            wagon_number=it.wagon_number,
+        ))
+
     db.commit()
     db.refresh(order)
     return _order_out(order)
@@ -328,6 +373,7 @@ def update_order(
     db: Session = Depends(get_db),
     _user: models.User = Depends(get_current_user),
 ):
+    """Обновить шапку заявки (клиент, договор, статус, комментарий)."""
     order = db.query(models.ReceivingOrder).filter(models.ReceivingOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
@@ -354,10 +400,64 @@ def delete_order(
     db: Session = Depends(get_db),
     _user: models.User = Depends(get_current_user),
 ):
+    """Удалить заявку целиком (все строки каскадно)."""
     order = db.query(models.ReceivingOrder).filter(models.ReceivingOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
     db.delete(order)
+    db.commit()
+    return {"ok": True}
+
+
+# ─── POST /v2/orders/{order_id}/items ────────────────────────────────────────
+
+@router.post("/orders/{order_id}/items")
+def add_order_item(
+    order_id: UUID,
+    body: OrderItemInput,
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Добавить вагон в существующую заявку."""
+    order = db.query(models.ReceivingOrder).filter(models.ReceivingOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+
+    conflict = db.query(models.ReceivingOrderItem).filter(
+        models.ReceivingOrderItem.route_id == order.route_id,
+        models.ReceivingOrderItem.wagon_number == body.wagon_number,
+    ).first()
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Вагон {body.wagon_number} уже входит в другую заявку"
+        )
+
+    item = models.ReceivingOrderItem(
+        order_id=order_id,
+        route_id=order.route_id,
+        waybill_id=body.waybill_id,
+        wagon_number=body.wagon_number,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _item_out(item)
+
+
+# ─── DELETE /v2/order-items/{item_id} ────────────────────────────────────────
+
+@router.delete("/order-items/{item_id}")
+def delete_order_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Убрать вагон из заявки (удалить строку)."""
+    item = db.query(models.ReceivingOrderItem).filter(models.ReceivingOrderItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Строка заявки не найдена")
+    db.delete(item)
     db.commit()
     return {"ok": True}
 
@@ -383,18 +483,24 @@ def export_route(
         "orders": [],
     }
     for o in route.orders:
-        wb = o.waybill
-        export["orders"].append({
+        order_data = {
             "order_id": str(o.id),
-            "waybill_number": wb.waybill_number if wb else "",
             "client_name": o.client_name or "",
             "contract_number": o.contract_number or "",
             "status": o.status or "new",
             "comment": o.comment or "",
-            "consignee_name": wb.consignee_name if wb else "",
-            "shipper_name": wb.shipper_name if wb else "",
-            "cargo_name": wb.cargo_name if wb else "",
-        })
+            "wagons": [],
+        }
+        for item in o.items:
+            wb = item.waybill
+            order_data["wagons"].append({
+                "wagon_number": item.wagon_number,
+                "waybill_id": str(item.waybill_id) if item.waybill_id else None,
+                "waybill_number": wb.waybill_number if wb else "",
+                "consignee_name": wb.consignee_name if wb else "",
+                "shipper_name": wb.shipper_name if wb else "",
+            })
+        export["orders"].append(order_data)
 
     # Помечаем маршрут закрытым после экспорта
     route.status = "closed"

@@ -328,11 +328,10 @@ class RailwayRoute(Base):
 
 
 class ReceivingOrder(Base):
-    """Заявка на получение груза — создаётся оператором по накладной из состава поезда."""
+    """Заявка на получение груза. Одна заявка = несколько вагонов/накладных (строки в items)."""
     __tablename__ = "receiving_orders"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     route_id = Column(UUID(as_uuid=True), ForeignKey("railway_routes.id", ondelete="CASCADE"), nullable=False, index=True)
-    waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="SET NULL"), nullable=True, index=True)
     client_name = Column(Text)
     contract_number = Column(Text)
     status = Column(Text, default='new')   # new / in_progress / done
@@ -342,4 +341,19 @@ class ReceivingOrder(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     route = relationship("RailwayRoute", back_populates="orders")
+    items = relationship("ReceivingOrderItem", back_populates="order", cascade="all, delete-orphan")
+
+
+class ReceivingOrderItem(Base):
+    """Строка заявки — один вагон + накладная (необязательно). Вагон может быть только в одной заявке маршрута."""
+    __tablename__ = "receiving_order_items"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("receiving_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    route_id = Column(UUID(as_uuid=True), ForeignKey("railway_routes.id", ondelete="CASCADE"), nullable=False, index=True)
+    waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="SET NULL"), nullable=True, index=True)
+    wagon_number = Column(Text, nullable=False)
+
+    __table_args__ = (UniqueConstraint("route_id", "wagon_number", name="_order_item_route_wagon_uc"),)
+
+    order = relationship("ReceivingOrder", back_populates="items")
     waybill = relationship("EtranWaybill")
