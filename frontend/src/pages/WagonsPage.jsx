@@ -11,7 +11,7 @@ export default function WagonsPage() {
   // Вкладки: Дислокация | Рейсы
   const [tab, setTab] = useState('hierarchy');
 
-  const [hierarchyFilter, setHierarchyFilter] = useState('active');
+  const [hierarchyFilter, setHierarchyFilter] = useState('delivery');
   const [tripsFilter, setTripsFilter] = useState('active');
 
   const [syncLoading, setSyncLoading] = useState(false);
@@ -114,10 +114,17 @@ export default function WagonsPage() {
             <div className="h-filter-toggle">
               <button
                 type="button"
-                className={hierarchyFilter === 'active' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-                onClick={() => setHierarchyFilter('active')}
+                className={hierarchyFilter === 'delivery' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setHierarchyFilter('delivery')}
               >
-                Активные
+                Поставка
+              </button>
+              <button
+                type="button"
+                className={hierarchyFilter === 'dispatch' ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
+                onClick={() => setHierarchyFilter('dispatch')}
+              >
+                Отправка
               </button>
               <button
                 type="button"
@@ -143,9 +150,10 @@ export default function WagonsPage() {
           </div>
           {!authLoading && (
             <HierarchyView
-              isActive={
-                hierarchyFilter === 'active' ? true
-                  : hierarchyFilter === 'archive' ? false
+              isActive={hierarchyFilter === 'archive' ? false : undefined}
+              direction={
+                hierarchyFilter === 'delivery' ? 'delivery'
+                  : hierarchyFilter === 'dispatch' ? 'dispatch'
                     : undefined
               }
               onMetaChange={setHierarchyMeta}

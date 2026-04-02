@@ -44,6 +44,7 @@ router = APIRouter(prefix="/v2", tags=["hierarchy-v2"])
 @router.get("/wagons", response_model=PaginatedResponse[WagonOut])
 def list_wagons(
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
+    direction: Optional[str] = Query(None, description="delivery — назначение 648400, dispatch — отправление 648400"),
     wagon_number: Optional[str] = Query(None, description="Фильтр по номеру вагона"),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=10000),
@@ -54,6 +55,27 @@ def list_wagons(
     q = db.query(Wagon)
     if is_active is not None:
         q = q.filter(Wagon.is_active == is_active)
+    # direction фильтрует по станции активного рейса
+    if direction == 'delivery':
+        # поставка: едут в 648400
+        q = q.filter(Wagon.is_active == True).filter(
+            Wagon.id.in_(
+                select(WagonTrip.wagon_id).where(
+                    WagonTrip.is_active == True,
+                    WagonTrip.destination_station_code == '648400',
+                )
+            )
+        )
+    elif direction == 'dispatch':
+        # отправка: уехали из 648400
+        q = q.filter(Wagon.is_active == True).filter(
+            Wagon.id.in_(
+                select(WagonTrip.wagon_id).where(
+                    WagonTrip.is_active == True,
+                    WagonTrip.departure_station_code == '648400',
+                )
+            )
+        )
     if wagon_number:
         q = q.filter(Wagon.railway_carriage_number.ilike(f"%{wagon_number}%"))
     # Сортировка по последней активности рейса — самые активные вагоны первыми
@@ -97,9 +119,9 @@ def list_wagons(
             wagon_last_comment[row[0]] = row[1]
 
         # Батч-загрузка полей последнего рейса.
-        # Для активных вагонов — только активные рейсы.
-        # Для архивных — любой последний рейс (все рейсы неактивны).
-        active_filter = "AND is_active = true" if is_active else ""
+        # Для активных/direction — только активные рейсы.
+        # Для архивных (is_active=False) — любой последний рейс.
+        active_filter = "AND is_active = true" if (is_active is not False) else ""
         for row in db.execute(text(f"""
             SELECT DISTINCT ON (wagon_id)
                 id,

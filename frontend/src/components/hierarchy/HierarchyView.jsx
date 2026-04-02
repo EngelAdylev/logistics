@@ -19,7 +19,7 @@ function matchesAny(val, tokens) {
 
 const DEFAULT_VISIBLE_IDS = HIERARCHY_COLUMNS.filter((c) => c.isDefaultVisible !== false).map((c) => c.id);
 
-export default function HierarchyView({ isActive, refreshKey }) {
+export default function HierarchyView({ isActive, direction, refreshKey }) {
   const [wagons, setWagons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,7 +46,11 @@ export default function HierarchyView({ isActive, refreshKey }) {
     setError(null);
     try {
       const params = new URLSearchParams({ page: 1, limit: 9999 });
-      if (isActive !== undefined) params.append('is_active', isActive);
+      if (direction) {
+        params.append('direction', direction);
+      } else if (isActive !== undefined) {
+        params.append('is_active', isActive);
+      }
       const res = await api.get(`/v2/wagons?${params}`);
       setWagons(res.data.items || []);
       setTotal(res.data.total || 0);
@@ -57,12 +61,12 @@ export default function HierarchyView({ isActive, refreshKey }) {
     } finally {
       setLoading(false);
     }
-  }, [isActive]);
+  }, [isActive, direction]);
 
   useEffect(() => {
     setWagonSearch('');
     fetchWagons();
-  }, [isActive, refreshKey]);
+  }, [isActive, direction, refreshKey]);
 
   const searchedWagons = useMemo(() => {
     const tokens = parseTokens(wagonSearch.toLowerCase());
