@@ -309,3 +309,37 @@ class EtranIncomingLog(Base):
     details = Column(Text)
     received_at = Column(DateTime(timezone=True), server_default=func.now())
     raw_payload = Column(JSONB)
+
+
+# ─── Поезда: маршруты и заявки на получение ──────────────────────────────────
+
+class RailwayRoute(Base):
+    """Болванка поезда — снимок состава, создаётся автоматически когда MIN(km) ≤ 150."""
+    __tablename__ = "railway_routes"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    train_number = Column(Text, nullable=False, unique=True, index=True)
+    train_index = Column(Text)
+    snapshot_data = Column(JSONB)   # список вагонов в момент создания
+    status = Column(Text, default='open')   # open / closed
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    orders = relationship("ReceivingOrder", back_populates="route", cascade="all, delete-orphan")
+
+
+class ReceivingOrder(Base):
+    """Заявка на получение груза — создаётся оператором по накладной из состава поезда."""
+    __tablename__ = "receiving_orders"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    route_id = Column(UUID(as_uuid=True), ForeignKey("railway_routes.id", ondelete="CASCADE"), nullable=False, index=True)
+    waybill_id = Column(UUID(as_uuid=True), ForeignKey("etran_waybills.id", ondelete="SET NULL"), nullable=True, index=True)
+    client_name = Column(Text)
+    contract_number = Column(Text)
+    status = Column(Text, default='new')   # new / in_progress / done
+    comment = Column(Text)
+    created_by = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    route = relationship("RailwayRoute", back_populates="orders")
+    waybill = relationship("EtranWaybill")

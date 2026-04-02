@@ -30,9 +30,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from routers.trains_router import router as trains_router
+
 app.include_router(auth_router)
 app.include_router(table_settings_router)
 app.include_router(hierarchy_router)
+app.include_router(trains_router)
 app.include_router(etran_router)
 app.include_router(dislocation_webhook_router)
 
@@ -222,6 +225,33 @@ def startup_event():
                 """),
                 ("trip_waybills_trip_idx", "CREATE INDEX IF NOT EXISTS idx_trip_waybills_trip ON trip_waybills(wagon_trip_id)"),
                 ("trip_waybills_waybill_idx", "CREATE INDEX IF NOT EXISTS idx_trip_waybills_waybill ON trip_waybills(waybill_id)"),
+                # Поезда
+                ("railway_routes", """
+                    CREATE TABLE IF NOT EXISTS railway_routes (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        train_number TEXT NOT NULL UNIQUE,
+                        train_index TEXT,
+                        snapshot_data JSONB,
+                        status TEXT DEFAULT 'open',
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """),
+                ("receiving_orders", """
+                    CREATE TABLE IF NOT EXISTS receiving_orders (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        route_id UUID NOT NULL REFERENCES railway_routes(id) ON DELETE CASCADE,
+                        waybill_id UUID REFERENCES etran_waybills(id) ON DELETE SET NULL,
+                        client_name TEXT,
+                        contract_number TEXT,
+                        status TEXT DEFAULT 'new',
+                        comment TEXT,
+                        created_by TEXT,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """),
+                ("receiving_orders_route_idx", "CREATE INDEX IF NOT EXISTS idx_receiving_orders_route ON receiving_orders(route_id)"),
             ]:
                 try:
                     conn.execute(text(sql))

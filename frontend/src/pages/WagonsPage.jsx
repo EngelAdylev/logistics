@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import HierarchyView from '../components/hierarchy/HierarchyView';
 import TripsView from '../components/hierarchy/TripsView';
+import TrainsView from '../components/trains/TrainsView';
 
 export default function WagonsPage() {
   const { loading: authLoading } = useAuth();
@@ -91,6 +92,13 @@ export default function WagonsPage() {
           >
             Рейсы
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('trains')}
+            className={tab === 'trains' ? 'active' : ''}
+          >
+            Поезда
+          </button>
         </div>
         <div className="sync-block">
           <button
@@ -107,7 +115,12 @@ export default function WagonsPage() {
         </div>
       </div>
 
-      {tab === 'hierarchy' ? (
+      {tab === 'trains' ? (
+        /* ── Вкладка Поезда ── */
+        <div className="h-tab-content">
+          <TrainsView refreshKey={refreshKey} />
+        </div>
+      ) : tab === 'hierarchy' ? (
         /* ── Вкладка Дислокация ── */
         <div className="h-tab-content">
           <div className="h-filter-block">

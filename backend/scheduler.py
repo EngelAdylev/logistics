@@ -519,6 +519,77 @@ def rebuild_tracking_from_dislocation_merge():
         db.close()
     return result
 
+def check_and_create_route_snapshots():
+    """
+    Проходим по активным поездам с поставкой (destination=648400).
+    Если MIN(remaining_distance) ≤ 150 км и railway_route для поезда ещё нет — создаём.
+    """
+    from database import SessionLocal as _SessionLocal
+    import models as _models
+    _db = _SessionLocal()
+    try:
+        rows = _db.execute(text("""
+            SELECT
+                wt.number_train,
+                wt.train_index,
+                MIN(
+                    CASE WHEN wt.remaining_distance ~ '^[0-9]+$'
+                    THEN wt.remaining_distance::int ELSE NULL END
+                ) AS min_km,
+                json_agg(json_build_object(
+                    'trip_id',            wt.id::text,
+                    'wagon_number',       w.railway_carriage_number,
+                    'waybill_id',         tw.waybill_id::text,
+                    'waybill_number',     ew.waybill_number,
+                    'consignee_name',     ew.consignee_name,
+                    'shipper_name',       ew.shipper_name,
+                    'cargo_name',         ew.cargo_name,
+                    'remaining_distance', wt.remaining_distance,
+                    'last_station_name',  wt.last_station_name,
+                    'last_operation_name', wt.last_operation_name
+                ) ORDER BY w.railway_carriage_number) AS snapshot
+            FROM wagon_trips wt
+            JOIN wagons w ON w.id = wt.wagon_id
+            LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
+            LEFT JOIN etran_waybills ew ON ew.id = tw.waybill_id
+            WHERE wt.is_active = true
+              AND wt.number_train IS NOT NULL
+              AND TRIM(COALESCE(wt.destination_station_code, '')) = '648400'
+            GROUP BY wt.number_train, wt.train_index
+            HAVING MIN(
+                CASE WHEN wt.remaining_distance ~ '^[0-9]+$'
+                THEN wt.remaining_distance::int ELSE NULL END
+            ) <= 150
+        """)).mappings().all()
+
+        created = 0
+        for row in rows:
+            existing = _db.query(_models.RailwayRoute).filter_by(
+                train_number=row["number_train"]
+            ).first()
+            if not existing:
+                route = _models.RailwayRoute(
+                    train_number=row["number_train"],
+                    train_index=row["train_index"],
+                    snapshot_data=row["snapshot"],
+                    status="open",
+                )
+                _db.add(route)
+                created += 1
+
+        if created:
+            _db.commit()
+            logger.info("check_and_create_route_snapshots: created %d routes", created)
+    except Exception as e:
+        logger.warning("check_and_create_route_snapshots failed: %s", e)
+        try:
+            _db.rollback()
+        except Exception:
+            pass
+    finally:
+        _db.close()
+
+
 def sync_all():
     """Запускает синхронизацию старой (tracking_wagons) и новой (wagons/trips/operations) моделей."""
     sync_dislocation_to_tracking()
@@ -533,6 +604,12 @@ def sync_all():
             _db.close()
     except Exception as e:
         logger.warning("sync_new_model_incremental failed (non-critical): %s", e)
+
+    # Создаём болванки маршрутов для поездов ≤ 150 км
+    try:
+        check_and_create_route_snapshots()
+    except Exception as e:
+        logger.warning("check_and_create_route_snapshots failed (non-critical): %s", e)
 
 
 def start_scheduler():
