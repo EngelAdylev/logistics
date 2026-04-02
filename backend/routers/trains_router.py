@@ -237,29 +237,14 @@ def get_route(
     if not route:
         raise HTTPException(status_code=404, detail="Маршрут не найден")
 
-    # Если snapshot ещё не сформирован — берём живые данные
-    snapshot = route.snapshot_data or _build_snapshot(db, route.train_number)
-
-    # Всегда подтягиваем актуальные container_number из etran_waybill_wagons
-    # (snapshot мог быть создан до того как добавили это поле)
-    if snapshot:
-        waybill_ids = [s["waybill_id"] for s in snapshot if s.get("waybill_id")]
-        if waybill_ids:
-            container_rows = db.execute(text("""
-                SELECT eww.waybill_id::text, eww.railway_carriage_number, eww.container_number
-                FROM etran_waybill_wagons eww
-                WHERE eww.waybill_id::text = ANY(:ids)
-            """), {"ids": waybill_ids}).mappings().all()
-            container_map = {
-                (r["waybill_id"], r["railway_carriage_number"]): r["container_number"] or ""
-                for r in container_rows
-            }
-            snapshot = [
-                {**s, "container_number": s.get("container_number") or container_map.get(
-                    (s.get("waybill_id"), s.get("wagon_number")), ""
-                )}
-                for s in snapshot
-            ]
+    # Для открытых маршрутов всегда берём живые данные — правильная разбивка
+    # по (вагон + накладная + КТК). Для закрытых — живые данные если вагоны ещё
+    # активны, иначе сохранённый снапшот.
+    live = _build_snapshot(db, route.train_number)
+    if live:
+        snapshot = live
+    else:
+        snapshot = route.snapshot_data or []
 
     # Строим карту: ключ → {order, item_id}
     # Ключ = "wb:{waybill_id}:ktk:{container}" если есть накладная+КТК
