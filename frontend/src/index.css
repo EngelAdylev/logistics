@@ -1030,34 +1030,138 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 }
 
 /* ─── Аккордеон поездов ─── */
-.train-accordion {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  overflow: hidden;
-}
-
-.train-accordion-header {
+/* ── Список поездов: шапка ── */
+.trains-list-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: #f8fafc;
-  transition: background 0.15s;
-  user-select: none;
-  flex-wrap: wrap;
+  gap: 0;
+  padding: 7px 14px 7px 38px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0;
 }
-.train-accordion-header:hover { background: #f1f5f9; }
-.train-accordion-header--open { background: #eff6ff; border-bottom: 1px solid #bfdbfe; }
-.train-accordion-header--ready { background: #f0fdf4; }
-.train-accordion-header--ready.train-accordion-header--open { background: #dcfce7; }
 
-.train-accordion-toggle { color: #64748b; flex-shrink: 0; display: flex; align-items: center; }
-.train-accordion-number { font-size: 14px; min-width: 90px; }
-.train-accordion-index  { font-size: 11px; color: #64748b; font-family: monospace; min-width: 110px; }
-.train-accordion-stat   { font-size: 12px; color: #64748b; }
+/* ── Аккордеон поезда ── */
+.trains-accordion {
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.trains-accordion:last-child { border-radius: 0 0 8px 8px; }
+.trains-accordion--open {
+  box-shadow: 0 2px 8px rgba(59,130,246,0.08);
+  border-color: #bfdbfe;
+  border-top: 1px solid #bfdbfe;
+  margin-top: -1px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  z-index: 1;
+  position: relative;
+}
+.trains-accordion--ready > .trains-accordion-row { background: #f0fdf4; }
+.trains-accordion--ready.trains-accordion--open > .trains-accordion-row { background: #dcfce7; }
 
-.train-accordion-body {
+.trains-accordion-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 9px 14px;
   background: #fff;
+  transition: background 0.12s;
+  user-select: none;
+  min-height: 42px;
+}
+.trains-accordion-row:hover { background: #f8fafc; }
+.trains-accordion--open > .trains-accordion-row { background: #eff6ff !important; border-bottom: 1px solid #dbeafe; }
+
+.trains-accordion-chevron {
+  width: 24px;
+  flex-shrink: 0;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+}
+
+.trains-accordion-body {
+  background: #fafbff;
   border-top: 1px solid #e2e8f0;
 }
+
+/* ── Состав поезда ── */
+.trains-composition-wrap { padding: 12px 16px 16px; }
+
+.trains-composition-loading {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px; font-size: 13px; color: #64748b;
+}
+
+.trains-composition-error {
+  padding: 12px 16px; font-size: 13px; color: #dc2626;
+  background: #fef2f2; border-radius: 6px; margin: 8px 16px;
+}
+
+.trains-composition-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.trains-composition-toolbar-left {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+
+/* ── Карточки заявок ── */
+.trains-orders-legend {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.trains-order-card {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+.trains-order-card-num  { font-weight: 700; color: #1e293b; }
+.trains-order-card-client { color: #334155; }
+.trains-order-card-count { color: #94a3b8; font-size: 11px; }
+.trains-order-card-actions { display: flex; gap: 2px; }
+
+/* ── Форма назначения клиента ── */
+.trains-order-form-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.trains-order-form-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: #1e293b;
+  margin-bottom: 10px;
+}
+.trains-order-form-count {
+  font-weight: 400; font-size: 12px;
+  background: #dbeafe; color: #1d4ed8;
+  border-radius: 10px; padding: 1px 8px; margin-left: 4px;
+}
+
+/* ── Подсказка режима выбора ── */
+.trains-select-hint {
+  font-size: 12px; color: #64748b;
+  background: #f0f9ff; border: 1px dashed #bae6fd;
+  border-radius: 6px; padding: 6px 12px;
+  margin-bottom: 10px;
+}
+
+/* ── Клиент в строке таблицы ── */
+.trains-wagon-client { font-size: 12px; font-weight: 600; color: #1e293b; }
+.wagon-row--selected { outline: 2px solid #3b82f6 inset; }
