@@ -1136,23 +1136,56 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .trains-order-card-count { color: #94a3b8; font-size: 11px; }
 .trains-order-card-actions { display: flex; gap: 2px; }
 
-/* ── Форма назначения клиента ── */
-.trains-order-form-panel {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+/* ── Форма назначения клиента (tof = train order form) ── */
+.tof-panel {
+  background: #f0f6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-}
-.trains-order-form-title {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 600; color: #1e293b;
+  padding: 10px 14px;
   margin-bottom: 10px;
 }
-.trains-order-form-count {
-  font-weight: 400; font-size: 12px;
-  background: #dbeafe; color: #1d4ed8;
-  border-radius: 10px; padding: 1px 8px; margin-left: 4px;
+.tof-header {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: #1d4ed8;
+  margin-bottom: 8px;
+}
+.tof-count {
+  background: #2563eb; color: #fff;
+  border-radius: 10px; padding: 1px 7px;
+  font-size: 11px; font-weight: 600; margin-left: 2px;
+}
+.tof-row {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+}
+.tof-field {
+  display: flex; flex-direction: column; gap: 3px;
+  flex: 1; min-width: 140px;
+}
+.tof-field--comment { flex: 1.5; }
+.tof-label {
+  font-size: 10px; font-weight: 600; color: #64748b;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.tof-input {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tof-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+.tof-actions {
+  display: flex; gap: 6px; align-items: flex-end; flex-shrink: 0;
+}
+.tof-error {
+  font-size: 12px; color: #dc2626;
+  margin-top: 6px;
 }
 
 /* ── Подсказка режима выбора ── */

@@ -68,26 +68,39 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
   };
 
   return (
-    <div className="trains-order-form-panel">
-      <div className="trains-order-form-title">
+    <div className="tof-panel">
+      <div className="tof-header">
         {isCreate
-          ? <><Plus size={14} /> Назначить клиента <span className="trains-order-form-count">выбрано строк: {selectedKeys.size}</span></>
-          : <><Pencil size={14} /> Редактировать заявку №{existing.order_number}</>}
+          ? <><Plus size={13} /> Назначить клиента {selectedKeys.size > 0 && <span className="tof-count">{selectedKeys.size} стр.</span>}</>
+          : <><Pencil size={13} /> Заявка №{existing.order_number}</>}
       </div>
-      <div className="order-form-grid">
-        <label>Клиент<input className="order-form-input" value={form.client_name} onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))} placeholder="Название клиента" autoFocus /></label>
-        <label>№ договора<input className="order-form-input" value={form.contract_number} onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))} placeholder="Номер договора" /></label>
-        <label className="order-form-comment">Комментарий
-          <textarea className="order-form-input" value={form.comment} onChange={e => setForm(p => ({ ...p, comment: e.target.value }))} rows={2} placeholder="Необязательно" />
-        </label>
+      <div className="tof-row">
+        <div className="tof-field">
+          <span className="tof-label">Клиент</span>
+          <input className="tof-input" value={form.client_name}
+            onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))}
+            placeholder="Название клиента" autoFocus />
+        </div>
+        <div className="tof-field">
+          <span className="tof-label">№ договора</span>
+          <input className="tof-input" value={form.contract_number}
+            onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))}
+            placeholder="Номер договора" />
+        </div>
+        <div className="tof-field tof-field--comment">
+          <span className="tof-label">Комментарий</span>
+          <input className="tof-input" value={form.comment}
+            onChange={e => setForm(p => ({ ...p, comment: e.target.value }))}
+            placeholder="Необязательно" />
+        </div>
+        <div className="tof-actions">
+          <button type="button" className="cancel-btn" onClick={onCancel} disabled={saving}>Отмена</button>
+          <button type="button" className="save-btn" onClick={handleSave} disabled={saving}>
+            {saving ? '…' : isCreate ? 'Присвоить' : 'Сохранить'}
+          </button>
+        </div>
       </div>
-      {err && <div className="order-form-error">{err}</div>}
-      <div className="order-form-actions">
-        <button type="button" className="cancel-btn" onClick={onCancel} disabled={saving}>Отмена</button>
-        <button type="button" className="save-btn" onClick={handleSave} disabled={saving}>
-          {saving ? 'Сохранение…' : isCreate ? 'Присвоить клиента' : 'Сохранить'}
-        </button>
-      </div>
+      {err && <div className="tof-error">{err}</div>}
     </div>
   );
 }
