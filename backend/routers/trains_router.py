@@ -252,8 +252,10 @@ def get_route(
     #         "wb:{waybill_id}:"                если накладная без КТК (порожний)
     #         "wagon:{wagon_number}"            если нет накладной
     def _item_key(waybill_id, container_number, wagon_number):
+        if waybill_id and container_number:
+            return f"wb:{waybill_id}:ktk:{container_number}"
         if waybill_id:
-            return f"wb:{waybill_id}:ktk:{container_number or ''}"
+            return f"wb:{waybill_id}:wagon:{wagon_number}"
         return f"wagon:{wagon_number}"
 
     item_order_map: dict = {}
@@ -367,7 +369,11 @@ def create_order(
             if it.container_number:
                 q = q.filter(models.ReceivingOrderItem.container_number == it.container_number)
             else:
-                q = q.filter(models.ReceivingOrderItem.container_number.is_(None))
+                # без контейнера — уникальность по (waybill_id + wagon_number)
+                q = q.filter(
+                    models.ReceivingOrderItem.container_number.is_(None),
+                    models.ReceivingOrderItem.wagon_number == it.wagon_number,
+                )
             if q.first():
                 raise HTTPException(status_code=409,
                     detail="Эта накладная/КТК уже входит в другую заявку")
@@ -472,7 +478,10 @@ def add_order_item(
         if body.container_number:
             q = q.filter(models.ReceivingOrderItem.container_number == body.container_number)
         else:
-            q = q.filter(models.ReceivingOrderItem.container_number.is_(None))
+            q = q.filter(
+                models.ReceivingOrderItem.container_number.is_(None),
+                models.ReceivingOrderItem.wagon_number == body.wagon_number,
+            )
         conflict = q.first()
     else:
         conflict = db.query(models.ReceivingOrderItem).filter(

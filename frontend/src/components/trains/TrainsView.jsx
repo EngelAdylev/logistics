@@ -4,7 +4,10 @@ import { api } from '../../api';
 
 /* ─── helpers ─── */
 function rowKey(wagon) {
-  if (wagon.waybill_id) return `wb:${wagon.waybill_id}:ktk:${wagon.container_number || ''}`;
+  if (wagon.waybill_id && wagon.container_number)
+    return `wb:${wagon.waybill_id}:ktk:${wagon.container_number}`;
+  if (wagon.waybill_id)
+    return `wb:${wagon.waybill_id}:wagon:${wagon.wagon_number}`;
   return `wagon:${wagon.wagon_number}`;
 }
 
@@ -31,14 +34,13 @@ function OrderBadge({ status }) {
 }
 
 /* ─── форма ─── */
-const EMPTY_FORM = { client_name: '', contract_number: '', status: 'new', comment: '' };
+const EMPTY_FORM = { client_name: '', contract_number: '', comment: '' };
 
 function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, onCancel }) {
   const isCreate = !existing;
   const [form, setForm] = useState(existing ? {
     client_name: existing.client_name || '',
     contract_number: existing.contract_number || '',
-    status: existing.status || 'new',
     comment: existing.comment || '',
   } : EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -75,13 +77,6 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
       <div className="order-form-grid">
         <label>Клиент<input className="order-form-input" value={form.client_name} onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))} placeholder="Название клиента" autoFocus /></label>
         <label>№ договора<input className="order-form-input" value={form.contract_number} onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))} placeholder="Номер договора" /></label>
-        <label>Статус
-          <select className="order-form-input" value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
-            <option value="new">Новая</option>
-            <option value="in_progress">В работе</option>
-            <option value="done">Выполнена</option>
-          </select>
-        </label>
         <label className="order-form-comment">Комментарий
           <textarea className="order-form-input" value={form.comment} onChange={e => setForm(p => ({ ...p, comment: e.target.value }))} rows={2} placeholder="Необязательно" />
         </label>

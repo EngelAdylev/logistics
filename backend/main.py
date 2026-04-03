@@ -300,9 +300,11 @@ def startup_event():
                     ON receiving_order_items(route_id, waybill_id, container_number)
                     WHERE waybill_id IS NOT NULL AND container_number IS NOT NULL
                 """),
+                ("drop_old_wb_no_container_uidx",
+                 "DROP INDEX IF EXISTS idx_order_item_wb_no_container"),
                 ("order_item_waybill_no_container_uidx", """
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_order_item_wb_no_container
-                    ON receiving_order_items(route_id, waybill_id)
+                    ON receiving_order_items(route_id, waybill_id, wagon_number)
                     WHERE waybill_id IS NOT NULL AND container_number IS NULL
                 """),
                 # Вагон без накладной

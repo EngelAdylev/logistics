@@ -992,7 +992,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 }
 .order-form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px 14px;
 }
 .order-form-comment {
@@ -1092,6 +1092,7 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 .trains-accordion-body {
   background: #fafbff;
   border-top: 1px solid #e2e8f0;
+  overflow-x: auto;
 }
 
 /* ── Состав поезда ── */
