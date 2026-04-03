@@ -1089,6 +1089,13 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   align-items: center;
 }
 
+.trains-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-bottom: 20px;
+}
+
 .trains-accordion-body {
   background: #fafbff;
   border-top: 1px solid #e2e8f0;

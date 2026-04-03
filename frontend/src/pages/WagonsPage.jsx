@@ -117,7 +117,7 @@ export default function WagonsPage() {
 
       {tab === 'trains' ? (
         /* ── Вкладка Поезда ── */
-        <div className="h-tab-content">
+        <div className="trains-tab-content">
           <TrainsView refreshKey={refreshKey} />
         </div>
       ) : tab === 'hierarchy' ? (
