@@ -136,7 +136,7 @@ function OrderFormPanel({ routeId, existing, selectedWagons, allWagons, onSaved,
           Отмена
         </button>
         <button type="button" className="save-btn" onClick={handleSave} disabled={saving}>
-          {saving ? 'Сохранение…' : isCreate ? 'Создать заявку' : 'Сохранить'}
+          {saving ? 'Сохранение…' : isCreate ? 'Присвоить клиента' : 'Сохранить'}
         </button>
       </div>
     </div>
@@ -266,7 +266,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                 className="trains-action-btn trains-action-btn--create"
                 onClick={() => { setMode('create'); setSelectedWagons(new Set()); }}
               >
-                <Plus size={13} /> Новая заявка
+                <Plus size={13} /> Назначить клиентов
               </button>
             )}
             {!isClosed && ordersCount > 0 && mode === 'view' && (
@@ -362,7 +362,7 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                       <th>Получатель</th>
                       <th>Груз</th>
                       <th>Остаток</th>
-                      <th>Заявка</th>
+                      <th>Клиент</th>
                       {mode === 'view' && !isClosed && <th></th>}
                     </tr>
                   </thead>
@@ -407,11 +407,13 @@ export default function TrainCompositionModal({ routeId, trainNumber, onClose })
                           <td className="cell-truncate" title={wagon.cargo_name}>{wagon.cargo_name || '—'}</td>
                           <td style={{ textAlign: 'center' }}>{wagon.remaining_distance || '—'}</td>
 
-                          {/* Статус заявки */}
+                          {/* Клиент */}
                           <td>
                             {order ? (
-                              <span style={{ fontSize: 12, fontWeight: 600 }}>
-                                №{order.order_number}
+                              <span style={{ fontSize: 12 }}>
+                                {order.client_name
+                                  ? <strong>{order.client_name}</strong>
+                                  : <span className="text-muted">не указан</span>}
                               </span>
                             ) : (
                               <span className="text-muted" style={{ fontSize: 12 }}>
