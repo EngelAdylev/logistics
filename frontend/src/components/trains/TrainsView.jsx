@@ -34,13 +34,12 @@ function OrderBadge({ status }) {
 }
 
 /* ─── форма ─── */
-const EMPTY_FORM = { client_name: '', contract_number: '', comment: '' };
+const EMPTY_FORM = { client_name: '', comment: '' };
 
 function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, onCancel }) {
   const isCreate = !existing;
   const [form, setForm] = useState(existing ? {
     client_name: existing.client_name || '',
-    contract_number: existing.contract_number || '',
     comment: existing.comment || '',
   } : EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -80,12 +79,6 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
           <input className="tof-input" value={form.client_name}
             onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))}
             placeholder="Название клиента" autoFocus />
-        </div>
-        <div className="tof-field">
-          <span className="tof-label">№ договора</span>
-          <input className="tof-input" value={form.contract_number}
-            onChange={e => setForm(p => ({ ...p, contract_number: e.target.value }))}
-            placeholder="Номер договора" />
         </div>
         <div className="tof-field tof-field--comment">
           <span className="tof-label">Комментарий</span>
