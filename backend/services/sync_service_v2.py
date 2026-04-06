@@ -196,6 +196,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
         "operations_inserted": 0,
         "trips_merged": 0,
         "trip_waybills_synced": 0,
+        "trips_reactivated": 0,
         "errors": 0,
     }
 
@@ -491,6 +492,33 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 updated_at = now()
         """))
 
+        # Шаг 7b. Реактивация архивных рейсов с более свежими операциями.
+        # Проблема: иногда в источнике данных операции поступают с временно неверной датой рейса.
+        # Система создаёт новый рейс (Trip B), а старый (Trip A) уходит в архив через Step 8b.
+        # Когда данные исправляются, операции снова привязываются к Trip A и обновляют
+        # его last_operation_date (Step 5). Если это значение свежее, чем у текущего активного рейса —
+        # реактивируем Trip A. Шаг 8 нормализации затем выберет победителя по last_operation_date.
+        reactivate_result = db.execute(text("""
+            UPDATE wagon_trips wt
+            SET is_active = true, updated_at = now()
+            WHERE wt.is_active = false
+              AND wt.last_operation_date IS NOT NULL
+              AND wt.last_operation_date > COALESCE(
+                  (SELECT MAX(wt2.last_operation_date)
+                   FROM wagon_trips wt2
+                   WHERE wt2.wagon_id = wt.wagon_id
+                     AND wt2.is_active = true),
+                  '1970-01-01'::timestamptz
+              )
+        """))
+        reactivated_count = reactivate_result.rowcount
+        if reactivated_count > 0:
+            logger.info(
+                "sync_new_model: reactivated %d archived trips (fresher last_operation_date than active)",
+                reactivated_count,
+            )
+        stats["trips_reactivated"] = reactivated_count
+
         # Шаг 8. Нормализация активности: у каждого вагона не более одного активного рейса (ТЗ №1)
         import time as _time
         _t0 = _time.perf_counter()
@@ -524,9 +552,12 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
             )
         stats["trips_normalized_deactivated"] = deactivated_count
 
-        # Шаг 8b. Архивируем рейсы, у которых есть более новый рейс того же вагона.
-        # Условие: у вагона есть другой рейс с более поздней датой рейса,
+        # Шаг 8b. Архивируем активные рейсы, у которых есть более новый АКТИВНЫЙ рейс того же вагона.
+        # Условие: у вагона есть другой АКТИВНЫЙ рейс с более поздней датой рейса,
         # ИЛИ с той же датой рейса но более поздней последней операцией.
+        # Важно: сравниваем только с активными рейсами (wt2.is_active = true),
+        # иначе реактивированный рейс с более старым flight_start_date может быть
+        # повторно заархивирован из-за сравнения с архивным рейсом с новой датой.
         _t2 = _time.perf_counter()
         stale_result = db.execute(text("""
             UPDATE wagon_trips wt
@@ -536,6 +567,7 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
                 SELECT 1 FROM wagon_trips wt2
                 WHERE wt2.wagon_id = wt.wagon_id
                   AND wt2.id != wt.id
+                  AND wt2.is_active = true
                   AND (
                     wt2.flight_start_date > wt.flight_start_date
                     OR (
