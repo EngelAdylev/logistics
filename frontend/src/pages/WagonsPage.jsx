@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import HierarchyView from '../components/hierarchy/HierarchyView';
 import TripsView from '../components/hierarchy/TripsView';
 import TrainsView from '../components/trains/TrainsView';
+import RoutesListView from '../components/trains/RoutesListView';
+import OrdersListView from '../components/trains/OrdersListView';
 
 export default function WagonsPage() {
   const { loading: authLoading } = useAuth();
@@ -99,6 +101,20 @@ export default function WagonsPage() {
           >
             Поезда
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('routes')}
+            className={tab === 'routes' ? 'active' : ''}
+          >
+            Рейсы ЛКДС
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('orders')}
+            className={tab === 'orders' ? 'active' : ''}
+          >
+            Заявки
+          </button>
         </div>
         <div className="sync-block">
           <button
@@ -115,7 +131,17 @@ export default function WagonsPage() {
         </div>
       </div>
 
-      {tab === 'trains' ? (
+      {tab === 'routes' ? (
+        /* ── Вкладка Рейсы ЛКДС ── */
+        <div className="routes-tab-content">
+          <RoutesListView />
+        </div>
+      ) : tab === 'orders' ? (
+        /* ── Вкладка Заявки ── */
+        <div className="orders-tab-content">
+          <OrdersListView />
+        </div>
+      ) : tab === 'trains' ? (
         /* ── Вкладка Поезда ── */
         <div className="trains-tab-content">
           <TrainsView refreshKey={refreshKey} />
