@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
@@ -102,7 +102,7 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
 }
 
 /* ─── состав поезда (inline) ─── */
-function TrainComposition({ routeId, trainNumber, onExported }) {
+function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, onVisibleColumnsChange }) {
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -117,11 +117,8 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
   const [commentText, setCommentText] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
 
-  // Выборка колонок для таблицы вагонов
-  const DEFAULT_VISIBLE_IDS = TRAIN_COMPOSITION_COLUMNS
-    .filter(c => c.isDefaultVisible !== false)
-    .map(c => c.id);
-  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
+  // Фильтры колонок в таблице вагонов
+  const [columnFilters, setColumnFilters] = useState({});
 
   // Липкий горизонтальный скролл
   const tableScrollRef = useRef(null);
@@ -224,6 +221,29 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
     setCommentText('');
   };
 
+  // Фильтры колонок
+  const handleFilterChange = (colId, vals) =>
+    setColumnFilters(prev => ({ ...prev, [colId]: vals }));
+
+  const handleResetFilters = () => setColumnFilters({});
+
+  // Применяем фильтры к вагонам
+  const filteredWagons = useMemo(() => {
+    if (!route?.wagons) return [];
+    let result = route.wagons;
+
+    for (const [colId, vals] of Object.entries(columnFilters)) {
+      if (!vals?.length) continue;
+      result = result.filter(w => {
+        const v = w[colId];
+        const str = v?.toString?.()?.trim?.() ?? '';
+        return vals.includes(str || '—');
+      });
+    }
+
+    return result;
+  }, [route?.wagons, columnFilters]);
+
   const handleDeleteOrder = async (orderId) => {
     if (!window.confirm('Удалить заявку?')) return;
     try { await api.delete(`/v2/orders/${orderId}`); fetchRoute(); } catch { alert('Ошибка удаления'); }
@@ -293,9 +313,14 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
           {mode === 'view' && commentMode === 'view' && (
             <ColumnVisibilityPanel
               visibleColumnIds={visibleColumnIds}
-              onVisibilityChange={setVisibleColumnIds}
+              onVisibilityChange={onVisibleColumnsChange}
               columns={TRAIN_COMPOSITION_COLUMNS}
             />
+          )}
+          {mode === 'view' && commentMode === 'view' && Object.keys(columnFilters).some(k => columnFilters[k]?.length) && (
+            <button type="button" className="compact-icon-btn warning" onClick={handleResetFilters} title="Сбросить фильтры">
+              ✕ Фильтры
+            </button>
           )}
         </div>
 
@@ -388,15 +413,25 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
             <tr>
               {(mode === 'create' || commentMode === 'add') && <th style={{ width: 36 }}></th>}
               {visibleCols.map(col => (
-                <th key={col.id} style={col.width ? { width: col.width } : undefined}>
-                  {col.label}
+                <th key={col.id} style={col.width ? { width: col.width } : undefined} className="th-with-filter">
+                  <span className="th-label">{col.label}</span>
+                  {col.filterable !== false && mode === 'view' && commentMode === 'view' && (
+                    <ColumnFilter
+                      columnId={col.id}
+                      label={col.label}
+                      rows={route?.wagons || []}
+                      activeValues={columnFilters[col.id]}
+                      onApply={vals => handleFilterChange(col.id, vals)}
+                      onClear={() => handleFilterChange(col.id, [])}
+                    />
+                  )}
                 </th>
               ))}
               {mode === 'view' && commentMode === 'view' && !isClosed && <th style={{ width: 36 }}></th>}
             </tr>
           </thead>
           <tbody>
-            {route.wagons.map((wagon) => {
+            {filteredWagons.map((wagon) => {
               const order = wagon.order;
               const key = rowKey(wagon);
               const isSelectedOrder = selectedKeys.has(key);
@@ -540,6 +575,12 @@ export default function TrainsView({ refreshKey }) {
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [columnFilters, setColumnFilters] = useState({});
+
+  // Глобальная видимость колонок (для всех поездов)
+  const DEFAULT_VISIBLE_IDS = TRAIN_COMPOSITION_COLUMNS
+    .filter(c => c.isDefaultVisible !== false)
+    .map(c => c.id);
+  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
 
   const fetchTrains = useCallback(async () => {
     setLoading(true); setError(null);
@@ -790,6 +831,8 @@ export default function TrainsView({ refreshKey }) {
                             routeId={t.route_id}
                             trainNumber={t.train_number}
                             onExported={fetchTrains}
+                            visibleColumnIds={visibleColumnIds}
+                            onVisibleColumnsChange={setVisibleColumnIds}
                           />
                         </td>
                       </tr>

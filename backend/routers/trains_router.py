@@ -318,38 +318,49 @@ def list_orders(
     _user: models.User = Depends(get_current_user),
 ):
     """Список всех заявок с информацией по вагонам и маршрутам."""
-    orders = db.query(models.ReceivingOrder).all()
-    result = []
+    # Используем SQL для правильного джойна с данными вагонов
+    rows = db.execute(text("""
+        SELECT
+            o.id, o.order_number, o.client_name, o.comment, o.created_at, o.route_id,
+            r.train_number, r.train_index, r.status as route_status,
+            oi.wagon_number, oi.waybill_id, oi.container_number
+        FROM receiving_orders o
+        LEFT JOIN railway_routes r ON r.id = o.route_id
+        LEFT JOIN receiving_order_items oi ON oi.order_id = o.id
+        ORDER BY o.created_at DESC, o.order_number
+    """)).fetchall()
 
-    for order in orders:
-        # Получаем маршрут для получения информации о поезде и статусе
-        route = db.query(models.RailwayRoute).filter(
-            models.RailwayRoute.id == order.route_id
-        ).first()
+    if not rows:
+        return {"items": [], "total": 0}
 
-        # Получаем вагоны для этой заявки
-        wagons_data = []
-        for item in order.items or []:
-            wagons_data.append({
-                "wagon_number": item.wagon_number,
-                "waybill_number": item.waybill_number,
-                "container_number": item.container_number,
-                "shipper_name": "",  # Будет заполнено из снимка если нужно
+    # Группируем по заявке
+    orders_dict = {}
+    for row in rows:
+        order_id = str(row[0])
+        if order_id not in orders_dict:
+            orders_dict[order_id] = {
+                "order_id": order_id,
+                "order_number": row[1],
+                "client_name": row[2],
+                "comment": row[3],
+                "created_at": row[4].isoformat() if row[4] else None,
+                "train_number": row[6] or "—",
+                "route_status": row[8],
+                "wagons": [],
+            }
+
+        # Добавляем вагон если есть
+        if row[9]:  # wagon_number
+            orders_dict[order_id]["wagons"].append({
+                "wagon_number": row[9],
+                "waybill_number": row[10],
+                "container_number": row[11],
+                "shipper_name": "",
                 "consignee_name": "",
                 "cargo_name": "",
             })
 
-        result.append({
-            "order_id": str(order.id),
-            "order_number": order.order_number,
-            "client_name": order.client_name,
-            "train_number": route.train_number if route else "—",
-            "route_status": route.status if route else None,
-            "wagons": wagons_data,
-            "comment": order.comment,
-            "created_at": order.created_at.isoformat() if order.created_at else None,
-        })
-
+    result = list(orders_dict.values())
     return {"items": result, "total": len(result)}
 
 
