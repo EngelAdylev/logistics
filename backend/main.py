@@ -246,20 +246,6 @@ def startup_event():
                  "ALTER TABLE railway_routes ADD COLUMN IF NOT EXISTS route_number INTEGER"),
                 ("railway_routes_route_number_default",
                  "ALTER TABLE railway_routes ALTER COLUMN route_number SET DEFAULT nextval('railway_route_number_seq')"),
-                ("railway_routes_fill_route_number", """
-                    UPDATE railway_routes
-                    SET route_number = nextval('railway_route_number_seq')
-                    WHERE route_number IS NULL
-                """),
-                ("railway_routes_route_number_not_null",
-                 "ALTER TABLE railway_routes ALTER COLUMN route_number SET NOT NULL"),
-                ("railway_routes_route_number_seq_setval", """
-                    SELECT setval(
-                        'railway_route_number_seq',
-                        COALESCE((SELECT MAX(route_number) FROM railway_routes), 1),
-                        COALESCE((SELECT MAX(route_number) FROM railway_routes), 0) > 0
-                    )
-                """),
                 ("railway_routes_route_number_uidx",
                  "CREATE UNIQUE INDEX IF NOT EXISTS uq_railway_routes_route_number ON railway_routes(route_number)"),
                 ("railway_routes_add_route_payload",

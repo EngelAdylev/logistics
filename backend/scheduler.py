@@ -613,7 +613,7 @@ def _build_route_payload(route) -> dict:
     return {
         "_id": str(uuid.uuid4()),
         "site": ROUTE_PAYLOAD_SITE,
-        "routeNumber": str(route.route_number),
+        "routeNumber": str(route.route_number or ""),
         "orders": orders_payload,
     }
 
@@ -651,6 +651,8 @@ def create_operation80_route_payloads():
             route = _db.query(_models.RailwayRoute).filter(_models.RailwayRoute.id == route_id).first()
             if not route or route.route_payload is not None:
                 continue
+            if route.route_number is None:
+                route.route_number = _db.execute(text("SELECT nextval('railway_route_number_seq')")).scalar()
             route.route_payload = _build_route_payload(route)
             route.route_payload_created_at = now
             route.status = "closed"
