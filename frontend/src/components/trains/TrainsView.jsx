@@ -273,16 +273,42 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
 
               const renderCellValue = (col) => {
                 const val = wagon[col.accessorKey];
-                if (!val) return <span className="text-muted">—</span>;
+                if (val === null || val === undefined || val === '') {
+                  return <span className="text-muted">—</span>;
+                }
 
                 // Специальная обработка для некоторых колонок
-                if (col.id === 'wagon_number') return <strong>{val}</strong>;
-                if (col.id === 'waybill_number' || col.id === 'container_number') {
+                if (col.id === 'wagon_number') {
+                  return <strong>{val}</strong>;
+                }
+
+                if (col.id === 'waybill_number' || col.id === 'container_number' || col.id === 'zpu_number') {
                   return <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>;
                 }
-                if (col.id === 'shipper_name' || col.id === 'consignee_name' || col.id === 'cargo_name') {
+
+                if (col.id === 'shipper_name' || col.id === 'consignee_name' || col.id === 'cargo_name' ||
+                    col.id === 'ownership' || col.id === 'wagon_model' || col.id === 'renter' ||
+                    col.id === 'departure_station_name' || col.id === 'destination_station_name' ||
+                    col.id === 'last_operation_name' || col.id === 'last_station_name') {
                   return <span className="cell-truncate" title={val}>{val}</span>;
                 }
+
+                // Числовые и размерные данные
+                if (col.id === 'remaining_distance' || col.id === 'lifting_capacity' ||
+                    col.id === 'weight_net' || col.id === 'cargo_weight' || col.id === 'axles_count') {
+                  return <span style={{ textAlign: 'center' }}>{val}</span>;
+                }
+
+                // Даты
+                if (col.id === 'next_repair_date') {
+                  if (val && typeof val === 'string') {
+                    const d = new Date(val);
+                    return <span style={{ fontSize: '0.85rem' }}>{d.toLocaleDateString('ru-RU')}</span>;
+                  }
+                  return <span className="text-muted">—</span>;
+                }
+
+                // Остальное — как есть
                 return val;
               };
 
@@ -426,7 +452,7 @@ export default function TrainsView({ refreshKey }) {
     </div>
   );
 
-  const TOTAL_COLS = 7; // chevron + 6 колонок данных
+  const TOTAL_COLS = 9; // chevron + 8 колонок данных (+ 2 live колонки: станция, операция)
 
   return (
     <div className="h-view-wrapper">
@@ -480,11 +506,13 @@ export default function TrainsView({ refreshKey }) {
         <table className="excel-table compact-table trains-main-table">
           <colgroup>
             <col style={{ width: 28 }} />
-            <col style={{ width: 120 }} />
-            <col style={{ width: 160 }} />
-            <col style={{ width: 75 }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 100 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 85 }} />
+            <col style={{ width: 85 }} />
+            <col style={{ width: 180 }} />
+            <col style={{ width: 150 }} />
             <col style={{ width: 110 }} />
           </colgroup>
           <thead>
@@ -520,6 +548,12 @@ export default function TrainsView({ refreshKey }) {
               </th>
               <th style={{ textAlign: 'center' }}>
                 <span className="th-label">Мин. остаток</span>
+              </th>
+              <th>
+                <span className="th-label">Текущая станция</span>
+              </th>
+              <th>
+                <span className="th-label">Последняя операция</span>
               </th>
               <th className="th-with-filter" style={{ textAlign: 'center' }}>
                 <span className="th-label">Статус</span>
@@ -570,6 +604,12 @@ export default function TrainsView({ refreshKey }) {
                       <td style={{ textAlign: 'center', fontSize: 13 }}>{t.wagon_total}</td>
                       <td style={{ textAlign: 'center', fontSize: 13 }}>{t.matched_wagons}</td>
                       <td style={{ textAlign: 'center' }}><KmBadge km={t.min_km} /></td>
+                      <td style={{ fontSize: 12, color: '#475569' }} className="cell-truncate" title={t.last_station_name || '—'}>
+                        {t.last_station_name || <span className="text-muted">—</span>}
+                      </td>
+                      <td style={{ fontSize: 12, color: '#475569' }} className="cell-truncate" title={t.last_operation_name || '—'}>
+                        {t.last_operation_name || <span className="text-muted">—</span>}
+                      </td>
                       <td style={{ textAlign: 'center' }}>
                         <RouteStatus routeStatus={t.route_status} ready={t.ready} />
                       </td>

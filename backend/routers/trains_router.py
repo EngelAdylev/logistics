@@ -184,6 +184,7 @@ def list_trains(
     Список активных поездов, везущих груз в 648400 (поставка).
     Данные считаются на лету по wagon_trips.
     Добавляет route_id если для поезда уже создана болванка.
+    Включает LIVE-данные: текущую станцию и последнюю операцию (обновляются при синхе).
     """
     rows = db.execute(text("""
         SELECT
@@ -198,6 +199,9 @@ def list_trains(
                     ELSE NULL
                 END
             )                                              AS min_km,
+            MAX(wt.last_operation_date)                    AS last_operation_date,
+            (ARRAY_AGG(wt.last_operation_name ORDER BY wt.last_operation_date DESC NULLS LAST))[1] AS last_operation_name,
+            (ARRAY_AGG(wt.last_station_name ORDER BY wt.last_operation_date DESC NULLS LAST))[1] AS last_station_name,
             r.id                                           AS route_id,
             r.status                                       AS route_status
         FROM wagon_trips wt
@@ -218,6 +222,9 @@ def list_trains(
             "wagon_total": r["wagon_total"],
             "matched_wagons": r["matched_wagons"],
             "min_km": r["min_km"],
+            "last_operation_date": r["last_operation_date"].isoformat() if r["last_operation_date"] else None,
+            "last_operation_name": r["last_operation_name"] or "",
+            "last_station_name": r["last_station_name"] or "",
             "ready": r["min_km"] is not None and r["min_km"] <= 150,
             "route_id": str(r["route_id"]) if r["route_id"] else None,
             "route_status": r["route_status"],
@@ -297,20 +304,37 @@ def _build_snapshot(db: Session, train_number: str) -> list:
     """Строит снимок состава поезда из живых данных wagon_trips.
     Одна строка = один (вагон + накладная). Вагон с 2 накладными → 2 строки.
     Вагон без накладной → 1 строка с waybill_id=null.
+
+    Собирает полные данные из:
+    - wagon_trips (базовые данные рейса)
+    - etran_waybills (накладная)
+    - etran_waybill_wagons (вагон в накладной с техническими данными)
     """
     rows = db.execute(text("""
         SELECT
-            wt.id           AS trip_id,
-            w.railway_carriage_number AS wagon_number,
+            wt.id                              AS trip_id,
+            w.railway_carriage_number         AS wagon_number,
             wt.remaining_distance,
             wt.last_station_name,
             wt.last_operation_name,
+            wt.departure_station_name,
+            wt.destination_station_name,
             tw.waybill_id,
             ew.waybill_number,
             ew.consignee_name,
             ew.shipper_name,
             eww.cargo_name,
-            eww.container_number
+            eww.cargo_weight,
+            eww.container_number,
+            eww.lifting_capacity,
+            eww.ownership,
+            eww.weight_net,
+            eww.zpu_number,
+            eww.zpu_type,
+            eww.wagon_model,
+            eww.axles_count,
+            eww.renter,
+            eww.next_repair_date
         FROM wagon_trips wt
         JOIN wagons w ON w.id = wt.wagon_id
         LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
@@ -331,12 +355,24 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             "remaining_distance": r["remaining_distance"],
             "last_station_name": r["last_station_name"] or "",
             "last_operation_name": r["last_operation_name"] or "",
+            "departure_station_name": r["departure_station_name"] or "",
+            "destination_station_name": r["destination_station_name"] or "",
             "waybill_id": str(r["waybill_id"]) if r["waybill_id"] else None,
             "waybill_number": r["waybill_number"] or "",
             "container_number": r["container_number"] or "",
-            "consignee_name": r["consignee_name"] or "",
             "shipper_name": r["shipper_name"] or "",
+            "consignee_name": r["consignee_name"] or "",
             "cargo_name": r["cargo_name"] or "",
+            "cargo_weight": r["cargo_weight"] or "",
+            "lifting_capacity": r["lifting_capacity"] or "",
+            "ownership": r["ownership"] or "",
+            "weight_net": r["weight_net"] or "",
+            "zpu_number": r["zpu_number"] or "",
+            "zpu_type": r["zpu_type"] or "",
+            "wagon_model": r["wagon_model"] or "",
+            "axles_count": r["axles_count"],
+            "renter": r["renter"] or "",
+            "next_repair_date": r["next_repair_date"],
         }
         for r in rows
     ]
