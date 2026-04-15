@@ -11,9 +11,6 @@ COPY . .
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
 
-# Reinstall deps to fix optional dependency issues with rollup
-RUN rm -rf node_modules package-lock.json && npm install
-
 RUN npm run build
 
 # Stage 2: Serve with nginx
