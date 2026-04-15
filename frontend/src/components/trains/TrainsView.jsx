@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
@@ -106,16 +106,32 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [mode, setMode] = useState('view');
+  const [mode, setMode] = useState('view'); // 'view' | 'create' | 'edit'
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [editingOrder, setEditingOrder] = useState(null);
   const [exporting, setExporting] = useState(false);
+
+  // Комментарии: commentMode 'view' | 'add'
+  const [commentMode, setCommentMode] = useState('view');
+  const [selectedWagons, setSelectedWagons] = useState(new Set()); // Set of wagon_id
+  const [commentText, setCommentText] = useState('');
+  const [commentSaving, setCommentSaving] = useState(false);
 
   // Выборка колонок для таблицы вагонов
   const DEFAULT_VISIBLE_IDS = TRAIN_COMPOSITION_COLUMNS
     .filter(c => c.isDefaultVisible !== false)
     .map(c => c.id);
   const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
+
+  // Липкий горизонтальный скролл
+  const tableScrollRef = useRef(null);
+  const stickyScrollRef = useRef(null);
+
+  const handleTableScroll = (e) => {
+    if (stickyScrollRef.current) {
+      stickyScrollRef.current.scrollLeft = e.target.scrollLeft;
+    }
+  };
 
   const fetchRoute = useCallback(async () => {
     setLoading(true); setError(null);
@@ -132,6 +148,57 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
   const toggleKey = (key) => setSelectedKeys(prev => {
     const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
   });
+
+  // Комментарии: выбор всех строк вагона
+  const toggleWagonForComment = (wagonId) => {
+    const wagonRows = route.wagons.filter(w => w.wagon_id === wagonId);
+    const allRowsSelected = wagonRows.every(w => selectedWagons.has(w.wagon_id));
+
+    setSelectedWagons(prev => {
+      const next = new Set(prev);
+      if (allRowsSelected) {
+        wagonRows.forEach(w => next.delete(w.wagon_id));
+      } else {
+        wagonRows.forEach(w => next.add(w.wagon_id));
+      }
+      return next;
+    });
+  };
+
+  const handleSaveComment = async () => {
+    if (selectedWagons.size === 0) {
+      alert('Выберите хотя бы один вагон');
+      return;
+    }
+    if (!commentText.trim()) {
+      alert('Введите текст комментария');
+      return;
+    }
+    setCommentSaving(true);
+    try {
+      const entityIds = Array.from(selectedWagons);
+      await api.post('/v2/comment-constructor/apply', {
+        entity_type: 'wagon',
+        entity_ids: entityIds,
+        text: commentText,
+      });
+      setCommentMode('view');
+      setSelectedWagons(new Set());
+      setCommentText('');
+      fetchRoute();
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      alert(typeof detail === 'string' ? detail : 'Ошибка сохранения комментария');
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
+  const cancelComment = () => {
+    setCommentMode('view');
+    setSelectedWagons(new Set());
+    setCommentText('');
+  };
 
   const handleDeleteOrder = async (orderId) => {
     if (!window.confirm('Удалить заявку?')) return;
@@ -182,18 +249,24 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
       {/* Тулбар */}
       <div className="trains-composition-toolbar">
         <div className="trains-composition-toolbar-left">
-          {!isClosed && mode === 'view' && (
+          {!isClosed && mode === 'view' && commentMode === 'view' && (
             <button type="button" className="trains-action-btn trains-action-btn--create"
               onClick={() => { setMode('create'); setSelectedKeys(new Set()); }}>
               <Plus size={13} /> Назначить клиентов
             </button>
           )}
-          {!isClosed && ordersCount > 0 && mode === 'view' && (
+          {!isClosed && mode === 'view' && commentMode === 'view' && (
+            <button type="button" className="trains-action-btn trains-action-btn--create"
+              onClick={() => { setCommentMode('add'); setSelectedWagons(new Set()); }}>
+              💬 Добавить комментарий
+            </button>
+          )}
+          {!isClosed && ordersCount > 0 && mode === 'view' && commentMode === 'view' && (
             <button type="button" className="trains-export-btn" onClick={handleExport} disabled={exporting}>
               <Download size={14} /> {exporting ? 'Экспорт…' : 'Сформировать JSON'}
             </button>
           )}
-          {mode === 'view' && (
+          {mode === 'view' && commentMode === 'view' && (
             <ColumnVisibilityPanel
               visibleColumnIds={visibleColumnIds}
               onVisibilityChange={setVisibleColumnIds}
@@ -223,8 +296,8 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
         )}
       </div>
 
-      {/* Форма */}
-      {(mode === 'create' || mode === 'edit') && (
+      {/* Форма заявки */}
+      {(mode === 'create' || mode === 'edit') && commentMode === 'view' && (
         <OrderFormPanel
           routeId={routeId}
           existing={mode === 'edit' ? editingOrder : null}
@@ -235,41 +308,78 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
         />
       )}
 
-      {/* Подсказка в режиме выбора */}
+      {/* Форма комментария */}
+      {commentMode === 'add' && (
+        <div className="tof-panel">
+          <div className="tof-header">
+            💬 Добавить комментарий {selectedWagons.size > 0 && <span className="tof-count">{selectedWagons.size} ваг.</span>}
+          </div>
+          <div className="tof-row">
+            <div className="tof-field tof-field--comment">
+              <span className="tof-label">Комментарий</span>
+              <textarea className="tof-input"
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                placeholder="Введите текст комментария…"
+                rows={3}
+                autoFocus
+              />
+            </div>
+            <div className="tof-actions">
+              <button type="button" className="cancel-btn" onClick={cancelComment} disabled={commentSaving}>Отмена</button>
+              <button type="button" className="save-btn" onClick={handleSaveComment} disabled={commentSaving}>
+                {commentSaving ? '…' : 'Добавить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Подсказка в режиме выбора заявки */}
       {mode === 'create' && (
         <div className="trains-select-hint">
           Отметьте строки (накладные / КТК) которые войдут в заявку, затем заполните форму выше.
         </div>
       )}
 
-      {/* Таблица */}
-      <div className="h-table-scroll">
-        <table className="excel-table compact-table trains-composition-table">
+      {/* Подсказка в режиме выбора комментария */}
+      {commentMode === 'add' && (
+        <div className="trains-select-hint">
+          Отметьте вагоны для добавления комментария, затем заполните форму выше.
+        </div>
+      )}
+
+      {/* Таблица с липким скроллом */}
+      <div className="trains-composition-scroll-wrapper">
+        <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
+          <table className="excel-table compact-table trains-composition-table">
           <colgroup>
-            {mode === 'create' && <col style={{ width: 36 }} />}
+            {(mode === 'create' || commentMode === 'add') && <col style={{ width: 36 }} />}
             {visibleCols.map(col => (
               <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
             ))}
-            {mode === 'view' && !isClosed && <col style={{ width: 36 }} />}
+            {mode === 'view' && commentMode === 'view' && !isClosed && <col style={{ width: 36 }} />}
           </colgroup>
           <thead>
             <tr>
-              {mode === 'create' && <th style={{ width: 36 }}></th>}
+              {(mode === 'create' || commentMode === 'add') && <th style={{ width: 36 }}></th>}
               {visibleCols.map(col => (
                 <th key={col.id} style={col.width ? { width: col.width } : undefined}>
                   {col.label}
                 </th>
               ))}
-              {mode === 'view' && !isClosed && <th style={{ width: 36 }}></th>}
+              {mode === 'view' && commentMode === 'view' && !isClosed && <th style={{ width: 36 }}></th>}
             </tr>
           </thead>
           <tbody>
             {route.wagons.map((wagon) => {
               const order = wagon.order;
               const key = rowKey(wagon);
-              const isSelected = selectedKeys.has(key);
-              const canSelect = mode === 'create' && !order;
-              const rowBg = isSelected ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
+              const isSelectedOrder = selectedKeys.has(key);
+              const isSelectedComment = selectedWagons.has(wagon.wagon_id);
+              const canSelectOrder = mode === 'create' && !order;
+              const canSelectComment = commentMode === 'add';
+              const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
 
               const renderCellValue = (col) => {
                 const val = wagon[col.accessorKey];
@@ -289,7 +399,8 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
                 if (col.id === 'shipper_name' || col.id === 'consignee_name' || col.id === 'cargo_name' ||
                     col.id === 'ownership' || col.id === 'wagon_model' || col.id === 'renter' ||
                     col.id === 'departure_station_name' || col.id === 'destination_station_name' ||
-                    col.id === 'last_operation_name' || col.id === 'last_station_name') {
+                    col.id === 'last_operation_name' || col.id === 'last_station_name' ||
+                    col.id === 'last_comment_text') {
                   return <span className="cell-truncate" title={val}>{val}</span>;
                 }
 
@@ -314,13 +425,18 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
 
               return (
                 <tr key={key}
-                  className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelected ? ' wagon-row--selected' : ''}`}
-                  style={{ background: rowBg, cursor: canSelect ? 'pointer' : 'default' }}
-                  onClick={canSelect ? () => toggleKey(key) : undefined}
+                  className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelectedOrder || isSelectedComment ? ' wagon-row--selected' : ''}`}
+                  style={{ background: rowBg, cursor: (canSelectOrder || canSelectComment) ? 'pointer' : 'default' }}
+                  onClick={canSelectOrder ? () => toggleKey(key) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
                 >
-                  {mode === 'create' && (
+                  {(mode === 'create' || commentMode === 'add') && (
                     <td style={{ textAlign: 'center' }}>
-                      {!order && <input type="checkbox" checked={isSelected} onChange={() => toggleKey(key)} onClick={e => e.stopPropagation()} />}
+                      {mode === 'create' && !order && (
+                        <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleKey(key)} onClick={e => e.stopPropagation()} />
+                      )}
+                      {commentMode === 'add' && (
+                        <input type="checkbox" checked={isSelectedComment} onChange={() => toggleWagonForComment(wagon.wagon_id)} onClick={e => e.stopPropagation()} />
+                      )}
                     </td>
                   )}
                   {visibleCols.map(col => (
@@ -328,7 +444,7 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
                       {renderCellValue(col)}
                     </td>
                   ))}
-                  {mode === 'view' && !isClosed && (
+                  {mode === 'view' && commentMode === 'view' && !isClosed && (
                     <td style={{ textAlign: 'center' }}>
                       {order && wagon.item_id && (
                         <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
@@ -345,6 +461,21 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
       {route.wagons.length === 0 && (
         <div className="trains-empty" style={{ padding: '20px 0' }}>Нет данных о составе поезда</div>
       )}
+        </div>
+
+        {/* Липкий горизонтальный скролл внизу */}
+        <div
+          className="trains-composition-sticky-scroll"
+          ref={stickyScrollRef}
+          onScroll={(e) => {
+            if (tableScrollRef.current) {
+              tableScrollRef.current.scrollLeft = e.target.scrollLeft;
+            }
+          }}
+        >
+          <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -452,7 +583,7 @@ export default function TrainsView({ refreshKey }) {
     </div>
   );
 
-  const TOTAL_COLS = 9; // chevron + 8 колонок данных (+ 2 live колонки: станция, операция)
+  const TOTAL_COLS = 10; // chevron + 9 колонок данных (вагоны, накладные, контейнеры + 2 live колонки: станция, операция)
 
   return (
     <div className="h-view-wrapper">
@@ -510,7 +641,8 @@ export default function TrainsView({ refreshKey }) {
             <col style={{ width: 130 }} />
             <col style={{ width: 70 }} />
             <col style={{ width: 85 }} />
-            <col style={{ width: 85 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 80 }} />
             <col style={{ width: 180 }} />
             <col style={{ width: 150 }} />
             <col style={{ width: 110 }} />
@@ -545,6 +677,9 @@ export default function TrainsView({ refreshKey }) {
               </th>
               <th style={{ textAlign: 'center' }}>
                 <span className="th-label">С накладной</span>
+              </th>
+              <th style={{ textAlign: 'center' }}>
+                <span className="th-label">Контейнеров</span>
               </th>
               <th style={{ textAlign: 'center' }}>
                 <span className="th-label">Мин. остаток</span>
@@ -603,6 +738,9 @@ export default function TrainsView({ refreshKey }) {
                       </td>
                       <td style={{ textAlign: 'center', fontSize: 13 }}>{t.wagon_total}</td>
                       <td style={{ textAlign: 'center', fontSize: 13 }}>{t.matched_wagons}</td>
+                      <td style={{ textAlign: 'center', fontSize: 13, color: t.container_count > 0 ? '#059669' : '#94a3b8' }}>
+                        {t.container_count}
+                      </td>
                       <td style={{ textAlign: 'center' }}><KmBadge km={t.min_km} /></td>
                       <td style={{ fontSize: 12, color: '#475569' }} className="cell-truncate" title={t.last_station_name || '—'}>
                         {t.last_station_name || <span className="text-muted">—</span>}

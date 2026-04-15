@@ -190,8 +190,9 @@ def list_trains(
         SELECT
             wt.number_train,
             wt.train_index,
-            COUNT(*)                                        AS wagon_total,
-            COUNT(tw.waybill_id)                           AS matched_wagons,
+            COUNT(DISTINCT w.id)                           AS wagon_total,
+            COUNT(DISTINCT CASE WHEN tw.waybill_id IS NOT NULL THEN w.id END) AS matched_wagons,
+            COUNT(DISTINCT CASE WHEN eww.container_number IS NOT NULL THEN eww.container_number END) AS container_count,
             MIN(
                 CASE
                     WHEN wt.remaining_distance ~ '^[0-9]+$'
@@ -205,7 +206,10 @@ def list_trains(
             r.id                                           AS route_id,
             r.status                                       AS route_status
         FROM wagon_trips wt
+        JOIN wagons w ON w.id = wt.wagon_id
         LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
+        LEFT JOIN etran_waybills ew ON ew.id = tw.waybill_id
+        LEFT JOIN etran_waybill_wagons eww ON eww.waybill_id = ew.id AND eww.railway_carriage_number = w.railway_carriage_number
         LEFT JOIN railway_routes r  ON r.train_number  = wt.number_train
         WHERE wt.is_active = true
           AND wt.number_train IS NOT NULL
@@ -221,6 +225,7 @@ def list_trains(
             "train_index": r["train_index"] or "",
             "wagon_total": r["wagon_total"],
             "matched_wagons": r["matched_wagons"],
+            "container_count": r["container_count"] or 0,
             "min_km": r["min_km"],
             "last_operation_date": r["last_operation_date"].isoformat() if r["last_operation_date"] else None,
             "last_operation_name": r["last_operation_name"] or "",
@@ -309,10 +314,12 @@ def _build_snapshot(db: Session, train_number: str) -> list:
     - wagon_trips (базовые данные рейса)
     - etran_waybills (накладная)
     - etran_waybill_wagons (вагон в накладной с техническими данными)
+    - wagon_entity_comments (комментарии к вагонам)
     """
     rows = db.execute(text("""
         SELECT
             wt.id                              AS trip_id,
+            w.id                               AS wagon_id,
             w.railway_carriage_number         AS wagon_number,
             wt.remaining_distance,
             wt.last_station_name,
@@ -334,7 +341,11 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             eww.wagon_model,
             eww.axles_count,
             eww.renter,
-            eww.next_repair_date
+            eww.next_repair_date,
+            (SELECT comment_text FROM wagon_entity_comments
+             WHERE wagon_id = w.id ORDER BY created_at DESC LIMIT 1) AS last_comment_text,
+            (SELECT author_name FROM wagon_entity_comments
+             WHERE wagon_id = w.id ORDER BY created_at DESC LIMIT 1) AS last_comment_author
         FROM wagon_trips wt
         JOIN wagons w ON w.id = wt.wagon_id
         LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
@@ -351,6 +362,7 @@ def _build_snapshot(db: Session, train_number: str) -> list:
     return [
         {
             "trip_id": str(r["trip_id"]),
+            "wagon_id": str(r["wagon_id"]),
             "wagon_number": r["wagon_number"],
             "remaining_distance": r["remaining_distance"],
             "last_station_name": r["last_station_name"] or "",
@@ -373,6 +385,8 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             "axles_count": r["axles_count"],
             "renter": r["renter"] or "",
             "next_repair_date": r["next_repair_date"],
+            "last_comment_text": r["last_comment_text"] or "",
+            "last_comment_author": r["last_comment_author"] or "",
         }
         for r in rows
     ]

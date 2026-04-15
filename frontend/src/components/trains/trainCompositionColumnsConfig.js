@@ -47,6 +47,11 @@ export const TRAIN_COMPOSITION_COLUMNS = [
   { id: 'cargo_weight', label: 'Вес груза', accessorKey: 'cargo_weight', filterable: false, isRequired: false, isDefaultVisible: false, width: '90px' },
   { id: 'zpu_number', label: 'ЗПУ №', accessorKey: 'zpu_number', filterable: false, isRequired: false, isDefaultVisible: false, width: '100px' },
   { id: 'zpu_type', label: 'Тип ЗПУ', accessorKey: 'zpu_type', filterable: false, isRequired: false, isDefaultVisible: false, width: '100px' },
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Комментарии
+  // ═════════════════════════════════════════════════════════════════════
+  { id: 'last_comment_text', label: 'Последний комментарий', accessorKey: 'last_comment_text', filterable: false, isRequired: false, isDefaultVisible: false, width: '220px' },
 ];
 
 export const TRAIN_COMPOSITION_TABLE_KEY = 'train_composition_wagons_table';

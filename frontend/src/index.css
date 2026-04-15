@@ -858,6 +858,13 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 }
 
 /* Таблица состава поезда (с горизонтальным скроллом) */
+.trains-composition-scroll-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .trains-composition-table {
   width: auto;  /* Не 100%, а минимально необходимая ширина */
   table-layout: auto;  /* Позволяет использовать colgroup ширины */
@@ -871,6 +878,39 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
+}
+
+/* Липкий горизонтальный скролл внизу таблицы */
+.trains-composition-sticky-scroll {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 50;
+  box-shadow: 0 -2px 4px rgba(0,0,0,0.02);
+}
+
+.trains-composition-sticky-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.trains-composition-sticky-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.trains-composition-sticky-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.trains-composition-sticky-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* км бейдж */
