@@ -593,3 +593,16 @@ def sync_new_model_incremental(db: Session) -> dict:
     строки dislocation где flight_id IS NULL, поэтому повторный запуск безопасен.
     """
     return sync_new_model(db)
+
+
+def sync_all(db: Session):
+    # ... Step 1-8 ...
+    
+    # Backfill: закрыть старые маршруты с payload'ем
+    db.execute(text("""
+        UPDATE railway_routes
+        SET status = 'closed'
+        WHERE route_payload IS NOT NULL
+          AND status != 'closed'
+    """))
+    db.commit()
