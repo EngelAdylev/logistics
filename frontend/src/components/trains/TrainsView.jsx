@@ -149,6 +149,30 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
     const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next;
   });
 
+  const toggleWaybillGroup = (wagon) => {
+    if (!wagon?.waybill_id) {
+      toggleKey(rowKey(wagon));
+      return;
+    }
+
+    const groupKeys = route.wagons
+      .filter(w => !w.order && w.waybill_id === wagon.waybill_id)
+      .map(w => rowKey(w));
+
+    if (groupKeys.length === 0) return;
+
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      const allSelected = groupKeys.every(k => next.has(k));
+      if (allSelected) {
+        groupKeys.forEach(k => next.delete(k));
+      } else {
+        groupKeys.forEach(k => next.add(k));
+      }
+      return next;
+    });
+  };
+
   // Комментарии: выбор всех строк вагона
   const toggleWagonForComment = (wagonId) => {
     const wagonRows = route.wagons.filter(w => w.wagon_id === wagonId);
@@ -427,12 +451,12 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
                 <tr key={key}
                   className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelectedOrder || isSelectedComment ? ' wagon-row--selected' : ''}`}
                   style={{ background: rowBg, cursor: (canSelectOrder || canSelectComment) ? 'pointer' : 'default' }}
-                  onClick={canSelectOrder ? () => toggleKey(key) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
+                  onClick={canSelectOrder ? () => toggleWaybillGroup(wagon) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
                 >
                   {(mode === 'create' || commentMode === 'add') && (
                     <td style={{ textAlign: 'center' }}>
                       {mode === 'create' && !order && (
-                        <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleKey(key)} onClick={e => e.stopPropagation()} />
+                        <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleWaybillGroup(wagon)} onClick={e => e.stopPropagation()} />
                       )}
                       {commentMode === 'add' && (
                         <input type="checkbox" checked={isSelectedComment} onChange={() => toggleWagonForComment(wagon.wagon_id)} onClick={e => e.stopPropagation()} />
