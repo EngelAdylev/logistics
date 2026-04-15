@@ -406,6 +406,13 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
               const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
 
               const renderCellValue = (col) => {
+                if (col.id === 'client_name') {
+                  const clientName = wagon.order?.client_name || '';
+                  return clientName
+                    ? <span className="cell-truncate" title={clientName}>{clientName}</span>
+                    : <span className="text-muted">—</span>;
+                }
+
                 const val = wagon[col.accessorKey];
                 if (val === null || val === undefined || val === '') {
                   return <span className="text-muted">—</span>;

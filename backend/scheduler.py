@@ -653,6 +653,7 @@ def create_operation80_route_payloads():
                 continue
             route.route_payload = _build_route_payload(route)
             route.route_payload_created_at = now
+            route.status = "closed"
             created += 1
 
         if created:

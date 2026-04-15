@@ -221,6 +221,7 @@ def list_trains(
         WHERE wt.is_active = true
           AND wt.number_train IS NOT NULL
           AND TRIM(COALESCE(wt.destination_station_code, '')) = :dst
+          AND COALESCE(r.status, 'open') <> 'closed'
         GROUP BY wt.number_train, wt.train_index, r.id, r.status
         ORDER BY min_km ASC NULLS LAST
     """), {"dst": DELIVERY_STATION}).mappings().all()
