@@ -210,6 +210,7 @@ def list_trains(
             (ARRAY_AGG(wt.last_operation_name ORDER BY wt.last_operation_date DESC NULLS LAST))[1] AS last_operation_name,
             (ARRAY_AGG(wt.last_station_name ORDER BY wt.last_operation_date DESC NULLS LAST))[1] AS last_station_name,
             r.id                                           AS route_id,
+            r.route_number                                 AS route_number,
             r.status                                       AS route_status
         FROM wagon_trips wt
         JOIN wagons w ON w.id = wt.wagon_id
@@ -238,6 +239,7 @@ def list_trains(
             "last_station_name": r["last_station_name"] or "",
             "ready": r["min_km"] is not None and r["min_km"] <= 150,
             "route_id": str(r["route_id"]) if r["route_id"] else None,
+            "route_number": r["route_number"],
             "route_status": r["route_status"],
         })
     return {"items": result, "total": len(result)}
@@ -303,9 +305,12 @@ def get_route(
     return {
         "id": str(route.id),
         "train_number": route.train_number,
+        "route_number": route.route_number,
         "train_index": route.train_index or "",
         "status": route.status,
         "created_at": route.created_at.isoformat() if route.created_at else None,
+        "route_payload_created_at": route.route_payload_created_at.isoformat() if route.route_payload_created_at else None,
+        "route_payload": route.route_payload,
         "wagons": wagons_out,
         "orders": [_order_out(o) for o in route.orders],
     }
@@ -594,6 +599,7 @@ def export_route(
 
     export = {
         "train_number": route.train_number,
+        "route_number": route.route_number,
         "train_index": route.train_index or "",
         "route_id": str(route.id),
         "created_at": route.created_at.isoformat() if route.created_at else None,

@@ -318,8 +318,12 @@ class RailwayRoute(Base):
     __tablename__ = "railway_routes"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     train_number = Column(Text, nullable=False, unique=True, index=True)
+    route_number = Column(Integer, nullable=False, unique=True,
+                          server_default=text("nextval('railway_route_number_seq')"))
     train_index = Column(Text)
     snapshot_data = Column(JSONB)   # список вагонов в момент создания
+    route_payload = Column(JSONB)   # пакет route+orders при первой операции 80
+    route_payload_created_at = Column(DateTime(timezone=True))
     status = Column(Text, default='open')   # open / closed
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 import re
+import uuid
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text
 from database import SessionLocal
@@ -7,6 +8,8 @@ from models import TrackingWagon
 import logging
 
 logger = logging.getLogger(__name__)
+DELIVERY_STATION_CODE = "648400"
+ROUTE_PAYLOAD_SITE = "Контейнерная площадка"
 
 
 def _fix_dt_str(s: str) -> str:
@@ -557,13 +560,13 @@ def check_and_create_route_snapshots():
                   AND eww.railway_carriage_number = w.railway_carriage_number
             WHERE wt.is_active = true
               AND wt.number_train IS NOT NULL
-              AND TRIM(COALESCE(wt.destination_station_code, '')) = '648400'
+              AND TRIM(COALESCE(wt.destination_station_code, '')) = :dst
             GROUP BY wt.number_train, wt.train_index
             HAVING MIN(
                 CASE WHEN wt.remaining_distance ~ '^[0-9]+$'
                 THEN wt.remaining_distance::int ELSE NULL END
             ) <= 150
-        """)).mappings().all()
+        """), {"dst": DELIVERY_STATION_CODE}).mappings().all()
 
         created = 0
         for row in rows:
@@ -593,6 +596,78 @@ def check_and_create_route_snapshots():
         _db.close()
 
 
+def _build_route_payload(route) -> dict:
+    """
+    JSON-пакет для интеграции, формируется в момент первой операции 80.
+    Одна запись в orders = одна строка cargo (order item).
+    """
+    orders_payload = []
+    for order in sorted(route.orders, key=lambda o: (o.created_at or datetime.min.replace(tzinfo=timezone.utc), str(o.id))):
+        order_number = str(order.order_number) if order.order_number is not None else ""
+        for _item in order.items:
+            orders_payload.append({
+                "_idCargo": str(uuid.uuid4()),
+                "orderNumber": order_number,
+            })
+
+    return {
+        "_id": str(uuid.uuid4()),
+        "site": ROUTE_PAYLOAD_SITE,
+        "routeNumber": str(route.route_number),
+        "orders": orders_payload,
+    }
+
+
+def create_operation80_route_payloads():
+    """
+    Для маршрутов, где впервые появилась операция 80 (подача вагона на ПП),
+    фиксирует route_payload и route_payload_created_at (один раз, идемпотентно).
+    """
+    from database import SessionLocal as _SessionLocal
+    import models as _models
+    _db = _SessionLocal()
+    try:
+        route_ids = _db.execute(text("""
+            SELECT r.id
+            FROM railway_routes r
+            WHERE r.route_payload IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM wagon_trips wt
+                WHERE wt.is_active = true
+                  AND wt.number_train = r.train_number
+                  AND TRIM(COALESCE(wt.destination_station_code, '')) = :dst
+                  AND LTRIM(BTRIM(COALESCE(wt.last_operation_code, '')), '0') = '80'
+              )
+            ORDER BY r.created_at
+        """), {"dst": DELIVERY_STATION_CODE}).scalars().all()
+
+        if not route_ids:
+            return
+
+        created = 0
+        now = datetime.now(timezone.utc)
+        for route_id in route_ids:
+            route = _db.query(_models.RailwayRoute).filter(_models.RailwayRoute.id == route_id).first()
+            if not route or route.route_payload is not None:
+                continue
+            route.route_payload = _build_route_payload(route)
+            route.route_payload_created_at = now
+            created += 1
+
+        if created:
+            _db.commit()
+            logger.info("create_operation80_route_payloads: created %d payloads", created)
+    except Exception as e:
+        logger.warning("create_operation80_route_payloads failed: %s", e)
+        try:
+            _db.rollback()
+        except Exception:
+            pass
+    finally:
+        _db.close()
+
+
 def sync_all():
     """Запускает синхронизацию старой (tracking_wagons) и новой (wagons/trips/operations) моделей."""
     sync_dislocation_to_tracking()
@@ -613,6 +688,12 @@ def sync_all():
         check_and_create_route_snapshots()
     except Exception as e:
         logger.warning("check_and_create_route_snapshots failed (non-critical): %s", e)
+
+    # Фиксируем интеграционный пакет route+orders при появлении операции 80
+    try:
+        create_operation80_route_payloads()
+    except Exception as e:
+        logger.warning("create_operation80_route_payloads failed (non-critical): %s", e)
 
 
 def start_scheduler():
