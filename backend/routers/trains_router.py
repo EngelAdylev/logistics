@@ -192,7 +192,13 @@ def list_trains(
             wt.train_index,
             COUNT(DISTINCT w.id)                           AS wagon_total,
             COUNT(DISTINCT CASE WHEN tw.waybill_id IS NOT NULL THEN w.id END) AS matched_wagons,
-            COUNT(DISTINCT CASE WHEN eww.container_number IS NOT NULL THEN eww.container_number END) AS container_count,
+            COUNT(
+                DISTINCT CASE
+                    WHEN NULLIF(BTRIM(eww.container_number), '') IS NOT NULL
+                    THEN NULLIF(BTRIM(eww.container_number), '')
+                    ELSE NULL
+                END
+            ) AS container_count,
             MIN(
                 CASE
                     WHEN wt.remaining_distance ~ '^[0-9]+$'
