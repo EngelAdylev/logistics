@@ -475,7 +475,6 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
         >
           <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
         </div>
-      </div>
     </div>
   );
 }
