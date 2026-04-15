@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX } from 'lucide-react';
 import { api } from '../../api';
+import ColumnFilter from '../../table/ColumnFilter';
 
 /* ─── helpers ─── */
 function rowKey(wagon) {
@@ -288,12 +289,36 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
   );
 }
 
+/* ─── утилиты поиска ─── */
+function parseTokens(input) {
+  return input.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function matchesAny(val, tokens) {
+  const lower = (val || '').toLowerCase();
+  return tokens.some(t => lower.includes(t));
+}
+
+function getStatusDisplay(t) {
+  if (t.route_status === 'closed') return 'Закрыт';
+  if (t.route_status === 'open')   return 'Открыт';
+  if (t.ready)                     return 'Формируется';
+  return 'Мониторинг';
+}
+
 /* ─── главный компонент ─── */
 export default function TrainsView({ refreshKey }) {
   const [trains, setTrains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [expandedTrain, setExpandedTrain] = useState(null);
+
+  // Множественное раскрытие
+  const [expandedTrains, setExpandedTrains] = useState(new Set());
+
+  // Поиск и фильтры
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [columnFilters, setColumnFilters] = useState({});
 
   const fetchTrains = useCallback(async () => {
     setLoading(true); setError(null);
@@ -304,13 +329,60 @@ export default function TrainsView({ refreshKey }) {
 
   useEffect(() => { fetchTrains(); }, [refreshKey, fetchTrains]);
 
-  const toggle = (t) => {
-    if (!t.route_id) return;
-    setExpandedTrain(prev => prev === t.train_number ? null : t.train_number);
+  // Добавляем вычисляемое поле status_display для ColumnFilter
+  const processedTrains = useMemo(() =>
+    trains.map(t => ({ ...t, status_display: getStatusDisplay(t) })),
+    [trains]
+  );
+
+  // Фильтрация: текстовый поиск + колоночные фильтры
+  const filteredTrains = useMemo(() => {
+    let result = processedTrains;
+
+    const tokens = parseTokens(search.toLowerCase());
+    if (tokens.length) {
+      result = result.filter(t =>
+        matchesAny(t.train_number, tokens) || matchesAny(t.train_index, tokens)
+      );
+    }
+
+    for (const [colId, vals] of Object.entries(columnFilters)) {
+      if (!vals?.length) continue;
+      result = result.filter(t => {
+        const v = t[colId];
+        const str = v?.toString?.()?.trim?.() ?? '';
+        return vals.includes(str || 'Без поезда');
+      });
+    }
+
+    return result;
+  }, [processedTrains, search, columnFilters]);
+
+  const toggleTrain = (trainNumber, canExpand) => {
+    if (!canExpand) return;
+    setExpandedTrains(prev => {
+      const next = new Set(prev);
+      if (next.has(trainNumber)) next.delete(trainNumber);
+      else next.add(trainNumber);
+      return next;
+    });
   };
 
+  const handleFilterChange = (colId, vals) =>
+    setColumnFilters(prev => ({ ...prev, [colId]: vals }));
+
+  const handleResetFilters = () => setColumnFilters({});
+
+  const hasSearch  = search.trim().length > 0;
+  const hasFilters = Object.values(columnFilters).some(v => v?.length > 0);
+
   if (loading) return <div className="data-loading">Загрузка поездов…</div>;
-  if (error)   return <div className="data-error">{error}<button type="button" className="retry-btn" onClick={fetchTrains}>Повторить</button></div>;
+  if (error)   return (
+    <div className="data-error">
+      {error}
+      <button type="button" className="retry-btn" onClick={fetchTrains}>Повторить</button>
+    </div>
+  );
 
   if (trains.length === 0) return (
     <div className="trains-empty">
@@ -320,54 +392,173 @@ export default function TrainsView({ refreshKey }) {
     </div>
   );
 
-  return (
-    <div className="trains-view">
+  const TOTAL_COLS = 7; // chevron + 6 колонок данных
 
-      {/* Шапка таблицы */}
-      <div className="trains-list-header">
-        <span style={{ width: 24 }}></span>
-        <span style={{ flex: '0 0 130px' }}>№ поезда</span>
-        <span style={{ flex: '0 0 150px' }}>Индекс</span>
-        <span style={{ flex: '0 0 80px', textAlign: 'center' }}>Вагонов</span>
-        <span style={{ flex: '0 0 90px', textAlign: 'center' }}>С накладной</span>
-        <span style={{ flex: '0 0 110px', textAlign: 'center' }}>Мин. остаток</span>
-        <span style={{ flex: '0 0 120px', textAlign: 'center' }}>Статус</span>
+  return (
+    <div className="h-view-wrapper">
+
+      {/* ── Тулбар ── */}
+      <div className="h-compact-toolbar">
+        <div className="h-compact-toolbar-left">
+          <button
+            type="button"
+            className={`compact-icon-btn ${searchOpen || hasSearch ? 'active' : ''}`}
+            onClick={() => setSearchOpen(v => !v)}
+            title="Поиск по номеру поезда или индексу"
+          >
+            <Search size={15} />
+          </button>
+          {searchOpen && (
+            <div className="h-compact-search">
+              <input
+                type="text"
+                className="h-compact-search-input"
+                placeholder="Номер поезда или индекс через пробел…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                autoFocus
+              />
+              {hasSearch && (
+                <button type="button" className="h-compact-search-clear" onClick={() => setSearch('')}>✕</button>
+              )}
+            </div>
+          )}
+          <span className="h-compact-meta">
+            {trains.length}
+            {(hasSearch || hasFilters) && filteredTrains.length !== trains.length && ` / ${filteredTrains.length}`}
+          </span>
+        </div>
+        <div className="h-compact-toolbar-right">
+          <button
+            type="button"
+            className={`compact-icon-btn ${hasFilters ? 'warning' : ''}`}
+            onClick={handleResetFilters}
+            disabled={!hasFilters}
+            title="Сбросить все фильтры"
+          >
+            <FilterX size={15} />
+          </button>
+        </div>
       </div>
 
-      {/* Строки поездов */}
-      {trains.map((t) => {
-        const isExpanded = expandedTrain === t.train_number;
-        const canExpand = !!t.route_id;
+      {/* ── Таблица ── */}
+      <div className="h-table-scroll">
+        <table className="excel-table compact-table trains-main-table">
+          <colgroup>
+            <col style={{ width: 28 }} />
+            <col style={{ width: 120 }} />
+            <col style={{ width: 160 }} />
+            <col style={{ width: 75 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 110 }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th />
+              <th className="th-with-filter">
+                <span className="th-label">№ поезда</span>
+                <ColumnFilter
+                  columnId="train_number"
+                  label="№ поезда"
+                  rows={processedTrains}
+                  activeValues={columnFilters.train_number}
+                  onApply={vals => handleFilterChange('train_number', vals)}
+                  onClear={() => handleFilterChange('train_number', [])}
+                />
+              </th>
+              <th className="th-with-filter">
+                <span className="th-label">Индекс</span>
+                <ColumnFilter
+                  columnId="train_index"
+                  label="Индекс"
+                  rows={processedTrains}
+                  activeValues={columnFilters.train_index}
+                  onApply={vals => handleFilterChange('train_index', vals)}
+                  onClear={() => handleFilterChange('train_index', [])}
+                />
+              </th>
+              <th style={{ textAlign: 'center' }}>
+                <span className="th-label">Вагонов</span>
+              </th>
+              <th style={{ textAlign: 'center' }}>
+                <span className="th-label">С накладной</span>
+              </th>
+              <th style={{ textAlign: 'center' }}>
+                <span className="th-label">Мин. остаток</span>
+              </th>
+              <th className="th-with-filter" style={{ textAlign: 'center' }}>
+                <span className="th-label">Статус</span>
+                <ColumnFilter
+                  columnId="status_display"
+                  label="Статус"
+                  rows={processedTrains}
+                  activeValues={columnFilters.status_display}
+                  onApply={vals => handleFilterChange('status_display', vals)}
+                  onClear={() => handleFilterChange('status_display', [])}
+                />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredTrains.length === 0 ? (
+              <tr>
+                <td colSpan={TOTAL_COLS} className="empty-table-message">
+                  Нет поездов по запросу
+                </td>
+              </tr>
+            ) : (
+              filteredTrains.map(t => {
+                const canExpand  = !!t.route_id;
+                const isExpanded = expandedTrains.has(t.train_number);
 
-        return (
-          <div key={t.train_number} className={`trains-accordion${isExpanded ? ' trains-accordion--open' : ''}${t.ready ? ' trains-accordion--ready' : ''}`}>
-            <div
-              className="trains-accordion-row"
-              onClick={() => toggle(t)}
-              style={{ cursor: canExpand ? 'pointer' : 'default' }}
-              title={!canExpand ? (t.ready ? 'Болванка формируется…' : 'Доступно при остатке ≤ 150 км') : undefined}
-            >
-              <span className="trains-accordion-chevron">
-                {canExpand
-                  ? (isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />)
-                  : <span style={{ width: 15 }} />}
-              </span>
-              <span style={{ flex: '0 0 130px', fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{t.train_number}</span>
-              <span style={{ flex: '0 0 150px', fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>{t.train_index || '—'}</span>
-              <span style={{ flex: '0 0 80px', textAlign: 'center', fontSize: 13 }}>{t.wagon_total}</span>
-              <span style={{ flex: '0 0 90px', textAlign: 'center', fontSize: 13 }}>{t.matched_wagons}</span>
-              <span style={{ flex: '0 0 110px', textAlign: 'center' }}><KmBadge km={t.min_km} /></span>
-              <span style={{ flex: '0 0 120px', textAlign: 'center' }}><RouteStatus routeStatus={t.route_status} ready={t.ready} /></span>
-            </div>
+                return (
+                  <React.Fragment key={t.train_number}>
+                    <tr
+                      className={`train-row${isExpanded ? ' train-row--expanded' : ''}${t.ready ? ' train-row--ready' : ''}`}
+                      onClick={() => toggleTrain(t.train_number, canExpand)}
+                      style={{ cursor: canExpand ? 'pointer' : 'default' }}
+                      title={!canExpand
+                        ? (t.ready ? 'Болванка формируется…' : 'Доступно при остатке ≤ 150 км')
+                        : undefined}
+                    >
+                      <td style={{ textAlign: 'center', color: '#94a3b8', padding: '0 4px' }}>
+                        {canExpand
+                          ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
+                          : <span style={{ display: 'inline-block', width: 14 }} />}
+                      </td>
+                      <td style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
+                        {t.train_number}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>
+                        {t.train_index || <span className="text-muted">—</span>}
+                      </td>
+                      <td style={{ textAlign: 'center', fontSize: 13 }}>{t.wagon_total}</td>
+                      <td style={{ textAlign: 'center', fontSize: 13 }}>{t.matched_wagons}</td>
+                      <td style={{ textAlign: 'center' }}><KmBadge km={t.min_km} /></td>
+                      <td style={{ textAlign: 'center' }}>
+                        <RouteStatus routeStatus={t.route_status} ready={t.ready} />
+                      </td>
+                    </tr>
 
-            {isExpanded && canExpand && (
-              <div className="trains-accordion-body">
-                <TrainComposition routeId={t.route_id} trainNumber={t.train_number} onExported={fetchTrains} />
-              </div>
+                    {isExpanded && canExpand && (
+                      <tr className="train-composition-row">
+                        <td colSpan={TOTAL_COLS} style={{ padding: 0, background: '#f8fafc' }}>
+                          <TrainComposition
+                            routeId={t.route_id}
+                            trainNumber={t.train_number}
+                            onExported={fetchTrains}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })
             )}
-          </div>
-        );
-      })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

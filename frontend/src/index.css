@@ -846,6 +846,17 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   font-size: 11px; color: #64748b; font-family: monospace;
 }
 
+/* Новая compact-таблица поездов (trains-main-table) */
+.trains-main-table .train-row:hover { background: #f1f5f9; }
+.trains-main-table .train-row--ready { background: #f0fdf4; }
+.trains-main-table .train-row--ready:hover { background: #dcfce7; }
+.trains-main-table .train-row--expanded { background: #eff6ff !important; }
+.trains-main-table .train-row--expanded:hover { background: #dbeafe !important; }
+.trains-main-table .train-composition-row > td {
+  border-top: 2px solid #bfdbfe;
+  border-bottom: 2px solid #bfdbfe;
+}
+
 /* км бейдж */
 .km-badge {
   display: inline-block;
