@@ -126,3 +126,128 @@ frontend/src/
 - У вагона не может быть >1 активного рейса одновременно (Step 8 — нормализация)
 - Одна строка заявки не может быть в двух заявках (partial unique index)
 - Экспорт JSON → маршрут закрыт → необратимо
+
+## API Reference (Поезда + Комментарии)
+
+### GET /v2/trains
+Список активных поездов с назначением на 648400.
+```
+Response: { items: [...], total: int }
+Поля item: train_number, train_index, wagon_total (DISTINCT), matched_wagons (с накладной),
+  container_count, min_km, last_operation_name, last_station_name, ready (bool),
+  route_id (UUID|null), route_status ("open"|"closed"|null)
+```
+
+### GET /v2/routes/{route_id}
+Состав поезда (snapshot) + заявки.
+```
+Response: { id, train_number, train_index, status, wagons: [...], orders: [...] }
+Поля wagon: trip_id, wagon_id, wagon_number, remaining_distance, last_station_name,
+  last_operation_name, departure_station_name, destination_station_name,
+  waybill_id, waybill_number, container_number, shipper_name, consignee_name,
+  cargo_name, cargo_weight, lifting_capacity, ownership, weight_net,
+  zpu_number, zpu_type, wagon_model, axles_count, renter, next_repair_date,
+  last_comment_text, last_comment_author, order (obj|null), item_id (UUID|null)
+```
+
+### POST /v2/routes/{route_id}/orders
+Создать заявку. Body: `{ client_name, contract_number, status, comment, items: [{wagon_number, waybill_id, container_number}] }`
+
+### PATCH /v2/orders/{order_id}
+Обновить шапку заявки. Body: `{ client_name?, contract_number?, status?, comment? }`
+
+### DELETE /v2/orders/{order_id}
+Удалить заявку целиком (каскад на items).
+
+### DELETE /v2/order-items/{item_id}
+Убрать один вагон из заявки.
+
+### GET /v2/routes/{route_id}/export
+Экспорт JSON для 1С. **Необратимо** — маршрут переходит в status='closed'.
+
+### POST /v2/comment-constructor/apply
+Массовое добавление комментария к вагонам/рейсам.
+```
+Body: { entity_type: "wagon"|"trip", entity_ids: [UUID], text: string (1-2000) }
+Response: { total_requested, success_count, failed_count, failed_ids, status, message }
+Лимит: 200 entity_ids за запрос.
+```
+
+## State Management (TrainComposition)
+
+В TrainComposition два независимых режима работают параллельно:
+
+### Заявки (Orders)
+```
+mode: 'view' | 'create' | 'edit'
+selectedKeys: Set<rowKey>         — ключ = wb:{waybill_id}:ktk:{container} или wagon:{number}
+editingOrder: order object | null
+```
+Выбор идёт **по строке** (одна строка = одна накладная/КТК). Один вагон может иметь несколько строк.
+
+### Комментарии (Comments)
+```
+commentMode: 'view' | 'add'
+selectedWagons: Set<wagon_id>     — ключ = UUID вагона
+commentText: string
+```
+Выбор идёт **по вагону** — клик на чекбокс выделяет ВСЕ строки этого wagon_id.
+
+### Правило взаимоисключения
+Кнопки "Назначить клиентов" и "Добавить комментарий" скрываются когда другой режим активен. Одновременно mode='create' и commentMode='add' невозможно через UI.
+
+## Известные Edge Cases и Грабли
+
+### 1. Вагон с несколькими накладными
+Один wagon_number может иметь 2-3 строки в таблице (разные waybill_id/container_number). При подсчёте вагонов в поезде используй `COUNT(DISTINCT w.id)`, не `COUNT(*)`.
+
+### 2. wagon_id vs wagon_number
+`wagon_id` — UUID из таблицы wagons. `wagon_number` — строковый номер вагона (8 цифр). Для комментариев нужен `wagon_id` (UUID). Для заявок — `waybill_id` + `container_number`.
+
+### 3. Закрытый маршрут (isClosed)
+После экспорта JSON маршрут закрыт навсегда. В UI скрываются: кнопки назначения клиентов, комментариев, удаления заявок. Данные только на чтение.
+
+### 4. Пустой snapshot
+Если `_build_snapshot()` возвращает 0 строк — вагоны могли архивироваться между запросами. Маршрут показывает "Нет данных о составе поезда".
+
+### 5. Перецепка вагона
+Вагон может перейти из одного поезда в другой. Заявка привязана к `wagon_trip_id` (рейсу), а не к поезду. Если вагон перецеплен — он исчезнет из старого поезда и появится в новом, но заявка не потеряется.
+
+### 6. Fail-safe синка
+Если API РЖД вернул пустые данные (0 вагонов) — sync_service НЕ архивирует существующие рейсы. Иначе вся база уйдёт в архив.
+
+### 7. Дубли при ARRAY_AGG
+В GET /v2/trains используются `ARRAY_AGG(last_station_name ORDER BY last_operation_date DESC)` для получения live-статуса. Берём `[0]` элемент — это самая свежая запись. Если все null — покажется "—".
+
+## Практические примеры
+
+### Добавить новую колонку в таблицу состава
+
+1. **Backend** (trains_router.py → `_build_snapshot()`):
+   - Добавь поле в SELECT запрос
+   - Добавь в return dict: `"new_field": r["new_field"] or ""`
+
+2. **Frontend config** (trainCompositionColumnsConfig.js):
+   ```js
+   { id: 'new_field', label: 'Название', accessorKey: 'new_field',
+     filterable: false, isRequired: false, isDefaultVisible: false, width: '120px' }
+   ```
+
+3. **Frontend render** (TrainsView.jsx → `renderCellValue()`):
+   - Если нужна спецобработка (truncate, mono, date) — добавь `if (col.id === 'new_field')`
+   - Если обычный текст — ничего не делай, отрисуется через default
+
+### Добавить новый режим работы (по аналогии с комментариями)
+
+1. Добавь state: `const [newMode, setNewMode] = useState('view');`
+2. Добавь кнопку в toolbar с условием `mode === 'view' && commentMode === 'view' && newMode === 'view'`
+3. Добавь форму после `{/* Форма комментария */}`
+4. В таблице: добавь условие для чекбоксов `(mode === 'create' || commentMode === 'add' || newMode === 'active')`
+5. Скрой action-колонку когда режим активен
+
+### Отладка пустых данных в таблице
+
+1. Открой Network → GET /v2/routes/{id} → проверь что поле есть в wagons[]
+2. Если поле null — проблема в `_build_snapshot()`, проверь JOIN и SELECT
+3. Если поле есть но не видно — проверь `visibleColumnIds` и `trainCompositionColumnsConfig.js`
+4. Если поле видно но "—" — проверь `accessorKey` совпадает с ключом в JSON
