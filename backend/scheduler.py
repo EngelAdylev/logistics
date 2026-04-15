@@ -669,6 +669,34 @@ def create_operation80_route_payloads():
         _db.close()
 
 
+def close_routes_with_payload():
+    """
+    Страховка для ранее созданных payload:
+    если payload уже есть, маршрут должен быть закрыт.
+    """
+    from database import SessionLocal as _SessionLocal
+    _db = _SessionLocal()
+    try:
+        updated = _db.execute(text("""
+            UPDATE railway_routes
+            SET status = 'closed',
+                updated_at = now()
+            WHERE route_payload IS NOT NULL
+              AND COALESCE(status, 'open') <> 'closed'
+        """)).rowcount or 0
+        if updated:
+            _db.commit()
+            logger.info("close_routes_with_payload: closed %d routes", updated)
+    except Exception as e:
+        logger.warning("close_routes_with_payload failed: %s", e)
+        try:
+            _db.rollback()
+        except Exception:
+            pass
+    finally:
+        _db.close()
+
+
 def sync_all():
     """Запускает синхронизацию старой (tracking_wagons) и новой (wagons/trips/operations) моделей."""
     sync_dislocation_to_tracking()
@@ -695,6 +723,12 @@ def sync_all():
         create_operation80_route_payloads()
     except Exception as e:
         logger.warning("create_operation80_route_payloads failed (non-critical): %s", e)
+
+    # Доводим статус старых маршрутов с уже сформированным payload
+    try:
+        close_routes_with_payload()
+    except Exception as e:
+        logger.warning("close_routes_with_payload failed (non-critical): %s", e)
 
 
 def start_scheduler():
