@@ -4,6 +4,8 @@
 Эндпоинты:
   POST /v2/routes/snapshot-debug       — диагностика создания болванок
   GET  /v2/trains                      — список активных поездов
+  GET  /v2/routes                      — список всех маршрутов (для аналитики)
+  GET  /v2/orders                      — список всех заявок (для аналитики)
   GET  /v2/routes/{route_id}           — маршрут + состав + заявки
   POST /v2/routes/{route_id}/orders    — создать заявку (с несколькими вагонами)
   PATCH /v2/orders/{order_id}          — обновить шапку заявки
@@ -243,6 +245,111 @@ def list_trains(
             "route_number": r["route_number"],
             "route_status": r["route_status"],
         })
+    return {"items": result, "total": len(result)}
+
+
+# ─── GET /v2/routes (список всех маршрутов для аналитики) ─────────────────────
+
+@router.get("/routes")
+def list_routes(
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Список всех маршрутов (рейсов) с информацией по заявкам и вагонам."""
+    routes = db.query(models.RailwayRoute).all()
+    result = []
+
+    for route in routes:
+        # Получаем живой снимок вагонов если маршрут открыт
+        snapshot = _build_snapshot(db, route.train_number) or (route.snapshot_data or [])
+
+        # Получаем все заявки по этому маршруту
+        orders = db.query(models.ReceivingOrder).filter(
+            models.ReceivingOrder.route_id == route.id
+        ).all()
+
+        # Подготавливаем список вагонов с инфо о заявках
+        wagons_data = []
+        for wagon in snapshot:
+            # Ищем заявку для этого вагона
+            order_id = None
+            order_number = None
+            client_name = None
+            for order in orders:
+                for item in order.items or []:
+                    if (item.wagon_number == wagon.get("wagon_number") and
+                        item.waybill_id == wagon.get("waybill_id")):
+                        order_id = str(order.id)
+                        order_number = order.order_number
+                        client_name = order.client_name
+                        break
+
+            wagons_data.append({
+                "wagon_number": wagon.get("wagon_number"),
+                "waybill_number": wagon.get("waybill_number"),
+                "container_number": wagon.get("container_number"),
+                "shipper_name": wagon.get("shipper_name"),
+                "consignee_name": wagon.get("consignee_name"),
+                "cargo_name": wagon.get("cargo_name"),
+                "order_id": order_id,
+                "order_number": order_number,
+                "client_name": client_name,
+            })
+
+        result.append({
+            "route_id": str(route.id),
+            "train_number": route.train_number,
+            "train_index": route.train_index,
+            "status": route.status,
+            "orders_count": len(orders),
+            "items_count": len(wagons_data),
+            "created_at": route.created_at.isoformat() if route.created_at else None,
+            "wagons": wagons_data,
+        })
+
+    return {"items": result, "total": len(result)}
+
+
+# ─── GET /v2/orders (список всех заявок для аналитики) ───────────────────────
+
+@router.get("/orders")
+def list_orders(
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Список всех заявок с информацией по вагонам и маршрутам."""
+    orders = db.query(models.ReceivingOrder).all()
+    result = []
+
+    for order in orders:
+        # Получаем маршрут для получения информации о поезде и статусе
+        route = db.query(models.RailwayRoute).filter(
+            models.RailwayRoute.id == order.route_id
+        ).first()
+
+        # Получаем вагоны для этой заявки
+        wagons_data = []
+        for item in order.items or []:
+            wagons_data.append({
+                "wagon_number": item.wagon_number,
+                "waybill_number": item.waybill_number,
+                "container_number": item.container_number,
+                "shipper_name": "",  # Будет заполнено из снимка если нужно
+                "consignee_name": "",
+                "cargo_name": "",
+            })
+
+        result.append({
+            "order_id": str(order.id),
+            "order_number": order.order_number,
+            "client_name": order.client_name,
+            "train_number": route.train_number if route else "—",
+            "route_status": route.status if route else None,
+            "wagons": wagons_data,
+            "comment": order.comment,
+            "created_at": order.created_at.isoformat() if order.created_at else None,
+        })
+
     return {"items": result, "total": len(result)}
 
 
