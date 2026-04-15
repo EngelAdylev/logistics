@@ -857,6 +857,22 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   border-bottom: 2px solid #bfdbfe;
 }
 
+/* Таблица состава поезда (с горизонтальным скроллом) */
+.trains-composition-table {
+  width: auto;  /* Не 100%, а минимально необходимая ширина */
+  table-layout: auto;  /* Позволяет использовать colgroup ширины */
+}
+.trains-composition-table .wagon-row:hover { background: #f8fafc; }
+.trains-composition-table .wagon-row--has-order { background: #f0fdf4; }
+.trains-composition-table .wagon-row--selected { background: #bfdbfe !important; }
+.trains-composition-table .cell-truncate {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
 /* км бейдж */
 .km-badge {
   display: inline-block;

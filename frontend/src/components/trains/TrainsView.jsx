@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
+import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
+import { TRAIN_COMPOSITION_COLUMNS, TRAIN_COMPOSITION_TABLE_KEY } from './trainCompositionColumnsConfig';
 
 /* ─── helpers ─── */
 function rowKey(wagon) {
@@ -109,6 +111,12 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
   const [editingOrder, setEditingOrder] = useState(null);
   const [exporting, setExporting] = useState(false);
 
+  // Выборка колонок для таблицы вагонов
+  const DEFAULT_VISIBLE_IDS = TRAIN_COMPOSITION_COLUMNS
+    .filter(c => c.isDefaultVisible !== false)
+    .map(c => c.id);
+  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
+
   const fetchRoute = useCallback(async () => {
     setLoading(true); setError(null);
     try { const res = await api.get(`/v2/routes/${routeId}`); setRoute(res.data); }
@@ -148,6 +156,13 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
     finally { setExporting(false); }
   };
 
+  const visibleCols = useMemo(() =>
+    visibleColumnIds.length
+      ? TRAIN_COMPOSITION_COLUMNS.filter(c => visibleColumnIds.includes(c.id))
+      : TRAIN_COMPOSITION_COLUMNS.filter(c => c.isDefaultVisible !== false),
+    [visibleColumnIds]
+  );
+
   const isClosed = route?.status === 'closed';
   const ordersCount = route?.orders?.length || 0;
   const orderColors = {};
@@ -177,6 +192,13 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
             <button type="button" className="trains-export-btn" onClick={handleExport} disabled={exporting}>
               <Download size={14} /> {exporting ? 'Экспорт…' : 'Сформировать JSON'}
             </button>
+          )}
+          {mode === 'view' && (
+            <ColumnVisibilityPanel
+              visibleColumnIds={visibleColumnIds}
+              onVisibilityChange={setVisibleColumnIds}
+              columns={TRAIN_COMPOSITION_COLUMNS}
+            />
           )}
         </div>
 
@@ -223,17 +245,21 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
       {/* Таблица */}
       <div className="h-table-scroll">
         <table className="excel-table compact-table trains-composition-table">
+          <colgroup>
+            {mode === 'create' && <col style={{ width: 36 }} />}
+            {visibleCols.map(col => (
+              <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
+            ))}
+            {mode === 'view' && !isClosed && <col style={{ width: 36 }} />}
+          </colgroup>
           <thead>
             <tr>
               {mode === 'create' && <th style={{ width: 36 }}></th>}
-              <th>Вагон</th>
-              <th>Накладная</th>
-              <th>Контейнер</th>
-              <th>Отправитель</th>
-              <th>Получатель</th>
-              <th>Груз</th>
-              <th style={{ textAlign: 'center' }}>Остаток, км</th>
-              <th>Клиент</th>
+              {visibleCols.map(col => (
+                <th key={col.id} style={col.width ? { width: col.width } : undefined}>
+                  {col.label}
+                </th>
+              ))}
               {mode === 'view' && !isClosed && <th style={{ width: 36 }}></th>}
             </tr>
           </thead>
@@ -244,6 +270,21 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
               const isSelected = selectedKeys.has(key);
               const canSelect = mode === 'create' && !order;
               const rowBg = isSelected ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
+
+              const renderCellValue = (col) => {
+                const val = wagon[col.accessorKey];
+                if (!val) return <span className="text-muted">—</span>;
+
+                // Специальная обработка для некоторых колонок
+                if (col.id === 'wagon_number') return <strong>{val}</strong>;
+                if (col.id === 'waybill_number' || col.id === 'container_number') {
+                  return <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>;
+                }
+                if (col.id === 'shipper_name' || col.id === 'consignee_name' || col.id === 'cargo_name') {
+                  return <span className="cell-truncate" title={val}>{val}</span>;
+                }
+                return val;
+              };
 
               return (
                 <tr key={key}
@@ -256,18 +297,11 @@ function TrainComposition({ routeId, trainNumber, onExported }) {
                       {!order && <input type="checkbox" checked={isSelected} onChange={() => toggleKey(key)} onClick={e => e.stopPropagation()} />}
                     </td>
                   )}
-                  <td><strong>{wagon.wagon_number}</strong></td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{wagon.waybill_number || <span className="text-muted">—</span>}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{wagon.container_number || <span className="text-muted">—</span>}</td>
-                  <td className="cell-truncate" title={wagon.shipper_name}>{wagon.shipper_name || <span className="text-muted">—</span>}</td>
-                  <td className="cell-truncate" title={wagon.consignee_name}>{wagon.consignee_name || <span className="text-muted">—</span>}</td>
-                  <td className="cell-truncate" title={wagon.cargo_name}>{wagon.cargo_name || <span className="text-muted">—</span>}</td>
-                  <td style={{ textAlign: 'center' }}>{wagon.remaining_distance || <span className="text-muted">—</span>}</td>
-                  <td>
-                    {order
-                      ? <span className="trains-wagon-client">{order.client_name || <span className="text-muted">не указан</span>}</span>
-                      : <span className="text-muted" style={{ fontSize: 11 }}>{wagon.waybill_id ? '—' : 'нет накладной'}</span>}
-                  </td>
+                  {visibleCols.map(col => (
+                    <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>
+                      {renderCellValue(col)}
+                    </td>
+                  ))}
                   {mode === 'view' && !isClosed && (
                     <td style={{ textAlign: 'center' }}>
                       {order && wagon.item_id && (
