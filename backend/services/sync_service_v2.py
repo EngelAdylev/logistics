@@ -567,6 +567,23 @@ def sync_new_model(db: Session, *, force_rebind: bool = False) -> dict:
             """))
         stats["stale_trips_archived"] = stale_count
 
+        # Backfill: закрыть маршруты с payload'ем (операция 80 уже сформировала payload)
+        _t4 = _time.perf_counter()
+        route_closure_result = db.execute(text("""
+            UPDATE railway_routes
+            SET status = 'closed', updated_at = now()
+            WHERE route_payload IS NOT NULL
+              AND status != 'closed'
+        """))
+        routes_closed = route_closure_result.rowcount
+        _t5 = _time.perf_counter()
+        if routes_closed > 0:
+            logger.info(
+                "sync_new_model: routes_auto_closed=%d (had payload), duration_ms=%.0f",
+                routes_closed, (_t5 - _t4) * 1000,
+            )
+        stats["routes_auto_closed"] = routes_closed
+
         db.commit()
         stats["status"] = "success" if stats["errors"] == 0 else "partial_failure"
         logger.info("sync_new_model: done stats=%s", stats)
