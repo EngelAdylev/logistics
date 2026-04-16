@@ -93,42 +93,59 @@ export default function RoutesListView({ refreshKey }) {
   );
 
   return (
-    <div className="lkds-list">
-      <div className="lkds-list-header">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Липкий хэдер */}
+      <div className="lkds-list-header" style={{
+        display: 'flex', alignItems: 'center', padding: '12px 16px',
+        background: '#f1f5f9', borderBottom: '1px solid #e2e8f0',
+        position: 'sticky', top: 0, zIndex: 10, minWidth: 'max-content',
+      }}>
         <span style={{ width: 24 }} />
-        <span style={{ flex: '0 0 130px' }}>№ поезда</span>
-        <span style={{ flex: '0 0 170px' }}>Индекс</span>
-        <span style={{ flex: '0 0 100px', textAlign: 'center' }}>Статус</span>
-        <span style={{ flex: '0 0 80px', textAlign: 'center' }}>Заявок</span>
-        <span style={{ flex: '0 0 80px', textAlign: 'center' }}>Вагонов</span>
-        <span style={{ flex: 1 }}>Дата создания</span>
+        <span style={{ flex: '0 0 130px', fontWeight: 600, fontSize: 12, color: '#475569' }}>№ поезда</span>
+        <span style={{ flex: '0 0 170px', fontWeight: 600, fontSize: 12, color: '#475569' }}>Индекс</span>
+        <span style={{ flex: '0 0 100px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>Статус</span>
+        <span style={{ flex: '0 0 80px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>Заявок</span>
+        <span style={{ flex: '0 0 80px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>Вагонов</span>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 12, color: '#475569' }}>Дата создания</span>
       </div>
 
-      {routes.map(r => {
-        const isOpen = expanded === r.route_id;
-        return (
-          <div key={r.route_id} className={`trains-accordion${isOpen ? ' trains-accordion--open' : ''}`}>
-            <div className="trains-accordion-row" style={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : r.route_id)}>
-              <span className="trains-accordion-chevron">
-                {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </span>
-              <span style={{ flex: '0 0 130px', fontWeight: 700, fontSize: 14 }}>{r.train_number}</span>
-              <span style={{ flex: '0 0 170px', fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>{r.train_index || '—'}</span>
-              <span style={{ flex: '0 0 100px', textAlign: 'center' }}>
-                <span className={STATUS_CLS[r.status] || 'route-status'}>{STATUS_LABEL[r.status] || r.status}</span>
-              </span>
-              <span style={{ flex: '0 0 80px', textAlign: 'center', fontSize: 13 }}>{r.orders_count}</span>
-              <span style={{ flex: '0 0 80px', textAlign: 'center', fontSize: 13 }}>{r.items_count}</span>
-              <span style={{ flex: 1, fontSize: 12, color: '#64748b' }}>{fmt(r.created_at)}</span>
-            </div>
-            {isOpen && (
-              <div className="trains-accordion-body">
-                <RouteDetail wagons={r.wagons} />
+      {/* Скролируемый контент */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {routes.map(r => {
+          const isOpen = expanded === r.route_id;
+          return (
+            <div key={r.route_id} className={`trains-accordion${isOpen ? ' trains-accordion--open' : ''}`}>
+              <div
+                className="trains-accordion-row"
+                style={{
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', padding: '12px 16px',
+                  borderBottom: '1px solid #e2e8f0', background: '#fff',
+                  minWidth: 'max-content',
+                }}
+                onClick={() => setExpanded(isOpen ? null : r.route_id)}
+              >
+                <span className="trains-accordion-chevron" style={{ width: 24 }}>
+                  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </span>
+                <span style={{ flex: '0 0 130px', fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{r.train_number}</span>
+                <span style={{ flex: '0 0 170px', fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>{r.train_index || '—'}</span>
+                <span style={{ flex: '0 0 100px', textAlign: 'center' }}>
+                  <span className={STATUS_CLS[r.status] || 'route-status'}>{STATUS_LABEL[r.status] || r.status}</span>
+                </span>
+                <span style={{ flex: '0 0 80px', textAlign: 'center', fontSize: 13, color: '#1e293b' }}>{r.orders_count}</span>
+                <span style={{ flex: '0 0 80px', textAlign: 'center', fontSize: 13, color: '#1e293b' }}>{r.items_count}</span>
+                <span style={{ flex: 1, fontSize: 12, color: '#64748b' }}>{fmt(r.created_at)}</span>
               </div>
-            )}
-          </div>
-        );
-      })}
+              {isOpen && (
+                <div className="trains-accordion-body" style={{ background: '#f8fafc', padding: '16px' }}>
+                  <RouteDetail wagons={r.wagons} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

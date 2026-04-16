@@ -71,46 +71,63 @@ export default function OrdersListView({ refreshKey }) {
   );
 
   return (
-    <div className="lkds-list">
-      <div className="lkds-list-header">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Липкий хэдер */}
+      <div className="lkds-list-header" style={{
+        display: 'flex', alignItems: 'center', padding: '12px 16px',
+        background: '#f1f5f9', borderBottom: '1px solid #e2e8f0',
+        position: 'sticky', top: 0, zIndex: 10, minWidth: 'max-content',
+      }}>
         <span style={{ width: 24 }} />
-        <span style={{ flex: '0 0 60px', textAlign: 'center' }}>№</span>
-        <span style={{ flex: '0 0 160px' }}>Клиент</span>
-        <span style={{ flex: '0 0 110px' }}>№ поезда</span>
-        <span style={{ flex: '0 0 90px', textAlign: 'center' }}>Рейс</span>
-        <span style={{ flex: '0 0 70px', textAlign: 'center' }}>Вагонов</span>
-        <span style={{ flex: 1 }}>Комментарий</span>
-        <span style={{ flex: '0 0 130px' }}>Дата создания</span>
+        <span style={{ flex: '0 0 60px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>№</span>
+        <span style={{ flex: '0 0 160px', fontWeight: 600, fontSize: 12, color: '#475569' }}>Клиент</span>
+        <span style={{ flex: '0 0 110px', fontWeight: 600, fontSize: 12, color: '#475569' }}>№ поезда</span>
+        <span style={{ flex: '0 0 90px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>Рейс</span>
+        <span style={{ flex: '0 0 70px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#475569' }}>Вагонов</span>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 12, color: '#475569' }}>Комментарий</span>
+        <span style={{ flex: '0 0 130px', fontWeight: 600, fontSize: 12, color: '#475569' }}>Дата создания</span>
       </div>
 
-      {orders.map(o => {
-        const isOpen = expanded === o.order_id;
-        return (
-          <div key={o.order_id} className={`trains-accordion${isOpen ? ' trains-accordion--open' : ''}`}>
-            <div className="trains-accordion-row" style={{ cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : o.order_id)}>
-              <span className="trains-accordion-chevron">
-                {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </span>
-              <span style={{ flex: '0 0 60px', textAlign: 'center', fontWeight: 700 }}>№{o.order_number}</span>
-              <span style={{ flex: '0 0 160px', fontSize: 13 }}>{o.client_name || <span className="text-muted">—</span>}</span>
-              <span style={{ flex: '0 0 110px', fontWeight: 600, fontSize: 14 }}>{o.train_number}</span>
-              <span style={{ flex: '0 0 90px', textAlign: 'center' }}>
-                <span className={ROUTE_STATUS_CLS[o.route_status] || 'route-status'}>
-                  {ROUTE_STATUS_LABEL[o.route_status] || '—'}
+      {/* Скролируемый контент */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {orders.map(o => {
+          const isOpen = expanded === o.order_id;
+          return (
+            <div key={o.order_id} className={`trains-accordion${isOpen ? ' trains-accordion--open' : ''}`}>
+              <div
+                className="trains-accordion-row"
+                style={{
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', padding: '12px 16px',
+                  borderBottom: '1px solid #e2e8f0', background: '#fff',
+                  minWidth: 'max-content',
+                }}
+                onClick={() => setExpanded(isOpen ? null : o.order_id)}
+              >
+                <span className="trains-accordion-chevron" style={{ width: 24 }}>
+                  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                 </span>
-              </span>
-              <span style={{ flex: '0 0 70px', textAlign: 'center', fontSize: 13 }}>{o.items_count}</span>
-              <span style={{ flex: 1, fontSize: 12, color: '#64748b' }}>{o.comment || '—'}</span>
-              <span style={{ flex: '0 0 130px', fontSize: 12, color: '#64748b' }}>{fmt(o.created_at)}</span>
-            </div>
-            {isOpen && (
-              <div className="trains-accordion-body">
-                <OrderDetail wagons={o.wagons} />
+                <span style={{ flex: '0 0 60px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>№{o.order_number}</span>
+                <span style={{ flex: '0 0 160px', fontSize: 13, color: '#1e293b' }}>{o.client_name || <span className="text-muted">—</span>}</span>
+                <span style={{ flex: '0 0 110px', fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{o.train_number}</span>
+                <span style={{ flex: '0 0 90px', textAlign: 'center' }}>
+                  <span className={ROUTE_STATUS_CLS[o.route_status] || 'route-status'}>
+                    {ROUTE_STATUS_LABEL[o.route_status] || '—'}
+                  </span>
+                </span>
+                <span style={{ flex: '0 0 70px', textAlign: 'center', fontSize: 13, color: '#1e293b' }}>{o.items_count}</span>
+                <span style={{ flex: 1, fontSize: 12, color: '#64748b' }}>{o.comment || '—'}</span>
+                <span style={{ flex: '0 0 130px', fontSize: 12, color: '#64748b' }}>{fmt(o.created_at)}</span>
               </div>
-            )}
-          </div>
-        );
-      })}
+              {isOpen && (
+                <div className="trains-accordion-body" style={{ background: '#f8fafc', padding: '16px' }}>
+                  <OrderDetail wagons={o.wagons} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
