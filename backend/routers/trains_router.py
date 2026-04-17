@@ -248,6 +248,87 @@ def list_trains(
     return {"items": result, "total": len(result)}
 
 
+# ─── GET /v2/trains/{train_number}/wagons ─────────────────────────────────────
+
+@router.get("/trains/{train_number}/wagons")
+def get_train_wagons(
+    train_number: str,
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """
+    Дислокация вагонов в поезде — только для отслеживания (мониторинг).
+    НЕ использует _build_snapshot() — это не рейс, снапшот не фиксируется.
+    Показывает живые данные из wagon_trips: где едет, сколько км, накладная если есть.
+    """
+    rows = db.execute(text("""
+        SELECT
+            w.railway_carriage_number          AS wagon_number,
+            wt.remaining_distance,
+            wt.last_station_name,
+            wt.last_operation_name,
+            wt.last_operation_date,
+            wt.departure_station_name,
+            wt.destination_station_name,
+            ew.waybill_number,
+            eww.container_number,
+            ew.shipper_name,
+            ew.consignee_name,
+            eww.cargo_name,
+            eww.cargo_weight,
+            eww.lifting_capacity,
+            eww.ownership,
+            eww.weight_net,
+            eww.wagon_model,
+            eww.axles_count,
+            eww.renter,
+            eww.next_repair_date,
+            eww.zpu_number,
+            eww.zpu_type
+        FROM wagon_trips wt
+        JOIN wagons w ON w.id = wt.wagon_id
+        LEFT JOIN trip_waybills tw ON tw.wagon_trip_id = wt.id
+        LEFT JOIN etran_waybills ew ON ew.id = tw.waybill_id
+        LEFT JOIN etran_waybill_wagons eww
+               ON eww.waybill_id = ew.id
+              AND eww.railway_carriage_number = w.railway_carriage_number
+        WHERE wt.is_active = true
+          AND wt.number_train = :train_number
+        ORDER BY w.railway_carriage_number, ew.waybill_number
+    """), {"train_number": train_number}).mappings().all()
+
+    return {
+        "items": [
+            {
+                "wagon_number":             r["wagon_number"] or "",
+                "remaining_distance":       r["remaining_distance"] or "",
+                "last_station_name":        r["last_station_name"] or "",
+                "last_operation_name":      r["last_operation_name"] or "",
+                "last_operation_date":      r["last_operation_date"].isoformat() if r["last_operation_date"] else None,
+                "departure_station_name":   r["departure_station_name"] or "",
+                "destination_station_name": r["destination_station_name"] or "",
+                "waybill_number":           r["waybill_number"] or "",
+                "container_number":         r["container_number"] or "",
+                "shipper_name":             r["shipper_name"] or "",
+                "consignee_name":           r["consignee_name"] or "",
+                "cargo_name":               r["cargo_name"] or "",
+                "cargo_weight":             r["cargo_weight"],
+                "lifting_capacity":         r["lifting_capacity"],
+                "ownership":                r["ownership"] or "",
+                "weight_net":               r["weight_net"],
+                "wagon_model":              r["wagon_model"] or "",
+                "axles_count":              r["axles_count"],
+                "renter":                   r["renter"] or "",
+                "next_repair_date":         r["next_repair_date"].isoformat() if r["next_repair_date"] else None,
+                "zpu_number":               r["zpu_number"] or "",
+                "zpu_type":                 r["zpu_type"] or "",
+            }
+            for r in rows
+        ],
+        "total": len(rows),
+    }
+
+
 # ─── GET /v2/routes (список всех маршрутов для аналитики) ─────────────────────
 
 @router.get("/routes")

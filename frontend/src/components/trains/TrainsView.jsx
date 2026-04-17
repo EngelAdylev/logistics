@@ -4,6 +4,7 @@ import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
 import { TRAIN_COMPOSITION_COLUMNS, TRAIN_COMPOSITION_TABLE_KEY } from './trainCompositionColumnsConfig';
+import { MONITORING_COLUMNS, MONITORING_TABLE_KEY } from './monitoringColumnsConfig';
 
 /* ─── helpers ─── */
 function rowKey(wagon) {
@@ -511,54 +512,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
               const canSelectComment = commentMode === 'add';
               const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
 
-              const renderCellValue = (col) => {
-                if (col.id === 'client_name') {
-                  const clientName = wagon.order?.client_name || '';
-                  return clientName
-                    ? <span className="cell-truncate" title={clientName}>{clientName}</span>
-                    : <span className="text-muted">—</span>;
-                }
-
-                const val = wagon[col.accessorKey];
-                if (val === null || val === undefined || val === '') {
-                  return <span className="text-muted">—</span>;
-                }
-
-                // Специальная обработка для некоторых колонок
-                if (col.id === 'wagon_number') {
-                  return <strong>{val}</strong>;
-                }
-
-                if (col.id === 'waybill_number' || col.id === 'container_number' || col.id === 'zpu_number') {
-                  return <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>;
-                }
-
-                if (col.id === 'shipper_name' || col.id === 'consignee_name' || col.id === 'cargo_name' ||
-                    col.id === 'ownership' || col.id === 'wagon_model' || col.id === 'renter' ||
-                    col.id === 'departure_station_name' || col.id === 'destination_station_name' ||
-                    col.id === 'last_operation_name' || col.id === 'last_station_name' ||
-                    col.id === 'last_comment_text') {
-                  return <span className="cell-truncate" title={val}>{val}</span>;
-                }
-
-                // Числовые и размерные данные
-                if (col.id === 'remaining_distance' || col.id === 'lifting_capacity' ||
-                    col.id === 'weight_net' || col.id === 'cargo_weight' || col.id === 'axles_count') {
-                  return <span style={{ textAlign: 'center' }}>{val}</span>;
-                }
-
-                // Даты
-                if (col.id === 'next_repair_date') {
-                  if (val && typeof val === 'string') {
-                    const d = new Date(val);
-                    return <span style={{ fontSize: '0.85rem' }}>{d.toLocaleDateString('ru-RU')}</span>;
-                  }
-                  return <span className="text-muted">—</span>;
-                }
-
-                // Остальное — как есть
-                return val;
-              };
+              const renderCellValue = (col) => renderWagonCell(col, wagon);
 
               return (
                 <tr key={key}
@@ -681,6 +635,188 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   );
 }
 
+/* ─── общий рендер ячейки для таблиц вагонов ─── */
+function renderWagonCell(col, wagon) {
+  if (col.id === 'client_name') {
+    const clientName = wagon.order?.client_name || wagon.client_name || '';
+    return clientName
+      ? <span className="cell-truncate" title={clientName}>{clientName}</span>
+      : <span className="text-muted">—</span>;
+  }
+
+  const val = wagon[col.accessorKey];
+  if (val === null || val === undefined || val === '')
+    return <span className="text-muted">—</span>;
+
+  if (col.id === 'wagon_number') return <strong>{val}</strong>;
+
+  if (col.id === 'waybill_number' || col.id === 'container_number' || col.id === 'zpu_number')
+    return <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>;
+
+  if (['shipper_name','consignee_name','cargo_name','ownership','wagon_model','renter',
+       'departure_station_name','destination_station_name',
+       'last_operation_name','last_station_name','last_comment_text'].includes(col.id))
+    return <span className="cell-truncate" title={val}>{val}</span>;
+
+  if (['remaining_distance','lifting_capacity','weight_net','cargo_weight','axles_count'].includes(col.id))
+    return <span style={{ textAlign: 'center' }}>{val}</span>;
+
+  if (col.id === 'next_repair_date') {
+    const d = new Date(val);
+    return isNaN(d) ? <span className="text-muted">—</span>
+      : <span style={{ fontSize: '0.85rem' }}>{d.toLocaleDateString('ru-RU')}</span>;
+  }
+
+  return val;
+}
+
+/* ─── рендер ячейки для таблицы мониторинга ─── */
+function renderMonitoringCell(col, wagon) {
+  const val = wagon[col.accessorKey];
+  const empty = val === null || val === undefined || val === '';
+
+  if (col.id === 'wagon_number')
+    return <strong style={{ fontFamily: 'monospace', fontSize: 13 }}>{val || '—'}</strong>;
+
+  if (col.id === 'remaining_distance')
+    return <KmBadge km={val ? parseInt(val, 10) : null} />;
+
+  if (col.id === 'last_operation_date') {
+    if (empty) return <span className="text-muted">—</span>;
+    const d = new Date(val);
+    return <span style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>;
+  }
+
+  if (col.id === 'next_repair_date') {
+    if (empty) return <span className="text-muted">—</span>;
+    const d = new Date(val);
+    return <span style={{ fontSize: '0.85rem' }}>{d.toLocaleDateString('ru-RU')}</span>;
+  }
+
+  if (['waybill_number', 'container_number', 'zpu_number', 'zpu_type'].includes(col.id))
+    return empty ? <span className="text-muted">—</span> : <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>;
+
+  if (['last_station_name', 'last_operation_name', 'departure_station_name', 'destination_station_name',
+       'shipper_name', 'consignee_name', 'cargo_name', 'ownership', 'wagon_model', 'renter'].includes(col.id))
+    return empty ? <span className="text-muted">—</span> : <span className="cell-truncate" title={val}>{val}</span>;
+
+  if (['cargo_weight', 'lifting_capacity', 'weight_net', 'axles_count'].includes(col.id))
+    return empty ? <span className="text-muted">—</span> : <span>{val}</span>;
+
+  return empty ? <span className="text-muted">—</span> : val;
+}
+
+/* ─── дислокация вагонов поезда в мониторинге (без route_id) ─── */
+function MonitoringTrainWagons({ trainNumber }) {
+  const [wagons, setWagons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const tableScrollRef = useRef(null);
+  const stickyScrollRef = useRef(null);
+
+  // Своё хранилище настроек — не пересекается с маршрутными таблицами
+  const [visibleColumnIds, setVisibleColumnIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(MONITORING_TABLE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return MONITORING_COLUMNS.filter(c => c.isDefaultVisible !== false).map(c => c.id);
+  });
+
+  const handleVisibilityChange = (ids) => {
+    setVisibleColumnIds(ids);
+    try { localStorage.setItem(MONITORING_TABLE_KEY, JSON.stringify(ids)); } catch {}
+  };
+
+  const visibleCols = useMemo(
+    () => MONITORING_COLUMNS.filter(c => visibleColumnIds.includes(c.id)),
+    [visibleColumnIds]
+  );
+
+  useEffect(() => {
+    setLoading(true); setError(null);
+    api.get(`/v2/trains/${encodeURIComponent(trainNumber)}/wagons`)
+      .then(res => setWagons(res.data.items || []))
+      .catch(() => setError('Не удалось загрузить вагоны'))
+      .finally(() => setLoading(false));
+  }, [trainNumber]);
+
+  if (loading) return <div className="trains-composition-loading"><div className="spinner-sm" />Загрузка…</div>;
+  if (error)   return <div className="trains-composition-error">{error}</div>;
+  if (wagons.length === 0) return (
+    <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+      <Clock size={18} style={{ marginBottom: 8, color: '#f59e0b' }} /><br />
+      Нет данных о вагонах в дислокации
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Тулбар */}
+      <div className="trains-composition-toolbar">
+        <div className="trains-composition-toolbar-left">
+          <Clock size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>
+            Мониторинг · {wagons.length} вагон(ов) в пути
+          </span>
+          <span style={{ fontSize: 11, color: '#b45309' }}>
+            Рейс и назначение клиентов — при остатке ≤ 150 км
+          </span>
+          <ColumnVisibilityPanel
+            visibleColumnIds={visibleColumnIds}
+            onVisibilityChange={handleVisibilityChange}
+            columns={MONITORING_COLUMNS}
+          />
+        </div>
+      </div>
+
+      {/* Таблица */}
+      <div className="trains-composition-scroll-wrapper">
+        <div
+          className="h-table-scroll"
+          ref={tableScrollRef}
+          onScroll={e => { if (stickyScrollRef.current) stickyScrollRef.current.scrollLeft = e.target.scrollLeft; }}
+        >
+          <table className="excel-table compact-table trains-composition-table">
+            <colgroup>
+              {visibleCols.map(col => (
+                <col key={`cg-${col.id}`} style={col.width ? { width: col.width } : undefined} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {visibleCols.map(col => (
+                  <th key={col.id} style={col.width ? { width: col.width } : undefined}>
+                    <span className="th-label">{col.label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {wagons.map((wagon, i) => (
+                <tr key={`${wagon.wagon_number}-${wagon.waybill_number || ''}-${i}`} className="wagon-row">
+                  {visibleCols.map(col => (
+                    <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>
+                      {renderMonitoringCell(col, wagon)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div
+          className="trains-composition-sticky-scroll"
+          ref={stickyScrollRef}
+          onScroll={e => { if (tableScrollRef.current) tableScrollRef.current.scrollLeft = e.target.scrollLeft; }}
+        >
+          <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── утилиты поиска ─── */
 function parseTokens(input) {
   return input.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
@@ -712,11 +848,19 @@ export default function TrainsView({ refreshKey }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [columnFilters, setColumnFilters] = useState({});
 
-  // Глобальная видимость колонок (для всех поездов)
-  const DEFAULT_VISIBLE_IDS = TRAIN_COMPOSITION_COLUMNS
-    .filter(c => c.isDefaultVisible !== false)
-    .map(c => c.id);
-  const [visibleColumnIds, setVisibleColumnIds] = useState(DEFAULT_VISIBLE_IDS);
+  // Глобальная видимость колонок для маршрутных таблиц — сохраняется в localStorage
+  const [visibleColumnIds, setVisibleColumnIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(TRAIN_COMPOSITION_TABLE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return TRAIN_COMPOSITION_COLUMNS.filter(c => c.isDefaultVisible !== false).map(c => c.id);
+  });
+
+  const handleRouteColumnsChange = (ids) => {
+    setVisibleColumnIds(ids);
+    try { localStorage.setItem(TRAIN_COMPOSITION_TABLE_KEY, JSON.stringify(ids)); } catch {}
+  };
 
   const fetchTrains = useCallback(async () => {
     setLoading(true); setError(null);
@@ -963,15 +1107,10 @@ export default function TrainsView({ refreshKey }) {
                               trainNumber={t.train_number}
                               onExported={fetchTrains}
                               visibleColumnIds={visibleColumnIds}
-                              onVisibleColumnsChange={setVisibleColumnIds}
+                              onVisibleColumnsChange={handleRouteColumnsChange}
                             />
                           ) : (
-                            <div style={{ padding: '32px 24px', textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
-                              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
-                                <Clock size={20} style={{ color: '#f59e0b' }} /> Поезд в статусе мониторинг
-                              </div>
-                              <div style={{ fontSize: 12, color: '#9ca3af' }}>Рейс будет создан когда остаток станет ≤ 150 км</div>
-                            </div>
+                            <MonitoringTrainWagons trainNumber={t.train_number} />
                           )}
                         </td>
                       </tr>
