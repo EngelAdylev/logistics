@@ -470,7 +470,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* ─── Таб: Состав вагонов ─── */}
       {compTab === 'wagons' && (
-      <div className="trains-composition-scroll-wrapper">
+        <div className="trains-composition-scroll-wrapper">
         <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
           <table className="excel-table compact-table trains-composition-table">
           <colgroup>
@@ -595,9 +595,9 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
         </table>
       </div>
 
-      {route.wagons.length === 0 && (
-        <div className="trains-empty" style={{ padding: '20px 0' }}>Нет данных о составе поезда</div>
-      )}
+          {route.wagons.length === 0 && (
+            <div className="trains-empty" style={{ padding: '20px 0' }}>Нет данных о составе поезда</div>
+          )}
         </div>
 
         {/* Липкий горизонтальный скролл внизу */}
