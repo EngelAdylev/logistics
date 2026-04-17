@@ -584,14 +584,7 @@ export default function TrainsView({ refreshKey }) {
 
   const fetchTrains = useCallback(async () => {
     setLoading(true); setError(null);
-    try {
-      const res = await api.get('/v2/trains');
-      const items = res.data.items || [];
-      setTrains(items);
-      // Auto-expand all trains with route_id
-      const trainNumbers = items.filter(t => t.route_id).map(t => t.train_number);
-      setExpandedTrains(new Set(trainNumbers));
-    }
+    try { const res = await api.get('/v2/trains'); setTrains(res.data.items || []); }
     catch { setError('Не удалось загрузить список поездов.'); }
     finally { setLoading(false); }
   }, []);
@@ -698,26 +691,6 @@ export default function TrainsView({ refreshKey }) {
           </span>
         </div>
         <div className="h-compact-toolbar-right">
-          {filteredTrains.filter(t => t.route_id).length > 0 && (
-            <>
-              <button
-                type="button"
-                className="compact-icon-btn"
-                onClick={() => {
-                  const allTrainNums = filteredTrains.filter(t => t.route_id).map(t => t.train_number);
-                  const allExpanded = allTrainNums.every(n => expandedTrains.has(n));
-                  if (allExpanded) {
-                    setExpandedTrains(new Set());
-                  } else {
-                    setExpandedTrains(new Set(allTrainNums));
-                  }
-                }}
-                title={expandedTrains.size > 0 ? "Свернуть все" : "Развернуть все"}
-              >
-                {expandedTrains.size > 0 ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
-            </>
-          )}
           <button
             type="button"
             className={`compact-icon-btn ${hasFilters ? 'warning' : ''}`}

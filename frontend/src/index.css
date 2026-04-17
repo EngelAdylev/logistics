@@ -1160,10 +1160,14 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   align-items: center;
 }
 
-.trains-tab-content {
+.trains-tab-content,
+.routes-tab-content,
+.orders-tab-content {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  overflow: hidden;
   padding-bottom: 20px;
 }
 
