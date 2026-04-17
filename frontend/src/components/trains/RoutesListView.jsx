@@ -93,12 +93,12 @@ export default function RoutesListView({ refreshKey }) {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 0 }}>
       {/* Липкий хэдер */}
       <div className="lkds-list-header" style={{
         display: 'flex', alignItems: 'center', padding: '12px 16px',
         background: '#f1f5f9', borderBottom: '1px solid #e2e8f0',
-        position: 'sticky', top: 0, zIndex: 10, minWidth: 'max-content',
+        position: 'sticky', top: 0, zIndex: 10, flexShrink: 0,
       }}>
         <span style={{ width: 24 }} />
         <span style={{ flex: '0 0 130px', fontWeight: 600, fontSize: 12, color: '#475569' }}>№ поезда</span>
@@ -110,7 +110,7 @@ export default function RoutesListView({ refreshKey }) {
       </div>
 
       {/* Скролируемый контент */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         {routes.map(r => {
           const isOpen = expanded === r.route_id;
           return (
@@ -121,11 +121,10 @@ export default function RoutesListView({ refreshKey }) {
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', padding: '12px 16px',
                   borderBottom: '1px solid #e2e8f0', background: '#fff',
-                  minWidth: 'max-content',
                 }}
                 onClick={() => setExpanded(isOpen ? null : r.route_id)}
               >
-                <span className="trains-accordion-chevron" style={{ width: 24 }}>
+                <span className="trains-accordion-chevron" style={{ width: 24, flexShrink: 0 }}>
                   {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                 </span>
                 <span style={{ flex: '0 0 130px', fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{r.train_number}</span>

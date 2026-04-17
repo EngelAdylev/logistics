@@ -863,11 +863,13 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .trains-composition-table {
-  width: auto;  /* Не 100%, а минимально необходимая ширина */
-  table-layout: auto;  /* Позволяет использовать colgroup ширины */
+  width: auto;
+  table-layout: auto;
+  border-collapse: collapse;
 }
 .trains-composition-table .wagon-row:hover { background: #f8fafc; }
 .trains-composition-table .wagon-row--has-order { background: #f0fdf4; }
@@ -886,31 +888,33 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 12px;
+  height: 16px;
   overflow-x: auto;
   overflow-y: hidden;
-  background: white;
-  border-top: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-top: 2px solid #e2e8f0;
+  border-bottom: 1px solid #d1d5db;
   z-index: 50;
-  box-shadow: 0 -2px 4px rgba(0,0,0,0.02);
+  box-shadow: 0 -3px 6px rgba(0,0,0,0.05);
 }
 
 .trains-composition-sticky-scroll::-webkit-scrollbar {
-  height: 8px;
+  height: 12px;
 }
 
 .trains-composition-sticky-scroll::-webkit-scrollbar-track {
   background: #f1f5f9;
+  border-radius: 6px;
 }
 
 .trains-composition-sticky-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #0ea5e9;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
 }
 
 .trains-composition-sticky-scroll::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #0284c7;
 }
 
 /* км бейдж */
