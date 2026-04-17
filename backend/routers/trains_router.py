@@ -319,7 +319,7 @@ def get_train_wagons(
                 "wagon_model":              r["wagon_model"] or "",
                 "axles_count":              r["axles_count"],
                 "renter":                   r["renter"] or "",
-                "next_repair_date":         r["next_repair_date"].isoformat() if r["next_repair_date"] else None,
+                "next_repair_date":         r["next_repair_date"] or None,
                 "zpu_number":               r["zpu_number"] or "",
                 "zpu_type":                 r["zpu_type"] or "",
             }
