@@ -847,14 +847,38 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 }
 
 /* Новая compact-таблица поездов (trains-main-table) */
-.trains-main-table .train-row:hover { background: #f1f5f9; }
-.trains-main-table .train-row--ready { background: #f0fdf4; }
-.trains-main-table .train-row--ready:hover { background: #dcfce7; }
-.trains-main-table .train-row--expanded { background: #eff6ff !important; }
-.trains-main-table .train-row--expanded:hover { background: #dbeafe !important; }
+.trains-main-table {
+  border-spacing: 0 8px;
+  border-collapse: separate;
+}
+
+.trains-main-table .train-row {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: all 0.2s ease;
+}
+
+.trains-main-table .train-row:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  background: #fff;
+}
+
+.trains-main-table .train-row--ready {
+  border-left: 4px solid #f59e0b;
+}
+
+.trains-main-table .train-row--expanded {
+  background: #eff6ff;
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 8px rgba(59,130,246,0.12);
+}
+
 .trains-main-table .train-composition-row > td {
-  border-top: 2px solid #bfdbfe;
-  border-bottom: 2px solid #bfdbfe;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 /* Таблица состава поезда (с горизонтальным скроллом) */
@@ -932,38 +956,56 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 /* Статус маршрута */
 .route-status {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
-.route-status--open       { background: #dbeafe; color: #1d4ed8; }
-.route-status--closed     { background: #f1f5f9; color: #64748b; }
-.route-status--pending    { background: #fef9c3; color: #92400e; }
-.route-status--monitoring { background: #f1f5f9; color: #94a3b8; }
+.route-status--open       { background: #d1fae5; color: #065f46; } /* зелёный - открыт */
+.route-status--closed     { background: #e5e7eb; color: #374151; } /* серый - закрыт */
+.route-status--pending    { background: #fef3c7; color: #92400e; } /* жёлтый - в процессе */
+.route-status--monitoring { background: #fed7aa; color: #9a3412; } /* оранжевый - мониторинг */
 
 /* Кнопки действий в таблице поездов */
 .trains-action-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 10px;
-  font-size: 12px; font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
   border-radius: 6px;
-  border: 1px solid transparent;
+  border: none;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
+
 .trains-action-btn--open {
-  background: #eff6ff; color: #2563eb; border-color: #bfdbfe;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
-.trains-action-btn--open:hover { background: #dbeafe; }
+.trains-action-btn--open:hover {
+  background: #bfdbfe;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.2);
+}
+
 .trains-action-btn--disabled {
-  background: #f8fafc; color: #cbd5e1; border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #cbd5e1;
   cursor: not-allowed;
+  opacity: 0.6;
 }
+
 .trains-action-btn--create {
-  background: #f0fdf4; color: #15803d; border-color: #bbf7d0;
+  background: #dcfce7;
+  color: #065f46;
 }
-.trains-action-btn--create:hover { background: #dcfce7; }
+.trains-action-btn--create:hover {
+  background: #bbf7d0;
+  box-shadow: 0 2px 6px rgba(6, 95, 70, 0.2);
+}
 
 /* ── Модалка состава поезда ── */
 .trains-modal {
@@ -1192,14 +1234,21 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 
 .trains-composition-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
 .trains-composition-toolbar-left {
-  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* ── Карточки заявок ── */

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X, Package, ClipboardList, MessageSquare, Info, Clock } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
@@ -119,6 +119,9 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
   // Фильтры колонок в таблице вагонов
   const [columnFilters, setColumnFilters] = useState({});
+
+  // Таб-система для состава
+  const [compTab, setCompTab] = useState('wagons'); // 'wagons' | 'orders' | 'info'
 
   // Липкий горизонтальный скролл
   const tableScrollRef = useRef(null);
@@ -302,7 +305,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
           {!isClosed && mode === 'view' && commentMode === 'view' && (
             <button type="button" className="trains-action-btn trains-action-btn--create"
               onClick={() => { setCommentMode('add'); setSelectedWagons(new Set()); }}>
-              💬 Добавить комментарий
+              <MessageSquare size={14} /> Добавить комментарий
             </button>
           )}
           {!isClosed && ordersCount > 0 && mode === 'view' && commentMode === 'view' && (
@@ -345,6 +348,73 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
         )}
       </div>
 
+      {/* Таб-навигация */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginTop: 12, marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => setCompTab('wagons')}
+          style={{
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: compTab === 'wagons' ? 700 : 500,
+            color: compTab === 'wagons' ? '#3b82f6' : '#6b7280',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: compTab === 'wagons' ? '3px solid #3b82f6' : 'none',
+            marginBottom: '-2px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Package size={16} /> Состав ({route.wagons?.length || 0})
+        </button>
+        <button
+          type="button"
+          onClick={() => setCompTab('orders')}
+          style={{
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: compTab === 'orders' ? 700 : 500,
+            color: compTab === 'orders' ? '#3b82f6' : '#6b7280',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: compTab === 'orders' ? '3px solid #3b82f6' : 'none',
+            marginBottom: '-2px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <ClipboardList size={16} /> Заявки ({ordersCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setCompTab('info')}
+          style={{
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: compTab === 'info' ? 700 : 500,
+            color: compTab === 'info' ? '#3b82f6' : '#6b7280',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: compTab === 'info' ? '3px solid #3b82f6' : 'none',
+            marginBottom: '-2px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Info size={16} /> Инфо
+        </button>
+      </div>
+
       {/* Форма заявки */}
       {(mode === 'create' || mode === 'edit') && commentMode === 'view' && (
         <OrderFormPanel
@@ -361,7 +431,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
       {commentMode === 'add' && (
         <div className="tof-panel">
           <div className="tof-header">
-            💬 Добавить комментарий {selectedWagons.size > 0 && <span className="tof-count">{selectedWagons.size} ваг.</span>}
+            <MessageSquare size={14} /> Добавить комментарий {selectedWagons.size > 0 && <span className="tof-count">{selectedWagons.size} ваг.</span>}
           </div>
           <div className="tof-row">
             <div className="tof-field tof-field--comment">
@@ -398,7 +468,8 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
         </div>
       )}
 
-      {/* Таблица с липким скроллом */}
+      {/* ─── Таб: Состав вагонов ─── */}
+      {compTab === 'wagons' && (
       <div className="trains-composition-scroll-wrapper">
         <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
           <table className="excel-table compact-table trains-composition-table">
@@ -541,6 +612,72 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
         >
           <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
         </div>
+      </div>
+      )}
+
+      {/* ─── Таб: Заявки ─── */}
+      {compTab === 'orders' && (
+        <div style={{ padding: '16px' }}>
+          {ordersCount === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af' }}>
+              Нет заявок
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+              {route.orders.map(o => (
+                <div key={o.id} style={{
+                  background: '#fff',
+                  border: `2px solid ${orderBorders[o.id]}`,
+                  borderRadius: 8,
+                  padding: 16,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Заявка №{o.order_number}</div>
+                    <OrderBadge status={o.status} />
+                  </div>
+                  {o.client_name && <div style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', marginBottom: 8 }}>{o.client_name}</div>}
+                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                    {o.items?.length || 0} вагон(ов) в заявке
+                  </div>
+                  {!isClosed && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="icon-action-btn" title="Редактировать" onClick={() => { setEditingOrder(o); setMode('edit'); }}><Pencil size={13} /></button>
+                      <button className="icon-action-btn icon-action-btn--danger" title="Удалить" onClick={() => handleDeleteOrder(o.id)}><Trash2 size={13} /></button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Таб: Информация ─── */}
+      {compTab === 'info' && (
+        <div style={{ padding: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Статус маршрута</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>
+                <RouteStatus routeStatus={route.status} ready={false} />
+              </div>
+            </div>
+            <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Вагонов в составе</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>{route.wagons?.length || 0}</div>
+            </div>
+            <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Заявок создано</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>{ordersCount}</div>
+            </div>
+            <div style={{ background: '#f9fafb', padding: 16, borderRadius: 8 }}>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>Дата создания</div>
+              <div style={{ fontSize: 14, color: '#475569' }}>{new Date(route.created_at).toLocaleString('ru-RU')}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -783,57 +920,60 @@ export default function TrainsView({ refreshKey }) {
               </tr>
             ) : (
               filteredTrains.map(t => {
-                const canExpand  = !!t.route_id;
                 const isExpanded = expandedTrains.has(t.train_number);
 
                 return (
                   <React.Fragment key={t.train_number}>
                     <tr
                       className={`train-row${isExpanded ? ' train-row--expanded' : ''}${t.ready ? ' train-row--ready' : ''}`}
-                      onClick={() => toggleTrain(t.train_number, canExpand)}
-                      style={{ cursor: canExpand ? 'pointer' : 'default' }}
-                      title={!canExpand
-                        ? (t.ready ? 'Болванка формируется…' : 'Доступно при остатке ≤ 150 км')
-                        : undefined}
+                      onClick={() => toggleTrain(t.train_number, true)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      <td style={{ textAlign: 'center', color: '#94a3b8', padding: '0 4px' }}>
-                        {canExpand
-                          ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
-                          : <span style={{ display: 'inline-block', width: 14 }} />}
+                      <td style={{ textAlign: 'center', color: '#94a3b8', padding: '10px 8px' }}>
+                        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </td>
-                      <td style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>
+                      <td style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', padding: '10px 12px' }}>
                         {t.train_number}
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#64748b' }}>
+                      <td style={{ fontFamily: 'monospace', fontSize: 12, color: '#64748b', padding: '10px 8px' }}>
                         {t.train_index || <span className="text-muted">—</span>}
                       </td>
-                      <td style={{ textAlign: 'center', fontSize: 13 }}>{t.wagon_total}</td>
-                      <td style={{ textAlign: 'center', fontSize: 13 }}>{t.matched_wagons}</td>
-                      <td style={{ textAlign: 'center', fontSize: 13, color: t.container_count > 0 ? '#059669' : '#94a3b8' }}>
+                      <td style={{ textAlign: 'center', fontSize: 13, padding: '10px 8px', fontWeight: 500 }}>{t.wagon_total}</td>
+                      <td style={{ textAlign: 'center', fontSize: 13, padding: '10px 8px', fontWeight: 500 }}>{t.matched_wagons}</td>
+                      <td style={{ textAlign: 'center', fontSize: 13, padding: '10px 8px', color: t.container_count > 0 ? '#059669' : '#94a3b8', fontWeight: 500 }}>
                         {t.container_count}
                       </td>
-                      <td style={{ textAlign: 'center' }}><KmBadge km={t.min_km} /></td>
-                      <td style={{ fontSize: 12, color: '#475569' }} className="cell-truncate" title={t.last_station_name || '—'}>
+                      <td style={{ textAlign: 'center', padding: '10px 8px' }}><KmBadge km={t.min_km} /></td>
+                      <td style={{ fontSize: 13, color: '#475569', padding: '10px 8px' }} className="cell-truncate" title={t.last_station_name || '—'}>
                         {t.last_station_name || <span className="text-muted">—</span>}
                       </td>
-                      <td style={{ fontSize: 12, color: '#475569' }} className="cell-truncate" title={t.last_operation_name || '—'}>
+                      <td style={{ fontSize: 13, color: '#475569', padding: '10px 8px' }} className="cell-truncate" title={t.last_operation_name || '—'}>
                         {t.last_operation_name || <span className="text-muted">—</span>}
                       </td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td style={{ textAlign: 'center', padding: '10px 12px' }}>
                         <RouteStatus routeStatus={t.route_status} ready={t.ready} />
                       </td>
                     </tr>
 
-                    {isExpanded && canExpand && (
+                    {isExpanded && (
                       <tr className="train-composition-row">
-                        <td colSpan={TOTAL_COLS} style={{ padding: 0, background: '#f8fafc' }}>
-                          <TrainComposition
-                            routeId={t.route_id}
-                            trainNumber={t.train_number}
-                            onExported={fetchTrains}
-                            visibleColumnIds={visibleColumnIds}
-                            onVisibleColumnsChange={setVisibleColumnIds}
-                          />
+                        <td colSpan={TOTAL_COLS} style={{ padding: '12px', background: '#ffffff', borderRadius: '0 0 8px 8px' }}>
+                          {t.route_id ? (
+                            <TrainComposition
+                              routeId={t.route_id}
+                              trainNumber={t.train_number}
+                              onExported={fetchTrains}
+                              visibleColumnIds={visibleColumnIds}
+                              onVisibleColumnsChange={setVisibleColumnIds}
+                            />
+                          ) : (
+                            <div style={{ padding: '32px 24px', textAlign: 'center', color: '#6b7280', fontSize: 14 }}>
+                              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'center', gap: 8 }}>
+                                <Clock size={20} style={{ color: '#f59e0b' }} /> Поезд в статусе мониторинг
+                              </div>
+                              <div style={{ fontSize: 12, color: '#9ca3af' }}>Рейс будет создан когда остаток станет ≤ 150 км</div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}
