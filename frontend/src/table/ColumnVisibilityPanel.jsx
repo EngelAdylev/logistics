@@ -5,20 +5,45 @@ import { TABLE_COLUMNS } from './tableColumnsConfig';
 export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityChange, columns: columnsProp }) {
   const columns = columnsProp || TABLE_COLUMNS;
   const [open, setOpen] = useState(false);
+  const [popupStyle, setPopupStyle] = useState({});
   const [localVisible, setLocalVisible] = useState(new Set(visibleColumnIds || []));
   const [search, setSearch] = useState('');
-  const ref = useRef(null);
+  const btnRef = useRef(null);
+  const popupRef = useRef(null);
 
   useEffect(() => {
     setLocalVisible(new Set(visibleColumnIds || []));
   }, [visibleColumnIds]);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+  // Позиционируем попап через fixed — избегаем перекрытия таблицами
+  const openPopup = () => {
+    if (open) { setOpen(false); return; }
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPopupStyle({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
     }
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    setOpen(true);
+    setSearch('');
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e) {
+      if (
+        popupRef.current && !popupRef.current.contains(e.target) &&
+        btnRef.current && !btnRef.current.contains(e.target)
+      ) setOpen(false);
+    }
+    function handleScroll() { setOpen(false); }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
   }, [open]);
 
   const toggle = (colId) => {
@@ -39,18 +64,23 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
     : columns;
 
   return (
-    <span className="column-visibility" ref={ref}>
+    <span className="column-visibility">
       <button
+        ref={btnRef}
         type="button"
         className="compact-icon-btn"
-        onClick={() => { setOpen(!open); setSearch(''); }}
+        onClick={openPopup}
         title="Настроить колонки"
         aria-label="Колонки"
       >
         <Columns3 size={15} />
       </button>
       {open && (
-        <div className="column-visibility-popup">
+        <div
+          ref={popupRef}
+          className="column-visibility-popup"
+          style={popupStyle}
+        >
           <div className="filter-search-wrap">
             <input
               type="text"
@@ -58,6 +88,7 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
               placeholder="Поиск колонки…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              autoFocus
             />
           </div>
           <div className="column-visibility-list">
