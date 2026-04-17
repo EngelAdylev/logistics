@@ -598,21 +598,20 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
           {route.wagons.length === 0 && (
             <div className="trains-empty" style={{ padding: '20px 0' }}>Нет данных о составе поезда</div>
           )}
-        </div>
 
-        {/* Липкий горизонтальный скролл внизу */}
-        <div
-          className="trains-composition-sticky-scroll"
-          ref={stickyScrollRef}
-          onScroll={(e) => {
-            if (tableScrollRef.current) {
-              tableScrollRef.current.scrollLeft = e.target.scrollLeft;
-            }
-          }}
-        >
-          <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
+          {/* Липкий горизонтальный скролл внизу */}
+          <div
+            className="trains-composition-sticky-scroll"
+            ref={stickyScrollRef}
+            onScroll={(e) => {
+              if (tableScrollRef.current) {
+                tableScrollRef.current.scrollLeft = e.target.scrollLeft;
+              }
+            }}
+          >
+            <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
+          </div>
         </div>
-      </div>
       )}
 
       {/* ─── Таб: Заявки ─── */}
