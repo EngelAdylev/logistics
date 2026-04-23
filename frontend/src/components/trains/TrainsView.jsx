@@ -5,6 +5,7 @@ import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
 import { TRAIN_COMPOSITION_COLUMNS, TRAIN_COMPOSITION_TABLE_KEY } from './trainCompositionColumnsConfig';
 import { MONITORING_COLUMNS, MONITORING_TABLE_KEY } from './monitoringColumnsConfig';
+import { applyFilters } from '../../table/tableUtils';
 
 /* ─── helpers ─── */
 function rowKey(wagon) {
@@ -723,14 +724,25 @@ function MonitoringTrainWagons({ trainNumber }) {
     return MONITORING_COLUMNS.filter(c => c.isDefaultVisible !== false).map(c => c.id);
   });
 
+  const [columnFilters, setColumnFilters] = useState({});
+
   const handleVisibilityChange = (ids) => {
     setVisibleColumnIds(ids);
     try { localStorage.setItem(MONITORING_TABLE_KEY, JSON.stringify(ids)); } catch {}
   };
 
+  const handleFilterApply = (colId, vals) => setColumnFilters(prev => ({ ...prev, [colId]: vals }));
+  const handleResetFilters = () => setColumnFilters({});
+  const hasFilters = Object.values(columnFilters).some(v => v?.length > 0);
+
   const visibleCols = useMemo(
     () => MONITORING_COLUMNS.filter(c => visibleColumnIds.includes(c.id)),
     [visibleColumnIds]
+  );
+
+  const filteredWagons = useMemo(
+    () => applyFilters(wagons, columnFilters),
+    [wagons, columnFilters]
   );
 
   useEffect(() => {
@@ -762,6 +774,16 @@ function MonitoringTrainWagons({ trainNumber }) {
           <span style={{ fontSize: 11, color: '#b45309' }}>
             Рейс и назначение клиентов — при остатке ≤ 150 км
           </span>
+          {hasFilters && (
+            <button
+              type="button"
+              className="compact-icon-btn warning"
+              onClick={handleResetFilters}
+              title="Сбросить фильтры"
+            >
+              <X size={13} />
+            </button>
+          )}
           <ColumnVisibilityPanel
             visibleColumnIds={visibleColumnIds}
             onVisibilityChange={handleVisibilityChange}
@@ -788,12 +810,22 @@ function MonitoringTrainWagons({ trainNumber }) {
                 {visibleCols.map(col => (
                   <th key={col.id} style={col.width ? { width: col.width } : undefined}>
                     <span className="th-label">{col.label}</span>
+                    {col.filterable !== false && (
+                      <ColumnFilter
+                        columnId={col.id}
+                        label={col.label}
+                        rows={wagons}
+                        activeValues={columnFilters[col.id]}
+                        onApply={vals => handleFilterApply(col.id, vals)}
+                        onClear={() => handleFilterApply(col.id, [])}
+                      />
+                    )}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {wagons.map((wagon, i) => (
+              {filteredWagons.map((wagon, i) => (
                 <tr key={`${wagon.wagon_number}-${wagon.waybill_number || ''}-${i}`} className="wagon-row">
                   {visibleCols.map(col => (
                     <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>

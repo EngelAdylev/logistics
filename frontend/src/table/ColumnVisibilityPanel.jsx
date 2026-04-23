@@ -37,7 +37,11 @@ export default function ColumnVisibilityPanel({ visibleColumnIds, onVisibilityCh
         btnRef.current && !btnRef.current.contains(e.target)
       ) setOpen(false);
     }
-    function handleScroll() { setOpen(false); }
+    function handleScroll(e) {
+      // Не закрывать если скроллят внутри самого попапа
+      if (popupRef.current && popupRef.current.contains(e.target)) return;
+      setOpen(false);
+    }
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('scroll', handleScroll, true);
     return () => {

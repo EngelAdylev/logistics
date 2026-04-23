@@ -9,10 +9,10 @@
 export const MONITORING_COLUMNS = [
   // ─── Основные (видимые по умолчанию) ────────────────────────────────────
   { id: 'wagon_number',           label: 'Вагон',               accessorKey: 'wagon_number',           isRequired: true, isDefaultVisible: true,  width: '95px'  },
-  { id: 'remaining_distance',     label: 'Остаток, км',          accessorKey: 'remaining_distance',     isDefaultVisible: true,  width: '85px'  },
+  { id: 'remaining_distance',     label: 'Остаток, км',          accessorKey: 'remaining_distance',     isDefaultVisible: true,  width: '85px',  filterable: false },
   { id: 'last_station_name',      label: 'Текущая станция',      accessorKey: 'last_station_name',      isDefaultVisible: true,  width: '160px' },
   { id: 'last_operation_name',    label: 'Последняя операция',   accessorKey: 'last_operation_name',    isDefaultVisible: true,  width: '160px' },
-  { id: 'last_operation_date',    label: 'Дата операции',        accessorKey: 'last_operation_date',    isDefaultVisible: true,  width: '120px' },
+  { id: 'last_operation_date',    label: 'Дата операции',        accessorKey: 'last_operation_date',    isDefaultVisible: true,  width: '120px', filterable: false },
   { id: 'waybill_number',         label: 'Накладная',            accessorKey: 'waybill_number',         isDefaultVisible: true,  width: '105px' },
   { id: 'container_number',       label: 'Контейнер',            accessorKey: 'container_number',       isDefaultVisible: true,  width: '115px' },
   { id: 'shipper_name',           label: 'Отправитель',          accessorKey: 'shipper_name',           isDefaultVisible: true,  width: '170px' },
