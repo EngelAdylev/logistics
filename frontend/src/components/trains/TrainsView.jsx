@@ -272,12 +272,15 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
     finally { setExporting(false); }
   };
 
-  const visibleCols = useMemo(() =>
-    visibleColumnIds.length
-      ? TRAIN_COMPOSITION_COLUMNS.filter(c => visibleColumnIds.includes(c.id))
-      : TRAIN_COMPOSITION_COLUMNS.filter(c => c.isDefaultVisible !== false),
-    [visibleColumnIds]
-  );
+  const visibleCols = useMemo(() => {
+    if (!visibleColumnIds.length) {
+      return TRAIN_COMPOSITION_COLUMNS.filter(c => c.isDefaultVisible !== false);
+    }
+    // Сохраняем порядок из visibleColumnIds (с drag-and-drop переупорядочиванием)
+    return visibleColumnIds
+      .map(id => TRAIN_COMPOSITION_COLUMNS.find(c => c.id === id))
+      .filter(Boolean);
+  }, [visibleColumnIds]);
 
   const isClosed = route?.status === 'closed';
   const ordersCount = route?.orders?.length || 0;
@@ -735,10 +738,15 @@ function MonitoringTrainWagons({ trainNumber }) {
   const handleResetFilters = () => setColumnFilters({});
   const hasFilters = Object.values(columnFilters).some(v => v?.length > 0);
 
-  const visibleCols = useMemo(
-    () => MONITORING_COLUMNS.filter(c => visibleColumnIds.includes(c.id)),
-    [visibleColumnIds]
-  );
+  const visibleCols = useMemo(() => {
+    if (!visibleColumnIds.length) {
+      return MONITORING_COLUMNS.filter(c => c.isDefaultVisible !== false);
+    }
+    // Сохраняем порядок из visibleColumnIds (с drag-and-drop переупорядочиванием)
+    return visibleColumnIds
+      .map(id => MONITORING_COLUMNS.find(c => c.id === id))
+      .filter(Boolean);
+  }, [visibleColumnIds]);
 
   const filteredWagons = useMemo(
     () => applyFilters(wagons, columnFilters),
