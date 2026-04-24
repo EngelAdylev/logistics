@@ -274,14 +274,23 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   display: flex; flex-direction: column;
 }
 .column-visibility-title { padding: 6px 8px; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid var(--border-color); }
-.column-visibility-list { padding: 4px; overflow-y: auto; max-height: 260px; }
-.column-visibility-item { display: flex; align-items: center; gap: 6px; padding: 3px 6px; cursor: pointer; font-size: 0.8rem; }
+.column-visibility-list { padding: 4px; overflow-y: auto; max-height: 340px; }
+.column-visibility-section-label { padding: 6px 8px 3px; font-size: 0.7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.column-visibility-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; cursor: pointer; font-size: 0.8rem; border-radius: 3px; transition: background 0.15s ease; }
 .column-visibility-item:hover:not(.required) { background: #f8fafc; }
 .column-visibility-item.required { cursor: default; opacity: 0.9; }
 .column-visibility-item input { cursor: pointer; }
 .column-visibility-item.required input { cursor: not-allowed; }
-.column-visibility-label { display: flex; align-items: center; gap: 6px; }
+.column-visibility-label { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .required-badge { font-size: 0.75rem; color: #64748b; }
+
+/* Drag-and-drop styles */
+.column-visibility-item.draggable { cursor: grab; }
+.column-visibility-item.draggable:active { cursor: grabbing; }
+.column-visibility-item.dragging { opacity: 0.5; background: #e0f2fe !important; }
+.column-visibility-item.drag-over { background: #bfdbfe; border-left: 2px solid #3b82f6; padding-left: 4px; }
+.drag-handle { flex-shrink: 0; color: #cbd5e1; transition: color 0.15s ease; }
+.column-visibility-item.draggable:hover .drag-handle { color: #94a3b8; }
 .settings-error { font-size: 0.875rem; color: #dc2626; margin-bottom: 8px; }
 .data-error {
   display: flex; align-items: center; gap: 12px; padding: 16px;

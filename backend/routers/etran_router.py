@@ -510,8 +510,24 @@ def _upsert_wagons(db: Session, waybill_id, wagon_data: list[dict]):
             db.add(new_wg)
             existing_map[key] = new_wg
 
+    # Hard delete: log each removed wagon
     for key, ew in existing_map.items():
         if key not in incoming_keys:
+            carriage_num, container_num = key
+            # Получаем номер накладной для логирования
+            wb = db.query(models.EtranWaybill).filter(
+                models.EtranWaybill.id == waybill_id
+            ).first()
+            wb_number = wb.waybill_number if wb else str(waybill_id)
+
+            logger.warning(
+                "etran_wagon_hard_delete: waybill=%s wagon=%s container=%s "
+                "(removed from incoming ЭТРАН data)",
+                wb_number, carriage_num, container_num or "—"
+            )
+            _log_incoming(db, "", wb_number, "", "wagon_deleted",
+                         f"Вагон удалён: {carriage_num} / контейнер {container_num or '—'} "
+                         "(удалено из данных ЭТРАН)")
             db.delete(ew)
 
 
