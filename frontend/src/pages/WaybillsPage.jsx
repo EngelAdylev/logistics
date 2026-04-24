@@ -1,10 +1,87 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, Search, FileText, Box, Train } from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, FileText, Box, Train, Clock, CheckCircle } from 'lucide-react';
 import { api } from '../api';
+
+// ─── СТАТУСЫ: Разделение на "В движении" и "Завершённые" ───
+const IN_PROGRESS_STATUSES = new Set([
+  'в пути',
+  'груз принят к перевозке',
+  'груз завезен полностью',
+  'на подходе',
+  'погрузка на вагон',
+  'переадресован',
+  'заготовка',
+  'заготовка импорта, транзита',
+  'заготовка по назначению',
+  'заготовка по перегрузу',
+  'заготовка при сторно по отправлению',
+  'заготовка уведомления',
+  'накладная заполнена грузоотправителем',
+  'накладная предъявлена',
+  'на границе (не исп.)',
+  'на визировании',
+  'автоматический прием',
+  'заадресован',
+  'завизирована',
+  'принят по стыку (не исп.)',
+  'грузоотправитель накладную получил',
+  'изменение уведомления',
+  'согласование уведомления',
+  'изменено назначение',
+  'передан в техпд',
+]);
+
+const COMPLETED_STATUSES = new Set([
+  // Успешно доставлено
+  'груз прибыл',
+  'получатель уведомлен',
+  // Расчёты
+  'раскредитован',
+  'раскредитование отменено',
+  // Завершение документов
+  'работа с документом окончена',
+  'работа с документами окончена',
+  // Проблемы
+  'груз не прибыл',
+  'испорчен',
+  'испорчен после сторно',
+  'испорчен с.333 не прошло',
+  'просрочен',
+  'отказ грузоотправителя',
+  'отказ в согласовании',
+  'отказ от уведомления',
+  'отклонен',
+  'приемосдатчиком не принято',
+  'информация с номерного бланка испорчена',
+  'не оплачен',
+  'ожидание ответа для порчи',
+  'ожидание ответа о выгрузке',
+  // Отмены и сторно
+  'сторнирован в пути',
+  'сторнирован по назначению',
+  'сторнирован по отправлению',
+  'сторно по отправлению отменено',
+  'ожидание сторно в пути',
+  'ожидание сторно по назначению',
+  'ожидание сторно по отправлению',
+  'данные сторно по назначению внесены',
+  'данные сторно по отправлению внесены',
+  // Прочие
+  'приемосдатчиком принято',
+  'приложение к претензии (деньги)',
+  'приложение к претензии (плательщик)',
+  'приложение к претензии (реквизиты)',
+  'приложение к претензии закрыто',
+  'приложение экспедитора к претензии',
+  'необходима отмена с.251',
+  'ожидание отметки таможни',
+  'ожидание согласования заявки гу-12',
+]);
 
 const STATUS_MAP = {
   'в пути':                        { color: '#1976d2', bg: '#e3f2fd',  label: 'В пути' },
   'работа с документами окончена':  { color: '#e65100', bg: '#fff3e0',  label: 'Документы' },
+  'работа с документом окончена':   { color: '#e65100', bg: '#fff3e0',  label: 'Документы' },
   'груз прибыл':                    { color: '#2e7d32', bg: '#e8f5e9',  label: 'Прибыл' },
   'получатель уведомлен':           { color: '#7b1fa2', bg: '#f3e5f5',  label: 'Уведомлён' },
   'раскредитован':                  { color: '#c62828', bg: '#fce4ec',  label: 'Раскредитован' },
@@ -126,28 +203,27 @@ function WaybillCard({ wb, isExpanded, onToggle }) {
 }
 
 export default function WaybillsPage() {
-  const [waybills, setWaybills] = useState([]);
+  const [allWaybills, setAllWaybills] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState(new Set());
-  const [statusFilter, setStatusFilter] = useState('');
+  const [activeTab, setActiveTab] = useState('in_progress'); // 'in_progress' или 'completed'
 
   const fetchWaybills = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { limit: 200 };
+      const params = { limit: 500 }; // Загружаем больше для локальной фильтрации
       if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
       const res = await api.get('/etran/waybills', { params });
-      setWaybills(res.data.items || []);
+      setAllWaybills(res.data.items || []);
       setTotal(res.data.total || 0);
     } catch (e) {
       console.error('Failed to fetch waybills:', e);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search]);
 
   useEffect(() => {
     fetchWaybills();
@@ -162,42 +238,48 @@ export default function WaybillsPage() {
     });
   };
 
-  const statuses = ['в пути', 'работа с документами окончена', 'груз прибыл', 'получатель уведомлен', 'раскредитован'];
+  // ─── Фильтрация накладных по вкладкам ───
+  const getDisplayedWaybills = () => {
+    if (activeTab === 'in_progress') {
+      return allWaybills.filter(wb => IN_PROGRESS_STATUSES.has(wb.status?.toLowerCase()));
+    } else {
+      return allWaybills.filter(wb => COMPLETED_STATUSES.has(wb.status?.toLowerCase()));
+    }
+  };
+
+  const displayedWaybills = getDisplayedWaybills();
+
+  const inProgressCount = allWaybills.filter(wb => IN_PROGRESS_STATUSES.has(wb.status?.toLowerCase())).length;
+  const completedCount = allWaybills.filter(wb => COMPLETED_STATUSES.has(wb.status?.toLowerCase())).length;
 
   return (
     <div className="wagons-page">
       <div className="tabs-row">
         <div className="tabs">
-          <button type="button" className="active">
-            <FileText size={16} style={{ marginRight: 4 }} />
-            Накладные ЭТРАН
+          <button
+            type="button"
+            className={activeTab === 'in_progress' ? 'active' : ''}
+            onClick={() => setActiveTab('in_progress')}
+          >
+            <Clock size={16} style={{ marginRight: 4 }} />
+            В движении
+            <span style={{ marginLeft: 6, fontSize: '0.85em', opacity: 0.7 }}>({inProgressCount})</span>
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'completed' ? 'active' : ''}
+            onClick={() => setActiveTab('completed')}
+          >
+            <CheckCircle size={16} style={{ marginRight: 4 }} />
+            Завершённые
+            <span style={{ marginLeft: 6, fontSize: '0.85em', opacity: 0.7 }}>({completedCount})</span>
           </button>
         </div>
       </div>
 
       <div className="h-tab-content">
         <div className="h-filter-block">
-          <div className="h-filter-toggle">
-            <button
-              type="button"
-              className={!statusFilter ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-              onClick={() => setStatusFilter('')}
-            >
-              Все
-            </button>
-            {statuses.map(s => (
-              <button
-                key={s}
-                type="button"
-                className={statusFilter === s ? 'h-filter-btn h-filter-btn--active' : 'h-filter-btn'}
-                onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
-                style={{ fontSize: '11px' }}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Search size={14} style={{ color: '#94a3b8' }} />
             <input
               type="text"
@@ -208,7 +290,7 @@ export default function WaybillsPage() {
             />
           </div>
           <div className="h-view-meta" style={{ marginLeft: 12 }}>
-            накладных: {total}
+            {activeTab === 'in_progress' ? 'В движении' : 'Завершённые'}: {displayedWaybills.length} из {total}
           </div>
         </div>
 
@@ -216,11 +298,15 @@ export default function WaybillsPage() {
           <div className="wb-cards-scroll">
             {loading ? (
               <div className="wb-empty">Загрузка...</div>
-            ) : waybills.length === 0 ? (
-              <div className="wb-empty">Нет накладных</div>
+            ) : displayedWaybills.length === 0 ? (
+              <div className="wb-empty">
+                {activeTab === 'in_progress'
+                  ? 'Нет накладных в движении'
+                  : 'Нет завершённых накладных'}
+              </div>
             ) : (
               <div className="wb-cards-list">
-                {waybills.map(wb => (
+                {displayedWaybills.map(wb => (
                   <WaybillCard
                     key={wb.id}
                     wb={wb}

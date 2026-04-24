@@ -37,13 +37,105 @@ def etran_health_post():
 
 
 # Допустимые статусы (lower-case) — остальные отсеиваем
+# Полный список статусов РЖД ЭТРАН (updated 2026-04-24)
 ALLOWED_STATUSES = {
+    "автоматический прием",
     "в пути",
-    "работа с документом окончена",
-    "работа с документами окончена",  # на случай обоих вариантов
+    "груз завезен полностью",
+    "груз не прибыл",
     "груз прибыл",
+    "груз принят к перевозке",
+    "грузоотправитель накладную получил",
+    "данные сторно по назначению внесены",
+    "данные сторно по отправлению внесены",
+    "заадресован",
+    "завизирована",
+    "заготовка",
+    "заготовка импорта, транзита",
+    "заготовка по назначению",
+    "заготовка по перегрузу",
+    "заготовка при сторно по отправлению",
+    "заготовка уведомления",
+    "изменение уведомления",
+    "изменено назначение",
+    "информация с номерного бланка испорчена",
+    "испорчен",
+    "испорчен после сторно",
+    "испорчен с.333 не прошло",
+    "корректирующее с.333 на с.251 послано",
+    "на визировании",
+    "на границе (не исп.)",
+    "на подходе",
+    "накладная заполнена грузоотправителем",
+    "накладная предъявлена",
+    "не оплачен",
+    "необходима отмена с.251",
+    "ожидание ответа для порчи",
+    "ожидание ответа о выгрузке",
+    "ожидание отметки таможни",
+    "ожидание согласования заявки гу-12",
+    "ожидание сторно в пути",
+    "ожидание сторно по назначению",
+    "ожидание сторно по отправлению",
+    "отказ в согласовании",
+    "отказ грузоотправителя",
+    "отказ от уведомления",
+    "отклонен",
+    "отметки и суммы проставлены",
+    "переадресован",
+    "передан в техпд",
+    "погрузка на вагон",
     "получатель уведомлен",
+    "приемосдатчиком не принято",
+    "приемосдатчиком принято",
+    "приложение к претензии (деньги)",
+    "приложение к претензии (плательщик)",
+    "приложение к претензии (реквизиты)",
+    "приложение к претензии закрыто",
+    "приложение экспедитора к претензии",
+    "принят по стыку (не исп.)",
+    "просрочен",
+    "работа с документом окончена",
+    "работа с документами окончена",
     "раскредитован",
+    "раскредитование отменено",
+    "с. 333 на с. 400 послано",
+    "с.251 послано",
+    "с.253 послано",
+    "с.253/c.256 ошибка емпп",
+    "с.256 послано",
+    "с.258 послано",
+    "с.333 на с.242 послано (раск.в др.арме)",
+    "с.333 на с.242 послано (раскредитован)",
+    "с.333 на с.242 послано (с.253 ошибка)",
+    "с.333 на с.242 послано (с.402 ошибка)",
+    "с.333 на с.242 послано (уведомлен)",
+    "с.333 на с.253 послано",
+    "с.333 на с.254/256 послано",
+    "с.333 на с.402 послано",
+    "с.333 на с.406 послано",
+    "с.333 на с.407 послано",
+    "с.333 на с.422 послано",
+    "с.402 не принято с.253",
+    "с.402 ошибка емпп",
+    "с.402 послано",
+    "с.405/406/400/407 посл.",
+    "с.406 посл. (перегруз) из в пути",
+    "с.406 посл. (прибыл)",
+    "с.406 посл. (принят к перевозке)",
+    "с.406 посл. (уведомлен)",
+    "с.406 посл.(раскред)",
+    "с.410 ошибка емпп",
+    "с.410 послано",
+    "согласование дм зи",
+    "согласование уведомления",
+    "создание заготовки для повторного зу",
+    "создание копии для исправления",
+    "сторнирован в пути",
+    "сторнирован по назначению",
+    "сторнирован по отправлению",
+    "сторно по отправлению отменено",
+    "стыковочное с.333 на с.253 послано",
 }
 
 
@@ -204,7 +296,7 @@ def _log_incoming(db: Session, message_id: str, waybill_number: str,
 
 def _process_one_waybill(db: Session, waybill: dict, message_id: str,
                          payload: dict, stats: dict):
-    """Обрабатывает одну накладную: upsert пакета + синхронизация статуса по номеру."""
+    """Upsert накладной по waybill_number. Один номер = одна запись в БД всегда."""
     data = _extract_waybill_data(waybill)
     waybill_number = data["waybill_number"]
     status = data["status"]
@@ -222,56 +314,55 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         stats["filtered_out"] += 1
         return
 
-    existing = None
+    # Идемпотентность: если этот message_id уже успешно обработан — пропускаем
     if message_id:
-        existing = db.query(models.EtranWaybill).filter(
-            models.EtranWaybill.waybill_number == waybill_number,
-            models.EtranWaybill.source_message_id == message_id,
+        already = db.query(models.EtranIncomingLog).filter(
+            models.EtranIncomingLog.message_id == message_id,
+            models.EtranIncomingLog.action_taken.in_(["created", "updated", "refreshed"]),
         ).first()
+        if already:
+            logger.info("etran_webhook: duplicate message_id=%s, skipping", message_id)
+            stats["skipped"] += 1
+            return
 
-    if not existing and data.get("waybill_identifier"):
-        existing = db.query(models.EtranWaybill).filter(
-            models.EtranWaybill.waybill_number == waybill_number,
-            models.EtranWaybill.waybill_identifier == data["waybill_identifier"],
-        ).order_by(models.EtranWaybill.updated_at.desc()).first()
-
-    siblings = db.query(models.EtranWaybill).filter(
+    # Ищем запись только по waybill_number — один номер = одна строка
+    existing = db.query(models.EtranWaybill).filter(
         models.EtranWaybill.waybill_number == waybill_number
-    ).all()
+    ).order_by(models.EtranWaybill.updated_at.desc()).first()
+
+    wagon_data = _extract_wagons(waybill)
 
     if existing:
         old_status = existing.status
+
+        # Обновляем статус всегда
         existing.status = status
         existing.status_updated_at = datetime.now(timezone.utc)
-        existing.raw_data = payload
         existing.updated_at = datetime.now(timezone.utc)
-        if message_id:
-            existing.source_message_id = message_id
+        existing.source_message_id = message_id or existing.source_message_id
+        existing.raw_data = payload
 
-        for field in ["departure_station_code", "departure_station_name",
-                      "destination_station_code", "destination_station_name",
-                      "departure_country", "destination_country",
-                      "shipper_name", "consignee_name", "consignee_address",
-                      "payer", "payer_code", "responsible_person",
-                      "accepted_at", "departure_at", "delivery_deadline"]:
-            if data.get(field):
-                setattr(existing, field, data[field])
+        # Остальные поля — обновляем если в пакете пришло непустое значение
+        # (не затираем хорошие данные пустыми при частичных обновлениях)
+        for field in [
+            "waybill_identifier",
+            "departure_station_code", "departure_station_name",
+            "destination_station_code", "destination_station_name",
+            "departure_country", "destination_country",
+            "shipper_name", "consignee_name", "consignee_address",
+            "payer", "payer_code", "responsible_person",
+            "waybill_type", "shipment_type", "shipment_speed", "form_type",
+            "waybill_created_at", "accepted_at", "departure_at", "delivery_deadline",
+        ]:
+            val = data.get(field)
+            if val:
+                setattr(existing, field, val)
 
-        wagon_data = _extract_wagons(waybill)
         _upsert_wagons(db, existing.id, wagon_data)
-
-        # Статус должен оставаться единым по одному номеру накладной,
-        # даже если один номер хранится в нескольких пакетах.
-        for sibling in siblings:
-            if sibling.id == existing.id:
-                continue
-            sibling.status = status
-            sibling.status_updated_at = datetime.now(timezone.utc)
-            sibling.updated_at = datetime.now(timezone.utc)
 
         action = "updated" if old_status != status else "refreshed"
         _log_incoming(db, message_id, waybill_number, status, action,
-                      f"Статус: '{old_status}' → '{status}', вагонов в пакете: {len(wagon_data)}")
+                      f"Статус: '{old_status}' → '{status}', вагонов: {len(wagon_data)}")
         if old_status != status:
             stats["updated"] += 1
         else:
@@ -280,10 +371,10 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
                     action, waybill_number, message_id or "", len(wagon_data))
     else:
         new_wb = models.EtranWaybill(
-            waybill_number=data["waybill_number"],
+            waybill_number=waybill_number,
             source_message_id=message_id or None,
             waybill_identifier=data["waybill_identifier"],
-            status=data["status"],
+            status=status,
             status_updated_at=datetime.now(timezone.utc),
             departure_station_code=data["departure_station_code"],
             departure_station_name=data["departure_station_name"],
@@ -311,13 +402,7 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         db.add(new_wb)
         db.flush()
 
-        wagon_data = _extract_wagons(waybill)
         _upsert_wagons(db, new_wb.id, wagon_data)
-
-        for sibling in siblings:
-            sibling.status = status
-            sibling.status_updated_at = datetime.now(timezone.utc)
-            sibling.updated_at = datetime.now(timezone.utc)
 
         _log_incoming(db, message_id, waybill_number, status, "created",
                       f"Новая накладная, вагонов: {len(wagon_data)}")
