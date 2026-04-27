@@ -49,6 +49,22 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
   } : EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const [clients, setClients] = useState([
+    { id: '1', code: 'OOO_TRANSPORT', name: 'ООО Транспортные системы' },
+    { id: '2', code: 'LOGISTIC_PRO', name: 'Логистик Про' },
+    { id: '3', code: 'CARGO_CENTER', name: 'Груз-Центр' },
+  ]);
+
+  // Load clients from DB (or use fallback)
+  useEffect(() => {
+    api.get('/v2/clients')
+      .then(res => {
+        if (res.data.items && res.data.items.length > 0) {
+          setClients(res.data.items);
+        }
+      })
+      .catch(e => console.error('Failed to load clients, using fallback:', e));
+  }, []);
 
   const handleSave = async () => {
     if (isCreate && selectedKeys.size === 0) { setErr('Выберите хотя бы одну строку'); return; }
@@ -81,9 +97,15 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
       <div className="tof-row">
         <div className="tof-field">
           <span className="tof-label">Клиент</span>
-          <input className="tof-input" value={form.client_name}
-            onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))}
-            placeholder="Название клиента" autoFocus />
+          <select className="tof-input" value={form.client_name}
+            onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))}>
+            <option value="">— Выберите клиента —</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.code}>
+                {c.code} — {c.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="tof-field tof-field--comment">
           <span className="tof-label">Комментарий</span>
