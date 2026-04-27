@@ -270,6 +270,7 @@ class EtranWaybillWagon(Base):
     # Вагон: доп. данные
     renter = Column(Text)
     wagon_model = Column(Text)
+    wagon_type = Column(Text)  # Род вагона (sort из waybill_railway_carriage)
     next_repair_date = Column(Text)
     # Груз (первый продукт из накладной — для быстрого доступа)
     cargo_name = Column(Text)

@@ -236,6 +236,7 @@ def _extract_wagons(waybill: dict) -> list[dict]:
             "renter": _s(carr.get("renter")),
             "weight_net": _s(carr.get("railway_weight_net")),
             "wagon_model": _s(carr.get("model")),
+            "wagon_type": _s(carr.get("sort")),  # Род вагона
             "next_repair_date": _clean_date_str(carr.get("date_of_next_repair")),
             "cargo_name": _s(first_product.get("etsng_name") or first_product.get("cargo_full_name")),
             "cargo_weight": _s(first_product.get("cargo_weight")),

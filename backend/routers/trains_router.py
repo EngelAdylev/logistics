@@ -550,6 +550,7 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             eww.zpu_number,
             eww.zpu_type,
             eww.wagon_model,
+            eww.wagon_type,
             eww.axles_count,
             eww.renter,
             eww.next_repair_date,
@@ -593,6 +594,7 @@ def _build_snapshot(db: Session, train_number: str) -> list:
             "zpu_number": r["zpu_number"] or "",
             "zpu_type": r["zpu_type"] or "",
             "wagon_model": r["wagon_model"] or "",
+            "wagon_type": r["wagon_type"] or "",
             "axles_count": r["axles_count"],
             "renter": r["renter"] or "",
             "next_repair_date": r["next_repair_date"],
@@ -849,7 +851,7 @@ def list_clients(
             (models.Client.name.ilike(search_term))
         )
 
-    clients = q.order_by(models.Client.code).limit(50).all()
+    clients = q.order_by(models.Client.code).limit(500).all()
 
     return {
         "items": [

@@ -214,6 +214,7 @@ def startup_event():
                 ("etran_wbw_renter", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS renter TEXT"),
                 ("etran_wbw_wagon_model", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS wagon_model TEXT"),
                 ("etran_wbw_next_repair_date", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS next_repair_date TEXT"),
+                ("etran_wbw_wagon_type", "ALTER TABLE etran_waybill_wagons ADD COLUMN IF NOT EXISTS wagon_type TEXT"),
                 ("trip_waybills_table", """
                     CREATE TABLE IF NOT EXISTS trip_waybills (
                         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

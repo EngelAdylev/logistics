@@ -41,6 +41,7 @@ export const TRAIN_COMPOSITION_COLUMNS = [
   { id: 'ownership',              label: 'Собственность',        accessorKey: 'ownership',                                 isRequired: false, isDefaultVisible: false, width: '130px' },
   { id: 'weight_net',             label: 'Вес нетто',            accessorKey: 'weight_net',             filterable: false, isRequired: false, isDefaultVisible: false, width: '90px'  },
   { id: 'wagon_model',            label: 'Модель вагона',        accessorKey: 'wagon_model',                               isRequired: false, isDefaultVisible: false, width: '130px' },
+  { id: 'wagon_type',             label: 'Род вагона',           accessorKey: 'wagon_type',                                isRequired: false, isDefaultVisible: false, width: '100px' },
   { id: 'renter',                 label: 'Арендатор',            accessorKey: 'renter',                                    isRequired: false, isDefaultVisible: false, width: '120px' },
   { id: 'next_repair_date',       label: 'Дата ремонта',         accessorKey: 'next_repair_date',       filterable: false, isRequired: false, isDefaultVisible: false, width: '130px' },
 
