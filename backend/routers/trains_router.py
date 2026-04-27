@@ -840,7 +840,7 @@ def list_clients(
     db: Session = Depends(get_db),
 ):
     """Список клиентов для выпадашки в форме заявки."""
-    q = db.query(models.Client).filter(models.Client.is_active == True)
+    q = db.query(models.Client).filter(models.Client.active == True)
 
     if search:
         search_term = f"%{search}%"
@@ -854,7 +854,7 @@ def list_clients(
     return {
         "items": [
             {
-                "id": str(c.id),
+                "id": c.id,
                 "code": c.code,
                 "name": c.name or "",
             }

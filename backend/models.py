@@ -334,12 +334,26 @@ class RailwayRoute(Base):
 class Client(Base):
     """Справочник клиентов для заявок на приёмку."""
     __tablename__ = "clients"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    code = Column(Text, unique=True, nullable=False, index=True)  # Код клиента (уникальный)
-    name = Column(Text)  # Название клиента
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    id = Column(Text, primary_key=True)
+    code = Column(Text, unique=True, nullable=False, index=True)
+    name = Column(Text)
+    active = Column(Boolean, default=True)
+    sync_id = Column(Text)
+    inn = Column(Text)
+    kpp = Column(Text)
+    okpo = Column(Text)
+    ogrn = Column(Text)
+    edo_id = Column(Text)
+    address_legal = Column(Text)
+    address_fact = Column(Text)
+    signatory_name = Column(Text)
+    signatory_position = Column(Text)
+    created_at = Column(DateTime(timezone=True))
+    created_by = Column(Text)
+    updated_at = Column(DateTime(timezone=True))
+    updated_by = Column(Text)
+    email = Column(Text)
+    phone_number = Column(Text)
 
 
 class ReceivingOrder(Base):
