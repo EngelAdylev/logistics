@@ -54,6 +54,10 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
     { id: '2', code: 'LOGISTIC_PRO', name: 'Логистик Про' },
     { id: '3', code: 'CARGO_CENTER', name: 'Груз-Центр' },
   ]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const clientInputRef = useRef(null);
+  const clientDropdownRef = useRef(null);
 
   // Load clients from DB (or use fallback)
   useEffect(() => {
@@ -65,6 +69,32 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
       })
       .catch(e => console.error('Failed to load clients, using fallback:', e));
   }, []);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (
+        clientDropdownRef.current && !clientDropdownRef.current.contains(e.target) &&
+        clientInputRef.current && !clientInputRef.current.contains(e.target)
+      ) {
+        setShowClientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter clients by search
+  const filteredClients = clients.filter(c =>
+    c.code.toLowerCase().includes(clientSearch.toLowerCase()) ||
+    c.name.toLowerCase().includes(clientSearch.toLowerCase())
+  );
+
+  const handleClientSelect = (client) => {
+    setForm(p => ({ ...p, client_name: client.code }));
+    setClientSearch('');
+    setShowClientDropdown(false);
+  };
 
   const handleSave = async () => {
     if (isCreate && selectedKeys.size === 0) { setErr('Выберите хотя бы одну строку'); return; }
@@ -95,17 +125,95 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
           : <><Pencil size={13} /> Заявка №{existing.order_number}</>}
       </div>
       <div className="tof-row">
-        <div className="tof-field">
+        <div className="tof-field" style={{ position: 'relative' }}>
           <span className="tof-label">Клиент</span>
-          <select className="tof-input" value={form.client_name}
-            onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))}>
-            <option value="">— Выберите клиента —</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.code}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
+          <div style={{ position: 'relative' }}>
+            <input
+              ref={clientInputRef}
+              className="tof-input"
+              type="text"
+              value={form.client_name || clientSearch}
+              onChange={(e) => {
+                const val = e.target.value;
+                setClientSearch(val);
+                if (form.client_name && val !== form.client_name) {
+                  setForm(p => ({ ...p, client_name: '' }));
+                }
+              }}
+              onFocus={() => setShowClientDropdown(true)}
+              placeholder="Поиск клиента..."
+              autoComplete="off"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                fontFamily: 'inherit',
+              }}
+            />
+            {showClientDropdown && filteredClients.length > 0 && (
+              <div
+                ref={clientDropdownRef}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: 'white',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  marginTop: '4px',
+                }}
+              >
+                {filteredClients.map((client) => (
+                  <div
+                    key={client.id}
+                    onClick={() => handleClientSelect(client)}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #f1f5f9',
+                      fontSize: '0.9rem',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={(e) => (e.target.style.background = '#f0f9ff')}
+                    onMouseLeave={(e) => (e.target.style.background = 'white')}
+                  >
+                    <div style={{ fontWeight: 500, color: '#1e293b' }}>{client.code}</div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{client.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {form.client_name && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(p => ({ ...p, client_name: '' }));
+                  setClientSearch('');
+                }}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#94a3b8',
+                  fontSize: '1.2rem',
+                  padding: '0 4px',
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
         <div className="tof-field tof-field--comment">
           <span className="tof-label">Комментарий</span>
