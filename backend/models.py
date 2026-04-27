@@ -331,6 +331,17 @@ class RailwayRoute(Base):
     orders = relationship("ReceivingOrder", back_populates="route", cascade="all, delete-orphan")
 
 
+class Client(Base):
+    """Справочник клиентов для заявок на приёмку."""
+    __tablename__ = "clients"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(Text, unique=True, nullable=False, index=True)  # Код клиента (уникальный)
+    name = Column(Text)  # Название клиента
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class ReceivingOrder(Base):
     """Заявка на получение груза. Одна заявка = несколько вагонов/накладных (строки в items)."""
     __tablename__ = "receiving_orders"

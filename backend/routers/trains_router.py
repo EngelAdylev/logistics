@@ -830,3 +830,34 @@ def export_route(
     db.commit()
 
     return export
+
+
+# ─── GET /v2/clients ──────────────────────────────────────────────────────────
+
+@router.get("/clients")
+def list_clients(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Список клиентов для выпадашки в форме заявки."""
+    q = db.query(models.Client).filter(models.Client.is_active == True)
+
+    if search:
+        search_term = f"%{search}%"
+        q = q.filter(
+            (models.Client.code.ilike(search_term)) |
+            (models.Client.name.ilike(search_term))
+        )
+
+    clients = q.order_by(models.Client.code).limit(50).all()
+
+    return {
+        "items": [
+            {
+                "id": str(c.id),
+                "code": c.code,
+                "name": c.name or "",
+            }
+            for c in clients
+        ]
+    }
