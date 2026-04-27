@@ -328,6 +328,19 @@ def startup_event():
                     ON receiving_order_items(route_id, wagon_number)
                     WHERE waybill_id IS NULL
                 """),
+                # Справочник клиентов
+                ("clients_table", """
+                    CREATE TABLE IF NOT EXISTS clients (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        code TEXT NOT NULL UNIQUE,
+                        name TEXT,
+                        is_active BOOLEAN DEFAULT true,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        updated_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """),
+                ("clients_code_idx", "CREATE INDEX IF NOT EXISTS idx_clients_code ON clients(code)"),
+                ("clients_is_active_idx", "CREATE INDEX IF NOT EXISTS idx_clients_is_active ON clients(is_active)"),
             ]:
                 try:
                     conn.execute(text(sql))
@@ -348,6 +361,24 @@ def startup_event():
                 pwd = os.getenv("ADMIN_PASSWORD", "admin12345")
                 u = models.User(login=login, password_hash=hash_password(pwd), role="admin", is_active=True)
                 db.add(u)
+                db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    # Создать образцовых клиентов если таблица пуста
+    try:
+        db = SessionLocal()
+        try:
+            count = db.query(models.Client).count()
+            if count == 0:
+                sample_clients = [
+                    models.Client(code="OOO_TRANSPORT", name="ООО Транспортные системы"),
+                    models.Client(code="LOGISTIC_PRO", name="Логистик Про"),
+                    models.Client(code="CARGO_CENTER", name="Груз-Центр"),
+                ]
+                db.add_all(sample_clients)
                 db.commit()
         finally:
             db.close()

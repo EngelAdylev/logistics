@@ -71,7 +71,9 @@ frontend/src/
   - [x] Комментарии в Поездах (вкладка TrainsView) — bulk select по wagon_id, форма с textarea, последний комментарий в таблице
 - [x] Расширяемые строки: поезда, рейсы ЛКДС, заявки
 - [x] Админ-only вкладки (Рейсы в ЛКДС, Заявки)
-- [ ] В работе: стабилизация архивации, тестирование на продакшн-данных
+- [x] Выборка колонок с drag-and-drop переупорядочением (TrainComposition)
+- [x] Дропдаун клиентов в форме заявки (OrdersModal) с автодополнением
+- [ ] В работе: трёхколоночные вагоны (груженый/порожній, род вагона, оператор по доверенности)
 - [ ] Планируется: уведомления (Telegram/email), аналитика, обратная связь из 1С
 
 ## Функции Поездов (TrainsView)
@@ -171,6 +173,16 @@ Response: { id, train_number, train_index, status, wagons: [...], orders: [...] 
 Body: { entity_type: "wagon"|"trip", entity_ids: [UUID], text: string (1-2000) }
 Response: { total_requested, success_count, failed_count, failed_ids, status, message }
 Лимит: 200 entity_ids за запрос.
+```
+
+### GET /v2/clients
+Список клиентов для дропдауна в форме заявки (с автодополнением).
+```
+Параметры: search (optional) — поиск по коду или названию клиента
+Response: { "items": [{ "id": UUID, "code": string, "name": string }, ...] }
+Возвращает до 50 результатов, отсортированных по коду
+Показывает только активных клиентов (is_active=true)
+Поиск case-insensitive (ILIKE)
 ```
 
 ## State Management (TrainComposition)

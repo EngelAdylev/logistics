@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
 import { api } from '../../api';
 
 const EMPTY_FORM = {
@@ -36,7 +35,9 @@ export function OrdersModal({ routeId, existing, selectedWagons, allWagons, onSa
     }
     const fetchClients = async () => {
       try {
+        console.log('Fetching clients with search:', clientSearch);
         const res = await api.get('/v2/clients', { params: { search: clientSearch } });
+        console.log('Got clients:', res.data);
         setClientOptions(res.data.items || []);
       } catch (e) {
         console.error('Failed to fetch clients:', e);
