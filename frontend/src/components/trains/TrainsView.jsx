@@ -255,6 +255,10 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   // Таб-система для состава
   const [compTab, setCompTab] = useState('wagons'); // 'wagons' | 'orders' | 'info'
 
+  // Группировка вагонов
+  const [groupByColumn, setGroupByColumn] = useState(null); // null | column_id
+  const [expandedGroups, setExpandedGroups] = useState(new Set()); // Set of group values
+
   // Липкий горизонтальный скролл
   const tableScrollRef = useRef(null);
   const stickyScrollRef = useRef(null);
@@ -273,6 +277,14 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   }, [routeId]);
 
   useEffect(() => { fetchRoute(); }, [fetchRoute]);
+
+  // Auto-expand all groups when grouping column changes
+  useEffect(() => {
+    if (groupByColumn && route?.wagons) {
+      const grouped = getGroupedWagons(filteredWagons);
+      setExpandedGroups(new Set(Object.keys(grouped)));
+    }
+  }, [groupByColumn]);
 
   const resetMode = () => { setMode('view'); setSelectedKeys(new Set()); setEditingOrder(null); };
   const handleSaved = () => { resetMode(); fetchRoute(); };
@@ -362,6 +374,40 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
   const handleResetFilters = () => setColumnFilters({});
 
+  // Группировка вагонов
+  const toggleGroup = (groupValue) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupValue)) {
+        next.delete(groupValue);
+      } else {
+        next.add(groupValue);
+      }
+      return next;
+    });
+  };
+
+  const getGroupedWagons = (wagons) => {
+    // Предполагаем, что это вызывается только когда groupByColumn установлена
+    const col = TRAIN_COMPOSITION_COLUMNS.find(c => c.id === groupByColumn);
+    if (!col) return {};
+
+    const grouped = {};
+    wagons.forEach(wagon => {
+      const val = wagon[col.accessorKey];
+      const groupKey = val && val.toString().trim() !== '' ? val.toString() : '—';
+      if (!grouped[groupKey]) grouped[groupKey] = [];
+      grouped[groupKey].push(wagon);
+    });
+
+    // Сортируем группы: "—" в конце
+    const sorted = {};
+    const keys = Object.keys(grouped);
+    keys.filter(k => k !== '—').forEach(k => { sorted[k] = grouped[k]; });
+    if (grouped['—']) sorted['—'] = grouped['—'];
+    return sorted;
+  };
+
   // Применяем фильтры к вагонам
   const filteredWagons = useMemo(() => {
     if (!route?.wagons) return [];
@@ -449,11 +495,39 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
             </button>
           )}
           {mode === 'view' && commentMode === 'view' && (
-            <ColumnVisibilityPanel
-              visibleColumnIds={visibleColumnIds}
-              onVisibilityChange={onVisibleColumnsChange}
-              columns={TRAIN_COMPOSITION_COLUMNS}
-            />
+            <>
+              <ColumnVisibilityPanel
+                visibleColumnIds={visibleColumnIds}
+                onVisibilityChange={onVisibleColumnsChange}
+                columns={TRAIN_COMPOSITION_COLUMNS}
+              />
+              <select
+                value={groupByColumn || ''}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setGroupByColumn(val);
+                  // При выборе группировки, разворачиваем все группы по умолчанию
+                  // При отключении - очищаем
+                  setExpandedGroups(new Set());
+                }}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '0.9rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  color: '#374151',
+                }}
+              >
+                <option value="">Без группировки</option>
+                {TRAIN_COMPOSITION_COLUMNS.map(col => (
+                  <option key={col.id} value={col.id}>
+                    Группировать по: {col.label}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
           {mode === 'view' && commentMode === 'view' && Object.keys(columnFilters).some(k => columnFilters[k]?.length) && (
             <button type="button" className="compact-icon-btn warning" onClick={handleResetFilters} title="Сбросить фильтры">
@@ -637,48 +711,146 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
             </tr>
           </thead>
           <tbody>
-            {filteredWagons.map((wagon) => {
-              const order = wagon.order;
-              const key = rowKey(wagon);
-              const isSelectedOrder = selectedKeys.has(key);
-              const isSelectedComment = selectedWagons.has(wagon.wagon_id);
-              const canSelectOrder = mode === 'create' && !order;
-              const canSelectComment = commentMode === 'add';
-              const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
+            {(() => {
+              // Нет группировки - просто рендерим все вагоны
+              if (!groupByColumn) {
+                return filteredWagons.map((wagon) => {
+                  const order = wagon.order;
+                  const key = rowKey(wagon);
+                  const isSelectedOrder = selectedKeys.has(key);
+                  const isSelectedComment = selectedWagons.has(wagon.wagon_id);
+                  const canSelectOrder = mode === 'create' && !order;
+                  const canSelectComment = commentMode === 'add';
+                  const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
 
-              const renderCellValue = (col) => renderWagonCell(col, wagon);
+                  const renderCellValue = (col) => renderWagonCell(col, wagon);
 
-              return (
-                <tr key={key}
-                  className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelectedOrder || isSelectedComment ? ' wagon-row--selected' : ''}`}
-                  style={{ background: rowBg, cursor: (canSelectOrder || canSelectComment) ? 'pointer' : 'default' }}
-                  onClick={canSelectOrder ? () => toggleWaybillGroup(wagon) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
-                >
-                  {(mode === 'create' || commentMode === 'add') && (
-                    <td style={{ textAlign: 'center' }}>
-                      {mode === 'create' && !order && (
-                        <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleWaybillGroup(wagon)} onClick={e => e.stopPropagation()} />
+                  return (
+                    <tr key={key}
+                      className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelectedOrder || isSelectedComment ? ' wagon-row--selected' : ''}`}
+                      style={{ background: rowBg, cursor: (canSelectOrder || canSelectComment) ? 'pointer' : 'default' }}
+                      onClick={canSelectOrder ? () => toggleWaybillGroup(wagon) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
+                    >
+                      {(mode === 'create' || commentMode === 'add') && (
+                        <td style={{ textAlign: 'center' }}>
+                          {mode === 'create' && !order && (
+                            <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleWaybillGroup(wagon)} onClick={e => e.stopPropagation()} />
+                          )}
+                          {commentMode === 'add' && (
+                            <input type="checkbox" checked={isSelectedComment} onChange={() => toggleWagonForComment(wagon.wagon_id)} onClick={e => e.stopPropagation()} />
+                          )}
+                        </td>
                       )}
-                      {commentMode === 'add' && (
-                        <input type="checkbox" checked={isSelectedComment} onChange={() => toggleWagonForComment(wagon.wagon_id)} onClick={e => e.stopPropagation()} />
+                      {visibleCols.map(col => (
+                        <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>
+                          {renderCellValue(col)}
+                        </td>
+                      ))}
+                      {mode === 'view' && commentMode === 'view' && !isClosed && (
+                        <td style={{ textAlign: 'center' }}>
+                          {order && wagon.item_id && (
+                            <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
+                          )}
+                        </td>
                       )}
+                    </tr>
+                  );
+                });
+              }
+
+              // С группировкой
+              const grouped = getGroupedWagons(filteredWagons);
+              const groups = Object.entries(grouped);
+
+              return groups.flatMap(([groupValue, wagons]) => {
+                const isExpanded = expandedGroups.has(groupValue);
+                const rows = [];
+
+                // Заголовок группы
+                rows.push(
+                  <tr
+                    key={`group-${groupValue}`}
+                    style={{
+                      background: '#f3f4f6',
+                      cursor: 'pointer',
+                      borderTop: '1px solid #e5e7eb',
+                    }}
+                    onClick={() => toggleGroup(groupValue)}
+                  >
+                    <td
+                      colSpan={
+                        ((mode === 'create' || commentMode === 'add') ? 1 : 0) +
+                        visibleCols.length +
+                        (mode === 'view' && commentMode === 'view' && !isClosed ? 1 : 0)
+                      }
+                      style={{
+                        padding: '8px 12px',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        color: '#374151',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      <span>{groupValue}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: '0.85rem', color: '#6b7280' }}>
+                        {wagons.length} вагон{wagons.length === 1 ? '' : wagons.length % 10 === 1 && wagons.length % 100 !== 11 ? '' : 'ов'}
+                      </span>
                     </td>
-                  )}
-                  {visibleCols.map(col => (
-                    <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>
-                      {renderCellValue(col)}
-                    </td>
-                  ))}
-                  {mode === 'view' && commentMode === 'view' && !isClosed && (
-                    <td style={{ textAlign: 'center' }}>
-                      {order && wagon.item_id && (
-                        <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+                  </tr>
+                );
+
+                // Строки вагонов если группа развёрнута
+                if (isExpanded) {
+                  wagons.forEach((wagon) => {
+                    const order = wagon.order;
+                    const key = rowKey(wagon);
+                    const isSelectedOrder = selectedKeys.has(key);
+                    const isSelectedComment = selectedWagons.has(wagon.wagon_id);
+                    const canSelectOrder = mode === 'create' && !order;
+                    const canSelectComment = commentMode === 'add';
+                    const rowBg = (isSelectedOrder || isSelectedComment) ? '#bfdbfe' : (order ? orderColors[order.id] : undefined);
+
+                    const renderCellValue = (col) => renderWagonCell(col, wagon);
+
+                    rows.push(
+                      <tr key={key}
+                        className={`wagon-row${order ? ' wagon-row--has-order' : ''}${isSelectedOrder || isSelectedComment ? ' wagon-row--selected' : ''}`}
+                        style={{ background: rowBg, cursor: (canSelectOrder || canSelectComment) ? 'pointer' : 'default' }}
+                        onClick={canSelectOrder ? () => toggleWaybillGroup(wagon) : (canSelectComment ? () => toggleWagonForComment(wagon.wagon_id) : undefined)}
+                      >
+                        {(mode === 'create' || commentMode === 'add') && (
+                          <td style={{ textAlign: 'center' }}>
+                            {mode === 'create' && !order && (
+                              <input type="checkbox" checked={isSelectedOrder} onChange={() => toggleWaybillGroup(wagon)} onClick={e => e.stopPropagation()} />
+                            )}
+                            {commentMode === 'add' && (
+                              <input type="checkbox" checked={isSelectedComment} onChange={() => toggleWagonForComment(wagon.wagon_id)} onClick={e => e.stopPropagation()} />
+                            )}
+                          </td>
+                        )}
+                        {visibleCols.map(col => (
+                          <td key={col.id} style={col.id === 'remaining_distance' ? { textAlign: 'center' } : undefined}>
+                            {renderCellValue(col)}
+                          </td>
+                        ))}
+                        {mode === 'view' && commentMode === 'view' && !isClosed && (
+                          <td style={{ textAlign: 'center' }}>
+                            {order && wagon.item_id && (
+                              <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  });
+                }
+
+                return rows;
+              });
+            })()}
           </tbody>
         </table>
       </div>
