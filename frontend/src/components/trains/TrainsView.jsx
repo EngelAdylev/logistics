@@ -748,7 +748,19 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* Форма заявки */}
       {(mode === 'create' || mode === 'edit') && commentMode === 'view' && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{
+          position: 'fixed',
+          top: '150px',
+          left: 0,
+          right: 0,
+          width: '100%',
+          zIndex: 100,
+          background: 'white',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          borderBottom: '1px solid #e5e7eb',
+          overflowY: 'auto',
+          maxHeight: 'calc(100vh - 150px)',
+        }}>
           <OrderFormPanel
             routeId={routeId}
             existing={mode === 'edit' ? editingOrder : null}
@@ -762,7 +774,19 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* Форма комментария */}
       {commentMode === 'add' && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{
+          position: 'fixed',
+          top: '150px',
+          left: 0,
+          right: 0,
+          width: '100%',
+          zIndex: 100,
+          background: 'white',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          borderBottom: '1px solid #e5e7eb',
+          overflowY: 'auto',
+          maxHeight: 'calc(100vh - 150px)',
+        }}>
           <div className="tof-panel">
           <div className="tof-header">
             <MessageSquare size={14} /> Добавить комментарий {selectedWagons.size > 0 && <span className="tof-count">{selectedWagons.size} ваг.</span>}
@@ -805,7 +829,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* ─── Таб: Состав вагонов ─── */}
       {compTab === 'wagons' && (
-        <div className="trains-composition-scroll-wrapper">
+        <div className="trains-composition-scroll-wrapper" style={{ marginTop: (mode === 'create' || mode === 'edit' || commentMode === 'add') ? '320px' : 0 }}>
         <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
           <table className="excel-table compact-table trains-composition-table">
           <colgroup>
