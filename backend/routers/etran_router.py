@@ -138,6 +138,33 @@ ALLOWED_STATUSES = {
     "стыковочное с.333 на с.253 послано",
 }
 
+# Терминальные статусы — накладная считается завершённой
+TERMINAL_STATUSES = {
+    "груз прибыл",                           # Основной терминал — груз доставлен
+    "груз завезен полностью",                # Груз полностью доставлен
+    "груз не прибыл",                        # Груз не доставлен (отказ)
+    "работа с документом окончена",          # Документ закрыт
+    "работа с документами окончена",         # Документы закрыты
+    "испорчен",                              # Документ повреждён
+    "испорчен после сторно",                 # Повреждён после отмены
+    "испорчен с.333 не прошло",              # Повреждён, не прошёл проверку
+    "сторнирован в пути",                    # Отменён в пути
+    "сторнирован по назначению",             # Отменён в пункте назначения
+    "сторнирован по отправлению",            # Отменён в пункте отправления
+    "раскредитован",                         # Де-кредитован (отмена платежа)
+    "отклонен",                              # Отклонен
+    "отказ грузоотправителя",                # Грузоотправитель отказал
+    "отказ от уведомления",                  # Отказ от уведомления
+    "приемосдатчиком принято",               # Принято приёмосдатчиком (завершение)
+    "грузоотправитель накладную получил",    # Грузоотправитель получил
+    "получатель уведомлен",                  # Получатель уведомлен (завершение)
+}
+
+
+def _is_terminal_status(status: str) -> bool:
+    """Проверяет, является ли статус терминальным (завершённым)."""
+    return status.lower() in TERMINAL_STATUSES
+
 
 def _parse_datetime(val) -> Optional[datetime]:
     """Парсим дату из JSON ЭТРАН. Возвращает None для пустых/нулевых дат."""
@@ -343,6 +370,10 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         existing.source_message_id = message_id or existing.source_message_id
         existing.raw_data = payload
 
+        # Если статус становится терминальным — отмечаем is_relevant=false
+        if _is_terminal_status(status):
+            existing.is_relevant = False
+
         # Остальные поля — обновляем если в пакете пришло непустое значение
         # (не затираем хорошие данные пустыми при частичных обновлениях)
         for field in [
@@ -363,13 +394,13 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
 
         action = "updated" if old_status != status else "refreshed"
         _log_incoming(db, message_id, waybill_number, status, action,
-                      f"Статус: '{old_status}' → '{status}', вагонов: {len(wagon_data)}")
+                      f"Статус: '{old_status}' → '{status}', is_relevant={existing.is_relevant}, вагонов: {len(wagon_data)}")
         if old_status != status:
             stats["updated"] += 1
         else:
             stats["skipped"] += 1
-        logger.info("etran_webhook: %s waybill=%s message_id=%s wagons=%d",
-                    action, waybill_number, message_id or "", len(wagon_data))
+        logger.info("etran_webhook: %s waybill=%s message_id=%s status_terminal=%s wagons=%d",
+                    action, waybill_number, message_id or "", _is_terminal_status(status), len(wagon_data))
     else:
         new_wb = models.EtranWaybill(
             waybill_number=waybill_number,
@@ -398,7 +429,7 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
             departure_at=data["departure_at"],
             delivery_deadline=data["delivery_deadline"],
             raw_data=payload,
-            is_relevant=True,
+            is_relevant=not _is_terminal_status(status),
         )
         db.add(new_wb)
         db.flush()
@@ -406,10 +437,10 @@ def _process_one_waybill(db: Session, waybill: dict, message_id: str,
         _upsert_wagons(db, new_wb.id, wagon_data)
 
         _log_incoming(db, message_id, waybill_number, status, "created",
-                      f"Новая накладная, вагонов: {len(wagon_data)}")
+                      f"Новая накладная, is_relevant={new_wb.is_relevant}, вагонов: {len(wagon_data)}")
         stats["created"] += 1
-        logger.info("etran_webhook: created waybill=%s status='%s' wagons=%d",
-                    waybill_number, status, len(wagon_data))
+        logger.info("etran_webhook: created waybill=%s status='%s' is_relevant=%s wagons=%d",
+                    waybill_number, status, new_wb.is_relevant, len(wagon_data))
 
 
 def _safe_process(db: Session, waybill: dict, message_id: str,

@@ -404,7 +404,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   });
 
   // Таб-система для состава
-  const [compTab, setCompTab] = useState('wagons'); // 'wagons' | 'orders' | 'info'
+  const [compTab, setCompTab] = useState('wagons'); // 'wagons' | 'orders' | 'info' | 'unbound'
 
   // Группировка вагонов (с сохранением в localStorage)
   const [groupByColumn, setGroupByColumn] = useState(() => {
@@ -424,6 +424,10 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
     }
   });
 
+  // Несвязанные накладные
+  const [unboundWaybills, setUnboundWaybills] = useState([]);
+  const [unboundLoading, setUnboundLoading] = useState(false);
+
   // Липкий горизонтальный скролл
   const tableScrollRef = useRef(null);
   const stickyScrollRef = useRef(null);
@@ -441,7 +445,23 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
     finally { setLoading(false); }
   }, [routeId]);
 
-  useEffect(() => { fetchRoute(); }, [fetchRoute]);
+  const fetchUnboundWaybills = useCallback(async () => {
+    setUnboundLoading(true);
+    try {
+      const res = await api.get(`/v2/routes/${routeId}/unbound-waybills`);
+      setUnboundWaybills(res.data.items || []);
+    } catch (e) {
+      console.error('Failed to fetch unbound waybills:', e);
+      setUnboundWaybills([]);
+    } finally {
+      setUnboundLoading(false);
+    }
+  }, [routeId]);
+
+  useEffect(() => {
+    fetchRoute();
+    fetchUnboundWaybills();
+  }, [fetchRoute, fetchUnboundWaybills]);
 
   // Сохранение groupByColumn в localStorage
   useEffect(() => {
@@ -768,6 +788,27 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
           }}
         >
           <ClipboardList size={16} /> Заявки ({ordersCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setCompTab('unbound')}
+          style={{
+            padding: '8px 16px',
+            fontSize: 13,
+            fontWeight: compTab === 'unbound' ? 700 : 500,
+            color: compTab === 'unbound' ? '#3b82f6' : '#6b7280',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: compTab === 'unbound' ? '3px solid #3b82f6' : 'none',
+            marginBottom: '-2px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Package size={16} /> Несвязанные ({unboundWaybills.length})
         </button>
         <button
           type="button"
@@ -1211,6 +1252,60 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Таб: Несвязанные накладные ─── */}
+      {compTab === 'unbound' && (
+        <div style={{ padding: '16px', overflowX: 'auto' }}>
+          {unboundLoading ? (
+            <div style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>
+              <div className="spinner-sm" style={{ marginBottom: 12 }} />
+              Загрузка несвязанных накладных…
+            </div>
+          ) : unboundWaybills.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px', color: '#9ca3af' }}>
+              <Package size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
+              <p style={{ margin: 0 }}>Все накладные уже связаны с вагонами</p>
+            </div>
+          ) : (
+            <table className="excel-table compact-table" style={{ width: '100%', marginBottom: 16 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '15%' }}>Номер накладной</th>
+                  <th style={{ width: '20%' }}>Отправитель</th>
+                  <th style={{ width: '20%' }}>Получатель</th>
+                  <th style={{ width: '15%' }}>Тип вагона</th>
+                  <th style={{ width: '20%' }}>Груз</th>
+                  <th style={{ width: '10%' }}>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unboundWaybills.map((wb) => (
+                  <tr key={wb.id}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 500 }}>{wb.waybill_number}</td>
+                    <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {wb.shipper_name || '—'}
+                    </td>
+                    <td title={wb.consignee_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {wb.consignee_name || '—'}
+                    </td>
+                    <td style={{ fontSize: 13 }}>
+                      {wb.wagon_types ? (
+                        <span title={wb.wagon_types} style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+                          {wb.wagon_types}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {wb.cargo_names || '—'}
+                    </td>
+                    <td style={{ fontSize: 12, color: '#6b7280' }}>{wb.status || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

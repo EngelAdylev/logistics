@@ -74,6 +74,7 @@ frontend/src/
 - [x] Выборка колонок с drag-and-drop переупорядочением (TrainComposition)
 - [x] Дропдаун клиентов в форме заявки (OrdersModal) с автодополнением
 - [x] Группировка вагонов по колонке (Group by) с expandable/collapsible группами
+- [x] Несвязанные накладные (вкладка в TrainComposition) — показывает накладные из etran_waybills, не привязанные к вагонам текущего маршрута
 - [ ] В работе: трёхколоночные вагоны (груженый/порожній, род вагона, оператор по доверенности)
 - [ ] Планируется: уведомления (Telegram/email), аналитика, обратная связь из 1С
 
@@ -102,6 +103,11 @@ frontend/src/
   - POST /v2/comment-constructor/apply с entity_type='wagon' и entity_ids (UUIDs)
   - Столбец last_comment_text показывает последний комментарий
   - Синхронизирует с Дислокацией через один эндпоинт
+- **Несвязанные накладные (Unbound Waybills):**
+  - Вкладка "Несвязанные (N)" показывает накладные из etran_waybills, не привязанные к вагонам текущего маршрута
+  - Таблица: Номер накладной, Отправитель, Получатель, Тип вагона, Груз, Статус
+  - Автоматически обновляется при загрузке маршрута
+  - Когда вагон с накладной придёт в дислокацию, TripWaybill создаётся и накладная исчезает из списка
 
 **Дефаулты видимости колонок:**
 - Видны: Вагон, Накладная, Контейнер, Отправитель, Получатель, Груз, Остаток, Клиент
@@ -173,6 +179,17 @@ Response: { id, train_number, train_index, status, wagons: [...], orders: [...] 
 
 ### GET /v2/routes/{route_id}/export
 Экспорт JSON для 1С. **Необратимо** — маршрут переходит в status='closed'.
+
+### GET /v2/routes/{route_id}/unbound-waybills
+Несвязанные накладные (не привязанные к вагонам в текущем маршруте).
+```
+Response: { items: [...], total: int }
+Поля item: id (UUID), waybill_number, shipper_name, consignee_name,
+  departure_station_name, destination_station_name, status, waybill_type,
+  wagon_types (STRING_AGG), cargo_names (STRING_AGG), container_numbers (STRING_AGG)
+```
+**Назначение:** Показать в UI вкладку "Несвязанные накладные" с накладными, которые ещё не привязаны к вагонам текущего поезда.
+Когда вагон с накладной придёт в дислокацию, создаётся TripWaybill и накладная исчезает из этого списка.
 
 ### POST /v2/comment-constructor/apply
 Массовое добавление комментария к вагонам/рейсам.

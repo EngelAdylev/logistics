@@ -2,17 +2,18 @@
 Роутер «Поезда» — только для поставки (destination_station_code = 648400).
 
 Эндпоинты:
-  POST /v2/routes/snapshot-debug       — диагностика создания болванок
-  GET  /v2/trains                      — список активных поездов
-  GET  /v2/routes                      — список всех маршрутов (для аналитики)
-  GET  /v2/orders                      — список всех заявок (для аналитики)
-  GET  /v2/routes/{route_id}           — маршрут + состав + заявки
-  POST /v2/routes/{route_id}/orders    — создать заявку (с несколькими вагонами)
-  PATCH /v2/orders/{order_id}          — обновить шапку заявки
-  DELETE /v2/orders/{order_id}         — удалить заявку целиком
-  POST /v2/orders/{order_id}/items     — добавить вагон в существующую заявку
-  DELETE /v2/order-items/{item_id}     — убрать вагон из заявки
-  GET  /v2/routes/{route_id}/export    — JSON для 1С
+  POST /v2/routes/snapshot-debug           — диагностика создания болванок
+  GET  /v2/trains                          — список активных поездов
+  GET  /v2/routes                          — список всех маршрутов (для аналитики)
+  GET  /v2/orders                          — список всех заявок (для аналитики)
+  GET  /v2/routes/{route_id}               — маршрут + состав + заявки
+  GET  /v2/routes/{route_id}/unbound-waybills — несвязанные накладные
+  POST /v2/routes/{route_id}/orders        — создать заявку (с несколькими вагонами)
+  PATCH /v2/orders/{order_id}              — обновить шапку заявки
+  DELETE /v2/orders/{order_id}             — удалить заявку целиком
+  POST /v2/orders/{order_id}/items         — добавить вагон в существующую заявку
+  DELETE /v2/order-items/{item_id}         — убрать вагон из заявки
+  GET  /v2/routes/{route_id}/export        — JSON для 1С
 """
 import logging
 from typing import List, Optional
@@ -514,6 +515,77 @@ def get_route(
         "wagons": wagons_out,
         "orders": [_order_out(o) for o in route.orders],
     }
+
+
+# ─── GET /v2/routes/{route_id}/unbound-waybills ───────────────────────────────
+
+@router.get("/routes/{route_id}/unbound-waybills")
+def get_unbound_waybills(
+    route_id: UUID,
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Получить список несвязанных накладных (не привязанных к вагонам в текущем маршруте).
+
+    Несвязанная накладная — та, которая:
+    1. Существует в etran_waybills (is_relevant=true)
+    2. НЕ имеет TripWaybill для вагонов текущего маршрута
+
+    Когда вагон с накладной придёт в дислокацию, TripWaybill создаётся,
+    и накладная исчезает из этого списка.
+    """
+    route = db.query(models.RailwayRoute).filter(models.RailwayRoute.id == route_id).first()
+    if not route:
+        raise HTTPException(status_code=404, detail="Маршрут не найден")
+
+    # Получаем все вагоны в этом маршруте (train_number)
+    # и их связанные накладные (через trip_waybills)
+    rows = db.execute(text("""
+        SELECT
+            ew.id,
+            ew.waybill_number,
+            ew.shipper_name,
+            ew.consignee_name,
+            ew.departure_station_name,
+            ew.destination_station_name,
+            ew.status,
+            ew.waybill_type,
+            STRING_AGG(DISTINCT eww.wagon_type, ', ') AS wagon_types,
+            STRING_AGG(DISTINCT eww.cargo_name, ', ') AS cargo_names,
+            STRING_AGG(DISTINCT COALESCE(eww.container_number, ''), ', ') FILTER (WHERE eww.container_number IS NOT NULL) AS container_numbers
+        FROM etran_waybills ew
+        LEFT JOIN etran_waybill_wagons eww ON eww.waybill_id = ew.id
+        WHERE ew.is_relevant = true
+          AND ew.id NOT IN (
+              SELECT DISTINCT tw.waybill_id
+              FROM trip_waybills tw
+              JOIN wagon_trips wt ON wt.id = tw.wagon_trip_id
+              WHERE wt.number_train = :train_number
+                AND wt.is_active = true
+          )
+        GROUP BY ew.id, ew.waybill_number, ew.shipper_name, ew.consignee_name,
+                 ew.departure_station_name, ew.destination_station_name, ew.status, ew.waybill_type
+        ORDER BY ew.waybill_number
+    """), {"train_number": route.train_number}).mappings().all()
+
+    result = [
+        {
+            "id": str(r["id"]),
+            "waybill_number": r["waybill_number"] or "",
+            "shipper_name": r["shipper_name"] or "",
+            "consignee_name": r["consignee_name"] or "",
+            "departure_station_name": r["departure_station_name"] or "",
+            "destination_station_name": r["destination_station_name"] or "",
+            "status": r["status"] or "",
+            "waybill_type": r["waybill_type"] or "",
+            "wagon_types": r["wagon_types"] or "",
+            "cargo_names": r["cargo_names"] or "",
+            "container_numbers": r["container_numbers"] or "",
+        }
+        for r in rows
+    ]
+
+    return {"items": result, "total": len(result)}
 
 
 def _build_snapshot(db: Session, train_number: str) -> list:
