@@ -749,17 +749,12 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
       {/* Форма заявки */}
       {(mode === 'create' || mode === 'edit') && commentMode === 'view' && (
         <div style={{
-          position: 'fixed',
-          top: '150px',
-          left: 0,
-          right: 0,
-          width: '100%',
-          zIndex: 100,
+          position: 'sticky',
+          top: '48px',
           background: 'white',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           borderBottom: '1px solid #e5e7eb',
-          overflowY: 'auto',
-          maxHeight: 'calc(100vh - 150px)',
+          zIndex: 40,
         }}>
           <OrderFormPanel
             routeId={routeId}
@@ -775,17 +770,12 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
       {/* Форма комментария */}
       {commentMode === 'add' && (
         <div style={{
-          position: 'fixed',
-          top: '150px',
-          left: 0,
-          right: 0,
-          width: '100%',
-          zIndex: 100,
+          position: 'sticky',
+          top: '48px',
           background: 'white',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           borderBottom: '1px solid #e5e7eb',
-          overflowY: 'auto',
-          maxHeight: 'calc(100vh - 150px)',
+          zIndex: 40,
         }}>
           <div className="tof-panel">
           <div className="tof-header">
@@ -829,7 +819,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* ─── Таб: Состав вагонов ─── */}
       {compTab === 'wagons' && (
-        <div className="trains-composition-scroll-wrapper" style={{ marginTop: (mode === 'create' || mode === 'edit' || commentMode === 'add') ? '320px' : 0 }}>
+        <div className="trains-composition-scroll-wrapper">
         <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
           <table className="excel-table compact-table trains-composition-table">
           <colgroup>
