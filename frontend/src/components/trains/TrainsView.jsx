@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X, Package, ClipboardList, MessageSquare, Info, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X, Package, ClipboardList, MessageSquare, Info, Clock } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
@@ -229,6 +229,146 @@ function OrderFormPanel({ routeId, existing, selectedKeys, allWagons, onSaved, o
         </div>
       </div>
       {err && <div className="tof-error">{err}</div>}
+    </div>
+  );
+}
+
+/* ─── dropdown для группировки ─── */
+function GroupByDropdown({ value, onChange, columns }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+  const buttonRef = useRef(null);
+
+  const selectedCol = columns.find(c => c.id === value);
+  const selectedLabel = selectedCol ? selectedCol.label : 'Без группировки';
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target) &&
+        buttonRef.current && !buttonRef.current.contains(e.target)
+      ) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setShowDropdown(!showDropdown)}
+        style={{
+          padding: '8px 12px',
+          fontSize: '0.9rem',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          background: 'white',
+          cursor: 'pointer',
+          color: selectedCol ? '#1e293b' : '#9ca3af',
+          fontWeight: selectedCol ? 500 : 400,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.borderColor = '#cbd5e1';
+          e.target.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.borderColor = '#e2e8f0';
+          e.target.style.boxShadow = 'none';
+        }}
+      >
+        <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>📊</span>
+        <span>{selectedLabel}</span>
+        {showDropdown ? <ChevronUp size={14} color="#94a3b8" /> : <ChevronDown size={14} color="#94a3b8" />}
+      </button>
+
+      {showDropdown && (
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            maxHeight: '320px',
+            overflowY: 'auto',
+            zIndex: 1000,
+            marginTop: '4px',
+            minWidth: '280px',
+          }}
+        >
+          <div
+            onClick={() => {
+              onChange(null);
+              setShowDropdown(false);
+            }}
+            style={{
+              padding: '10px 12px',
+              cursor: 'pointer',
+              borderBottom: '1px solid #f1f5f9',
+              fontSize: '0.9rem',
+              transition: 'background 0.15s',
+              background: !value ? '#f0f9ff' : 'white',
+              color: !value ? '#0284c7' : '#6b7280',
+              fontWeight: !value ? 500 : 400,
+            }}
+            onMouseEnter={(e) => {
+              if (value) e.target.style.background = '#f0f9ff';
+            }}
+            onMouseLeave={(e) => {
+              if (value) e.target.style.background = 'white';
+            }}
+          >
+            <div style={{ fontWeight: 500 }}>Без группировки</div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+              Показать все вагоны в одной таблице
+            </div>
+          </div>
+
+          {columns.map((col) => (
+            <div
+              key={col.id}
+              onClick={() => {
+                onChange(col.id);
+                setShowDropdown(false);
+              }}
+              style={{
+                padding: '10px 12px',
+                cursor: 'pointer',
+                borderBottom: '1px solid #f1f5f9',
+                fontSize: '0.9rem',
+                transition: 'background 0.15s',
+                background: value === col.id ? '#f0f9ff' : 'white',
+                color: value === col.id ? '#0284c7' : '#6b7280',
+              }}
+              onMouseEnter={(e) => {
+                if (value !== col.id) e.target.style.background = '#f0f9ff';
+              }}
+              onMouseLeave={(e) => {
+                if (value !== col.id) e.target.style.background = 'white';
+              }}
+            >
+              <div style={{ fontWeight: value === col.id ? 500 : 400, color: '#1e293b' }}>
+                {col.label}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                Группировать таблицу по значениям "{col.label}"
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -501,32 +641,14 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
                 onVisibilityChange={onVisibleColumnsChange}
                 columns={TRAIN_COMPOSITION_COLUMNS}
               />
-              <select
-                value={groupByColumn || ''}
-                onChange={(e) => {
-                  const val = e.target.value || null;
+              <GroupByDropdown
+                value={groupByColumn}
+                onChange={(val) => {
                   setGroupByColumn(val);
-                  // При выборе группировки, разворачиваем все группы по умолчанию
-                  // При отключении - очищаем
                   setExpandedGroups(new Set());
                 }}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '0.9rem',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  background: 'white',
-                  cursor: 'pointer',
-                  color: '#374151',
-                }}
-              >
-                <option value="">Без группировки</option>
-                {TRAIN_COMPOSITION_COLUMNS.map(col => (
-                  <option key={col.id} value={col.id}>
-                    Группировать по: {col.label}
-                  </option>
-                ))}
-              </select>
+                columns={TRAIN_COMPOSITION_COLUMNS}
+              />
             </>
           )}
           {mode === 'view' && commentMode === 'view' && Object.keys(columnFilters).some(k => columnFilters[k]?.length) && (
@@ -626,19 +748,22 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* Форма заявки */}
       {(mode === 'create' || mode === 'edit') && commentMode === 'view' && (
-        <OrderFormPanel
-          routeId={routeId}
-          existing={mode === 'edit' ? editingOrder : null}
-          selectedKeys={selectedKeys}
-          allWagons={route.wagons}
-          onSaved={handleSaved}
-          onCancel={resetMode}
-        />
+        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+          <OrderFormPanel
+            routeId={routeId}
+            existing={mode === 'edit' ? editingOrder : null}
+            selectedKeys={selectedKeys}
+            allWagons={route.wagons}
+            onSaved={handleSaved}
+            onCancel={resetMode}
+          />
+        </div>
       )}
 
       {/* Форма комментария */}
       {commentMode === 'add' && (
-        <div className="tof-panel">
+        <div style={{ position: 'sticky', top: 0, zIndex: 50, background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+          <div className="tof-panel">
           <div className="tof-header">
             <MessageSquare size={14} /> Добавить комментарий {selectedWagons.size > 0 && <span className="tof-count">{selectedWagons.size} ваг.</span>}
           </div>
@@ -659,6 +784,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
                 {commentSaving ? '…' : 'Добавить'}
               </button>
             </div>
+          </div>
           </div>
         </div>
       )}
