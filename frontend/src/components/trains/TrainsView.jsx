@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronUp, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X, Package, ClipboardList, MessageSquare, Info, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, Download, Plus, Pencil, Trash2, Minus, Train, Search, FilterX, X, Package, ClipboardList, MessageSquare, Info, Clock, MessageCircle } from 'lucide-react';
 import { api } from '../../api';
 import ColumnFilter from '../../table/ColumnFilter';
 import ColumnVisibilityPanel from '../../table/ColumnVisibilityPanel';
@@ -388,6 +388,10 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   const [selectedWagons, setSelectedWagons] = useState(new Set()); // Set of wagon_id
   const [commentText, setCommentText] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
+
+  // Modal для просмотра комментариев вагона
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
+  const [selectedWagonForComments, setSelectedWagonForComments] = useState(null);
 
   // Фильтры колонок в таблице вагонов
   const [columnFilters, setColumnFilters] = useState({});
@@ -817,6 +821,105 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
         </div>
       )}
 
+      {/* Modal: Комментарии вагона */}
+      {showCommentsModal && selectedWagonForComments && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }} onClick={() => setShowCommentsModal(false)}>
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 20px 25px rgba(0,0,0,0.15)',
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              padding: '24px',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>
+                  Комментарии вагона
+                </h2>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>
+                  Вагон #{selectedWagonForComments.wagon_number}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCommentsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#94a3b8',
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              {route?.wagons
+                ?.filter(w => w.wagon_id === selectedWagonForComments.wagon_id)
+                ?.flatMap(w => [
+                  w.last_comment_text && {
+                    text: w.last_comment_text,
+                    author: w.last_comment_author || 'Неизвестно',
+                    date: new Date().toLocaleDateString('ru-RU'),
+                  }
+                ])
+                ?.filter(Boolean)
+                ?.length > 0 ? (
+                route.wagons
+                  .filter(w => w.wagon_id === selectedWagonForComments.wagon_id)
+                  .flatMap(w => w.last_comment_text ? [{
+                    text: w.last_comment_text,
+                    author: w.last_comment_author || 'Неизвестно',
+                    date: new Date().toLocaleDateString('ru-RU'),
+                  }] : [])
+                  .map((comment, i) => (
+                    <div key={i} style={{
+                      padding: '12px',
+                      background: '#f8fafc',
+                      borderRadius: '8px',
+                      marginBottom: '12px',
+                      borderLeft: '3px solid #3b82f6',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px' }}>
+                          {comment.author}
+                        </span>
+                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                          {comment.date}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, color: '#475569', fontSize: '13px', lineHeight: '1.5' }}>
+                        {comment.text}
+                      </p>
+                    </div>
+                  ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af' }}>
+                  <MessageCircle size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                  <p style={{ margin: 0 }}>Нет комментариев для этого вагона</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Таб: Состав вагонов ─── */}
       {compTab === 'wagons' && (
         <>
@@ -888,7 +991,15 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
                         </td>
                       ))}
                       {mode === 'view' && commentMode === 'view' && !isClosed && (
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ textAlign: 'center', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                          <button
+                            className="icon-action-btn"
+                            title="Комментарии"
+                            onClick={() => { setSelectedWagonForComments(wagon); setShowCommentsModal(true); }}
+                            style={{ cursor: 'pointer' }}
+                          >
+                            <MessageCircle size={13} color="#3b82f6" />
+                          </button>
                           {order && wagon.item_id && (
                             <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
                           )}
@@ -978,7 +1089,15 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
                           </td>
                         ))}
                         {mode === 'view' && commentMode === 'view' && !isClosed && (
-                          <td style={{ textAlign: 'center' }}>
+                          <td style={{ textAlign: 'center', display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center' }}>
+                            <button
+                              className="icon-action-btn"
+                              title="Комментарии"
+                              onClick={() => { setSelectedWagonForComments(wagon); setShowCommentsModal(true); }}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <MessageCircle size={13} color="#3b82f6" />
+                            </button>
                             {order && wagon.item_id && (
                               <button className="icon-action-btn icon-action-btn--danger" title="Убрать из заявки" onClick={() => handleRemoveItem(wagon.item_id)}><Minus size={12} /></button>
                             )}
