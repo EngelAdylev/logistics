@@ -588,6 +588,62 @@ def get_unbound_waybills(
     return {"items": result, "total": len(result)}
 
 
+# ─── GET /v2/unbound-waybills (глобально, без привязки к маршруту) ──────────
+
+@router.get("/unbound-waybills")
+def get_all_unbound_waybills(
+    db: Session = Depends(get_db),
+    _user: models.User = Depends(get_current_user),
+):
+    """Получить все несвязанные накладные в системе (не привязанные ни к одному вагону).
+
+    Используется для отображения глобального списка несвязанных накладных.
+    """
+    rows = db.execute(text("""
+        SELECT
+            ew.id,
+            ew.waybill_number,
+            ew.shipper_name,
+            ew.consignee_name,
+            ew.departure_station_name,
+            ew.destination_station_name,
+            ew.status,
+            ew.waybill_type,
+            STRING_AGG(DISTINCT eww.wagon_type, ', ') AS wagon_types,
+            STRING_AGG(DISTINCT eww.cargo_name, ', ') AS cargo_names,
+            STRING_AGG(DISTINCT COALESCE(eww.container_number, ''), ', ') FILTER (WHERE eww.container_number IS NOT NULL) AS container_numbers
+        FROM etran_waybills ew
+        LEFT JOIN etran_waybill_wagons eww ON eww.waybill_id = ew.id
+        WHERE ew.is_relevant = true
+          AND ew.id NOT IN (
+              SELECT DISTINCT tw.waybill_id
+              FROM trip_waybills tw
+          )
+        GROUP BY ew.id, ew.waybill_number, ew.shipper_name, ew.consignee_name,
+                 ew.departure_station_name, ew.destination_station_name, ew.status, ew.waybill_type
+        ORDER BY ew.waybill_number
+    """)).mappings().all()
+
+    result = [
+        {
+            "id": str(r["id"]),
+            "waybill_number": r["waybill_number"] or "",
+            "shipper_name": r["shipper_name"] or "",
+            "consignee_name": r["consignee_name"] or "",
+            "departure_station_name": r["departure_station_name"] or "",
+            "destination_station_name": r["destination_station_name"] or "",
+            "status": r["status"] or "",
+            "waybill_type": r["waybill_type"] or "",
+            "wagon_types": r["wagon_types"] or "",
+            "cargo_names": r["cargo_names"] or "",
+            "container_numbers": r["container_numbers"] or "",
+        }
+        for r in rows
+    ]
+
+    return {"items": result, "total": len(result)}
+
+
 def _build_snapshot(db: Session, train_number: str) -> list:
     """Строит снимок состава поезда из живых данных wagon_trips.
     Одна строка = один (вагон + накладная). Вагон с 2 накладными → 2 строки.
