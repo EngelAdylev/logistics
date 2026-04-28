@@ -393,15 +393,36 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   const [showCommentsModal, setShowCommentsModal] = useState(false);
   const [selectedWagonForComments, setSelectedWagonForComments] = useState(null);
 
-  // Фильтры колонок в таблице вагонов
-  const [columnFilters, setColumnFilters] = useState({});
+  // Фильтры колонок в таблице вагонов (с сохранением в localStorage)
+  const [columnFilters, setColumnFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem('trainComposition_columnFilters');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Таб-система для состава
   const [compTab, setCompTab] = useState('wagons'); // 'wagons' | 'orders' | 'info'
 
-  // Группировка вагонов
-  const [groupByColumn, setGroupByColumn] = useState(null); // null | column_id
-  const [expandedGroups, setExpandedGroups] = useState(new Set()); // Set of group values
+  // Группировка вагонов (с сохранением в localStorage)
+  const [groupByColumn, setGroupByColumn] = useState(() => {
+    try {
+      const saved = localStorage.getItem('trainComposition_groupByColumn');
+      return saved || null;
+    } catch {
+      return null;
+    }
+  });
+  const [expandedGroups, setExpandedGroups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('trainComposition_expandedGroups');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   // Липкий горизонтальный скролл
   const tableScrollRef = useRef(null);
@@ -421,6 +442,27 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
   }, [routeId]);
 
   useEffect(() => { fetchRoute(); }, [fetchRoute]);
+
+  // Сохранение groupByColumn в localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('trainComposition_groupByColumn', groupByColumn || '');
+    } catch {}
+  }, [groupByColumn]);
+
+  // Сохранение expandedGroups в localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('trainComposition_expandedGroups', JSON.stringify(Array.from(expandedGroups)));
+    } catch {}
+  }, [expandedGroups]);
+
+  // Сохранение columnFilters в localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('trainComposition_columnFilters', JSON.stringify(columnFilters));
+    } catch {}
+  }, [columnFilters]);
 
   // Auto-expand all groups when grouping column changes
   useEffect(() => {
