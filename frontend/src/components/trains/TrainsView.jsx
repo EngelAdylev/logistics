@@ -819,8 +819,9 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
 
       {/* ─── Таб: Состав вагонов ─── */}
       {compTab === 'wagons' && (
-        <div className="trains-composition-scroll-wrapper">
-        <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
+        <>
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+          <div className="h-table-scroll" ref={tableScrollRef} onScroll={handleTableScroll}>
           <table className="excel-table compact-table trains-composition-table">
           <colgroup>
             {(mode === 'create' || commentMode === 'add') && <col style={{ width: 36 }} />}
@@ -1012,6 +1013,7 @@ function TrainComposition({ routeId, trainNumber, onExported, visibleColumnIds, 
             <div style={{ height: '1px', width: tableScrollRef.current?.scrollWidth || '100%' }} />
           </div>
         </div>
+        </>
       )}
 
       {/* ─── Таб: Заявки ─── */}
