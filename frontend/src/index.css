@@ -1348,3 +1348,47 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
 /* ── Клиент в строке таблицы ── */
 .trains-wagon-client { font-size: 12px; font-weight: 600; color: #1e293b; }
 .wagon-row--selected { outline: 2px solid #3b82f6 inset; }
+
+/* ─── Стили скролл-бара ─── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ─── Раскрытый состав поезда (лучшее выделение) ─── */
+.train-composition-row {
+  background: #ffffff !important;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 2px solid #bfdbfe;
+  box-shadow: inset 0 1px 3px rgba(59, 130, 246, 0.06);
+}
+
+/* ─── Разделение между таблицами ─── */
+.unbound-waybills-separator {
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #d1d5db 50%, transparent 100%);
+  margin: 32px 0 28px 0;
+  position: relative;
+}
+.unbound-waybills-separator::after {
+  content: 'Несвязанные накладные';
+  position: absolute;
+  left: 16px;
+  top: -14px;
+  background: #ffffff;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

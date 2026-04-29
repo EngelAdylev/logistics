@@ -1812,7 +1812,7 @@ export default function TrainsView({ refreshKey }) {
     </div>
 
     {/* ── Разделитель ── */}
-    <div style={{ height: '1px', background: '#e5e7eb', margin: '24px 0' }} />
+    <div className="unbound-waybills-separator" />
 
     {/* ── Таблица несвязанных накладных ── */}
     <div style={{ padding: '0 16px 16px' }}>
