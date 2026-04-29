@@ -1587,6 +1587,8 @@ export default function TrainsView({ refreshKey }) {
   const [unboundWaybills, setUnboundWaybills] = useState([]);
   const [unboundLoading, setUnboundLoading] = useState(false);
   const [expandedWaybillGroups, setExpandedWaybillGroups] = useState(new Set());
+  const [waybillGroupDetails, setWaybillGroupDetails] = useState({}); // key: groupKey, value: {waybillNumber: details}
+  const [groupLoadingStates, setGroupLoadingStates] = useState({}); // key: groupKey, value: boolean
 
   // Модал с деталями накладной
   const [waybillDetailsModal, setWaybillDetailsModal] = useState(null);
@@ -1602,6 +1604,26 @@ export default function TrainsView({ refreshKey }) {
       setUnboundWaybills([]);
     } finally {
       setUnboundLoading(false);
+    }
+  }, []);
+
+  // Загружаем детали всех накладных в группе при раскрытии
+  const loadGroupDetails = useCallback(async (groupKey, waybillNumbers) => {
+    setGroupLoadingStates(prev => ({ ...prev, [groupKey]: true }));
+    try {
+      const details = {};
+      for (const num of waybillNumbers) {
+        try {
+          const res = await api.get(`/etran/waybills/${num}`);
+          details[num] = res.data;
+        } catch (e) {
+          console.error(`Failed to fetch waybill ${num}:`, e);
+          details[num] = null;
+        }
+      }
+      setWaybillGroupDetails(prev => ({ ...prev, [groupKey]: details }));
+    } finally {
+      setGroupLoadingStates(prev => ({ ...prev, [groupKey]: false }));
     }
   }, []);
 
@@ -1921,40 +1943,82 @@ export default function TrainsView({ refreshKey }) {
                         </td>
                       </tr>
                       {isExpanded && (
-                        <tr style={{ background: '#ffffff', fontSize: '12px' }}>
-                          <td />
-                          <td colSpan="4" style={{ padding: '8px' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                              {group.waybills.map(num => (
-                                <span
-                                  key={num}
-                                  onClick={() => openWaybillDetails(num)}
-                                  style={{
-                                    background: '#e0e7ff',
-                                    color: '#3730a3',
-                                    padding: '4px 8px',
-                                    borderRadius: '3px',
-                                    fontSize: '12px',
-                                    fontWeight: 500,
-                                    fontFamily: 'monospace',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.target.style.background = '#c7d2fe';
-                                    e.target.style.boxShadow = '0 0 0 3px rgba(55, 48, 163, 0.1)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.target.style.background = '#e0e7ff';
-                                    e.target.style.boxShadow = 'none';
-                                  }}
-                                >
-                                  {num}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
+                        <>
+                          {!waybillGroupDetails[key] && !groupLoadingStates[key] && (
+                            <tr style={{ background: '#ffffff' }}>
+                              <td colSpan="5" style={{ padding: '8px' }}>
+                                {(() => {
+                                  // Загружаем детали при раскрытии
+                                  loadGroupDetails(key, group.waybills);
+                                  return (
+                                    <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                                      <div className="spinner-sm" style={{ marginBottom: 8 }} />
+                                      Загрузка деталей…
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                            </tr>
+                          )}
+
+                          {groupLoadingStates[key] && (
+                            <tr style={{ background: '#ffffff' }}>
+                              <td colSpan="5" style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                                <div className="spinner-sm" style={{ marginBottom: 8 }} />
+                                Загрузка…
+                              </td>
+                            </tr>
+                          )}
+
+                          {waybillGroupDetails[key] && (
+                            <tr style={{ background: '#ffffff' }}>
+                              <td colSpan="5" style={{ padding: '8px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                                      <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569', width: '30%' }}>Номер накладной</th>
+                                      <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569', width: '35%' }}>Номер вагона</th>
+                                      <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569', width: '35%' }}>Контейнер</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {Object.entries(waybillGroupDetails[key]).flatMap(([waybillNum, details]) => {
+                                      if (!details || !details.wagons) return null;
+                                      const wagons = details.wagons || [];
+                                      if (wagons.length === 0) {
+                                        return (
+                                          <tr key={waybillNum} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '6px 8px', color: '#334155', fontFamily: 'monospace', fontWeight: 500, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openWaybillDetails(waybillNum)}>
+                                              {waybillNum}
+                                            </td>
+                                            <td style={{ padding: '6px 8px', color: '#9ca3af' }}>—</td>
+                                            <td style={{ padding: '6px 8px', color: '#9ca3af' }}>—</td>
+                                          </tr>
+                                        );
+                                      }
+                                      return wagons.map((wagon, idx) => (
+                                        <tr key={`${waybillNum}-${idx}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                          {idx === 0 && (
+                                            <td style={{ padding: '6px 8px', color: '#334155', fontFamily: 'monospace', fontWeight: 500, cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openWaybillDetails(waybillNum)}>
+                                              {waybillNum}
+                                            </td>
+                                          )}
+                                          {idx > 0 && <td style={{ padding: '6px 8px' }} />}
+                                          <td style={{ padding: '6px 8px', color: '#334155', fontFamily: 'monospace' }}>
+                                            {wagon.railway_carriage_number || '—'}
+                                          </td>
+                                          <td style={{ padding: '6px 8px', color: '#334155' }}>
+                                            {wagon.container_number || '—'}
+                                          </td>
+                                        </tr>
+                                      ));
+                                    })}
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          )}
+                        </>
                       )}
                     </React.Fragment>
                   );
