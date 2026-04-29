@@ -1588,6 +1588,10 @@ export default function TrainsView({ refreshKey }) {
   const [unboundLoading, setUnboundLoading] = useState(false);
   const [expandedWaybillGroups, setExpandedWaybillGroups] = useState(new Set());
 
+  // Модал с деталями накладной
+  const [waybillDetailsModal, setWaybillDetailsModal] = useState(null);
+  const [waybillDetailsLoading, setWaybillDetailsLoading] = useState(false);
+
   const fetchUnboundWaybills = useCallback(async () => {
     setUnboundLoading(true);
     try {
@@ -1598,6 +1602,18 @@ export default function TrainsView({ refreshKey }) {
       setUnboundWaybills([]);
     } finally {
       setUnboundLoading(false);
+    }
+  }, []);
+
+  const openWaybillDetails = useCallback(async (waybillNumber) => {
+    setWaybillDetailsLoading(true);
+    try {
+      const res = await api.get(`/etran/waybills/${waybillNumber}`);
+      setWaybillDetailsModal(res.data);
+    } catch (e) {
+      console.error('Failed to fetch waybill details:', e);
+    } finally {
+      setWaybillDetailsLoading(false);
     }
   }, []);
 
@@ -1837,69 +1853,109 @@ export default function TrainsView({ refreshKey }) {
           Все накладные связаны с вагонами
         </div>
       ) : (() => {
-        const grouped = unboundWaybills.reduce((acc, wb) => {
-          const key = wb.departure_station_name || '—';
-          if (!acc[key]) acc[key] = [];
-          acc[key].push(wb);
-          return acc;
-        }, {});
+        // Группируем по комбинации всех 4 параметров
+        const grouped = {};
+        unboundWaybills.forEach(wb => {
+          const key = `${wb.departure_station_name || '—'}|${wb.destination_station_name || '—'}|${wb.shipper_name || '—'}|${wb.cargo_names || '—'}`;
+          if (!grouped[key]) {
+            grouped[key] = {
+              departure_station_name: wb.departure_station_name,
+              destination_station_name: wb.destination_station_name,
+              shipper_name: wb.shipper_name,
+              cargo_names: wb.cargo_names,
+              waybills: []
+            };
+          }
+          grouped[key].waybills.push(wb.waybill_number);
+        });
+
+        const sortedGroups = Object.entries(grouped).sort(([k1], [k2]) => k1.localeCompare(k2));
 
         return (
           <div className="h-table-scroll">
             <table className="excel-table compact-table" style={{ width: '100%' }}>
+              <colgroup>
+                <col style={{ width: '28px' }} />
+                <col style={{ width: '25%' }} />
+                <col style={{ width: '25%' }} />
+                <col style={{ width: '25%' }} />
+                <col style={{ width: '25%' }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th style={{ width: '28px' }} />
-                  <th style={{ width: '25%' }}>Станция отправления</th>
-                  <th style={{ width: '25%' }}>Станция назначения</th>
-                  <th style={{ width: '25%' }}>Плательщик</th>
-                  <th style={{ width: '25%' }}>Груз</th>
+                  <th />
+                  <th>Станция отправления</th>
+                  <th>Станция назначения</th>
+                  <th>Плательщик</th>
+                  <th>Груз</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(grouped).map(([station, items]) => {
-                  const isExpanded = expandedWaybillGroups.has(station);
+                {sortedGroups.map(([key, group]) => {
+                  const isExpanded = expandedWaybillGroups.has(key);
                   return (
-                    <React.Fragment key={station}>
+                    <React.Fragment key={key}>
                       <tr
                         onClick={() => {
                           const next = new Set(expandedWaybillGroups);
-                          if (next.has(station)) next.delete(station);
-                          else next.add(station);
+                          if (next.has(key)) next.delete(key);
+                          else next.add(key);
                           setExpandedWaybillGroups(next);
                         }}
-                        style={{
-                          cursor: 'pointer',
-                          background: '#f8fafc',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                        }}
+                        style={{ cursor: 'pointer', background: '#f8fafc', fontWeight: 500, fontSize: '13px' }}
                       >
                         <td style={{ textAlign: 'center', padding: '8px' }}>
-                          {isExpanded ? <ChevronDown size={16} color="#94a3b8" /> : <ChevronRight size={16} color="#94a3b8" />}
+                          {isExpanded ? <ChevronDown size={16} color="#64748b" /> : <ChevronRight size={16} color="#64748b" />}
                         </td>
-                        <td style={{ color: '#1e293b', padding: '8px' }}>{station}</td>
-                        <td colSpan="3" style={{ color: '#64748b', fontSize: '12px', padding: '8px' }}>
-                          {items.length} накладн.
+                        <td style={{ padding: '8px', color: '#1e293b' }}>
+                          {group.departure_station_name || '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#334155', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={group.destination_station_name}>
+                          {group.destination_station_name || '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#334155', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={group.shipper_name}>
+                          {group.shipper_name || '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#334155', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={group.cargo_names}>
+                          {group.cargo_names || '—'}
                         </td>
                       </tr>
-                      {isExpanded && items.map((wb) => (
-                        <tr key={wb.id} style={{ background: '#ffffff' }}>
+                      {isExpanded && (
+                        <tr style={{ background: '#ffffff', fontSize: '12px' }}>
                           <td />
-                          <td style={{ paddingLeft: '40px', fontSize: '13px' }}>
-                            {wb.departure_station_name || '—'}
-                          </td>
-                          <td title={wb.destination_station_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
-                            {wb.destination_station_name || '—'}
-                          </td>
-                          <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
-                            {wb.shipper_name || '—'}
-                          </td>
-                          <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
-                            {wb.cargo_names || '—'}
+                          <td colSpan="4" style={{ padding: '8px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {group.waybills.map(num => (
+                                <span
+                                  key={num}
+                                  onClick={() => openWaybillDetails(num)}
+                                  style={{
+                                    background: '#e0e7ff',
+                                    color: '#3730a3',
+                                    padding: '4px 8px',
+                                    borderRadius: '3px',
+                                    fontSize: '12px',
+                                    fontWeight: 500,
+                                    fontFamily: 'monospace',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.background = '#c7d2fe';
+                                    e.target.style.boxShadow = '0 0 0 3px rgba(55, 48, 163, 0.1)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.background = '#e0e7ff';
+                                    e.target.style.boxShadow = 'none';
+                                  }}
+                                >
+                                  {num}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </React.Fragment>
                   );
                 })}
@@ -1909,6 +1965,170 @@ export default function TrainsView({ refreshKey }) {
         );
       })()}
     </div>
+
+    {/* ── Модал: детали накладной ── */}
+    {waybillDetailsModal && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}
+        onClick={() => setWaybillDetailsModal(null)}
+      >
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '6px',
+            maxWidth: '900px',
+            maxHeight: '85vh',
+            overflow: 'auto',
+            padding: '20px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>
+              Накладная #{waybillDetailsModal.waybill?.waybill_number || '—'}
+            </h2>
+            <button
+              onClick={() => setWaybillDetailsModal(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer',
+                color: '#9ca3af'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {waybillDetailsLoading ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>
+              <div className="spinner-sm" style={{ marginBottom: 12 }} />
+              Загрузка…
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '13px' }}>
+              {/* Левая колонка */}
+              <div>
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>
+                  Основная информация
+                </h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {[
+                    ['Статус', waybillDetailsModal.waybill?.status],
+                    ['Идентификатор', waybillDetailsModal.waybill?.waybill_identifier],
+                    ['Тип', waybillDetailsModal.waybill?.waybill_type],
+                    ['Скорость отправки', waybillDetailsModal.waybill?.shipment_speed],
+                    ['Тип бланка', waybillDetailsModal.waybill?.form_type],
+                    ['Дата источника', waybillDetailsModal.waybill?.waybill_created_at?.slice(0, 10)],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px' }}>
+                      <div style={{ fontWeight: 500, color: '#475569' }}>{label}:</div>
+                      <div style={{ color: '#1e293b', wordBreak: 'break-word' }}>{value || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '12px', marginTop: '16px', textTransform: 'uppercase' }}>
+                  Маршрут
+                </h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {[
+                    ['От', waybillDetailsModal.waybill?.departure_station_name],
+                    ['Код', waybillDetailsModal.waybill?.departure_station_code],
+                    ['До', waybillDetailsModal.waybill?.destination_station_name],
+                    ['Код', waybillDetailsModal.waybill?.destination_station_code],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px' }}>
+                      <div style={{ fontWeight: 500, color: '#475569' }}>{label}:</div>
+                      <div style={{ color: '#1e293b', wordBreak: 'break-word' }}>{value || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Правая колонка */}
+              <div>
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>
+                  Даты
+                </h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {[
+                    ['Создана', waybillDetailsModal.waybill?.waybill_created_at?.slice(0, 16)],
+                    ['Предъявлена', waybillDetailsModal.waybill?.accepted_at?.slice(0, 16)],
+                    ['Отправление', waybillDetailsModal.waybill?.departure_at?.slice(0, 16)],
+                    ['Срок доставки', waybillDetailsModal.waybill?.delivery_deadline?.slice(0, 16)],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px' }}>
+                      <div style={{ fontWeight: 500, color: '#475569' }}>{label}:</div>
+                      <div style={{ color: '#1e293b', fontFamily: 'monospace', fontSize: '12px' }}>{value || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '12px', marginTop: '16px', textTransform: 'uppercase' }}>
+                  Участники
+                </h3>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {[
+                    ['Отправитель', waybillDetailsModal.waybill?.shipper_name],
+                    ['Получатель', waybillDetailsModal.waybill?.consignee_name],
+                    ['Адрес получателя', waybillDetailsModal.waybill?.consignee_address],
+                    ['Плательщик', waybillDetailsModal.waybill?.payer],
+                    ['Код плательщика', waybillDetailsModal.waybill?.payer_code],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px' }}>
+                      <div style={{ fontWeight: 500, color: '#475569' }}>{label}:</div>
+                      <div style={{ color: '#1e293b', wordBreak: 'break-word' }}>{value || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {waybillDetailsModal.wagons && waybillDetailsModal.wagons.length > 0 && (
+            <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '12px', textTransform: 'uppercase' }}>
+                Вагоны ({waybillDetailsModal.wagons.length})
+              </h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Номер вагона</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Контейнер</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Груз</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: '#475569' }}>Вес</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waybillDetailsModal.wagons.map((w) => (
+                    <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '6px 8px', color: '#334155', fontFamily: 'monospace' }}>{w.railway_carriage_number}</td>
+                      <td style={{ padding: '6px 8px', color: '#334155' }}>{w.container_number || '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#334155' }}>{w.cargo_name || '—'}</td>
+                      <td style={{ padding: '6px 8px', color: '#334155' }}>{w.cargo_weight || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
     </div>
   );
 }
