@@ -1698,6 +1698,7 @@ export default function TrainsView({ refreshKey }) {
   const TOTAL_COLS = 10; // chevron + 9 колонок данных (вагоны, накладные, контейнеры + 2 live колонки: станция, операция)
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
     <div className="h-view-wrapper">
 
       {/* ── Тулбар ── */}
@@ -1883,72 +1884,73 @@ export default function TrainsView({ refreshKey }) {
           </tbody>
         </table>
       </div>
+    </div>
 
-      {/* ── Разделитель ── */}
-      <div style={{ height: '1px', background: '#e5e7eb', margin: '24px 0' }} />
+    {/* ── Разделитель ── */}
+    <div style={{ height: '1px', background: '#e5e7eb', margin: '24px 0' }} />
 
-      {/* ── Таблица несвязанных накладных ── */}
-      <div style={{ padding: '0 16px 16px' }}>
-        <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Package size={16} style={{ color: '#6b7280' }} />
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
-            Несвязанные накладные
-          </h3>
-          <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>
-            ({unboundWaybills.length})
-          </span>
-        </div>
-
-        {unboundLoading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>
-            <div className="spinner-sm" style={{ marginBottom: 12 }} />
-            Загрузка…
-          </div>
-        ) : unboundWaybills.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-            Все накладные связаны с вагонами
-          </div>
-        ) : (
-          <div className="h-table-scroll">
-            <table className="excel-table compact-table" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '15%' }}>Номер накладной</th>
-                  <th style={{ width: '20%' }}>Отправитель</th>
-                  <th style={{ width: '20%' }}>Получатель</th>
-                  <th style={{ width: '15%' }}>Груз</th>
-                  <th style={{ width: '20%' }}>Статус</th>
-                  <th style={{ width: '10%' }}>Тип</th>
-                </tr>
-              </thead>
-              <tbody>
-                {unboundWaybills.map((wb) => (
-                  <tr key={wb.id}>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 500 }}>
-                      {wb.waybill_number}
-                    </td>
-                    <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {wb.shipper_name || '—'}
-                    </td>
-                    <td title={wb.consignee_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {wb.consignee_name || '—'}
-                    </td>
-                    <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {wb.cargo_names || '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: '#6b7280' }}>
-                      {wb.status || '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: '#6b7280' }}>
-                      {wb.waybill_type || '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+    {/* ── Таблица несвязанных накладных ── */}
+    <div style={{ padding: '0 16px 16px' }}>
+      <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Package size={16} style={{ color: '#6b7280' }} />
+        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+          Несвязанные накладные
+        </h3>
+        <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500 }}>
+          ({unboundWaybills.length})
+        </span>
       </div>
+
+      {unboundLoading ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>
+          <div className="spinner-sm" style={{ marginBottom: 12 }} />
+          Загрузка…
+        </div>
+      ) : unboundWaybills.length === 0 ? (
+        <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+          Все накладные связаны с вагонами
+        </div>
+      ) : (
+        <div className="h-table-scroll">
+          <table className="excel-table compact-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '15%' }}>Номер накладной</th>
+                <th style={{ width: '20%' }}>Отправитель</th>
+                <th style={{ width: '20%' }}>Получатель</th>
+                <th style={{ width: '15%' }}>Груз</th>
+                <th style={{ width: '20%' }}>Статус</th>
+                <th style={{ width: '10%' }}>Тип</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unboundWaybills.map((wb) => (
+                <tr key={wb.id}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 500 }}>
+                    {wb.waybill_number}
+                  </td>
+                  <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {wb.shipper_name || '—'}
+                  </td>
+                  <td title={wb.consignee_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {wb.consignee_name || '—'}
+                  </td>
+                  <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {wb.cargo_names || '—'}
+                  </td>
+                  <td style={{ fontSize: 12, color: '#6b7280' }}>
+                    {wb.status || '—'}
+                  </td>
+                  <td style={{ fontSize: 12, color: '#6b7280' }}>
+                    {wb.waybill_type || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
     </div>
   );
 }
