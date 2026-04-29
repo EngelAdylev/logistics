@@ -1698,8 +1698,8 @@ export default function TrainsView({ refreshKey }) {
   const TOTAL_COLS = 10; // chevron + 9 колонок данных (вагоны, накладные, контейнеры + 2 live колонки: станция, операция)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-    <div className="h-view-wrapper">
+    <div style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', height: '100%' }}>
+    <div className="h-view-wrapper" style={{ flex: '0 1 auto' }}>
 
       {/* ── Тулбар ── */}
       <div className="h-compact-toolbar">
