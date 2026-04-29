@@ -1835,46 +1835,81 @@ export default function TrainsView({ refreshKey }) {
         <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
           Все накладные связаны с вагонами
         </div>
-      ) : (
-        <div className="h-table-scroll">
-          <table className="excel-table compact-table" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={{ width: '15%' }}>Номер накладной</th>
-                <th style={{ width: '20%' }}>Отправитель</th>
-                <th style={{ width: '20%' }}>Получатель</th>
-                <th style={{ width: '15%' }}>Груз</th>
-                <th style={{ width: '20%' }}>Статус</th>
-                <th style={{ width: '10%' }}>Тип</th>
-              </tr>
-            </thead>
-            <tbody>
-              {unboundWaybills.map((wb) => (
-                <tr key={wb.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 500 }}>
-                    {wb.waybill_number}
-                  </td>
-                  <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {wb.shipper_name || '—'}
-                  </td>
-                  <td title={wb.consignee_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {wb.consignee_name || '—'}
-                  </td>
-                  <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {wb.cargo_names || '—'}
-                  </td>
-                  <td style={{ fontSize: 12, color: '#6b7280' }}>
-                    {wb.status || '—'}
-                  </td>
-                  <td style={{ fontSize: 12, color: '#6b7280' }}>
-                    {wb.waybill_type || '—'}
-                  </td>
+      ) : (() => {
+        // Группировка по станции отправления
+        const grouped = unboundWaybills.reduce((acc, wb) => {
+          const key = wb.departure_station_name || '—';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(wb);
+          return acc;
+        }, {});
+
+        const [expandedGroups, setExpandedGroups] = React.useState(new Set(Object.keys(grouped)));
+
+        return (
+          <div className="h-table-scroll">
+            <table className="excel-table compact-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '28px' }} />
+                  <th style={{ width: '25%' }}>Станция отправления</th>
+                  <th style={{ width: '25%' }}>Станция назначения</th>
+                  <th style={{ width: '25%' }}>Плательщик</th>
+                  <th style={{ width: '25%' }}>Груз</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {Object.entries(grouped).map(([station, items]) => {
+                  const isExpanded = expandedGroups.has(station);
+                  return (
+                    <React.Fragment key={station}>
+                      <tr
+                        onClick={() => {
+                          const next = new Set(expandedGroups);
+                          if (next.has(station)) next.delete(station);
+                          else next.add(station);
+                          setExpandedGroups(next);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          background: '#f8fafc',
+                          fontWeight: 600,
+                          fontSize: '13px',
+                        }}
+                      >
+                        <td style={{ textAlign: 'center', padding: '8px' }}>
+                          {isExpanded ? <ChevronDown size={16} color="#94a3b8" /> : <ChevronRight size={16} color="#94a3b8" />}
+                        </td>
+                        <td style={{ color: '#1e293b', padding: '8px' }}>{station}</td>
+                        <td colSpan="3" style={{ color: '#64748b', fontSize: '12px', padding: '8px' }}>
+                          {items.length} накладн.
+                        </td>
+                      </tr>
+                      {isExpanded && items.map((wb) => (
+                        <tr key={wb.id} style={{ background: '#ffffff' }}>
+                          <td />
+                          <td style={{ paddingLeft: '40px', fontSize: '13px' }}>
+                            {wb.departure_station_name || '—'}
+                          </td>
+                          <td title={wb.destination_station_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                            {wb.destination_station_name || '—'}
+                          </td>
+                          <td title={wb.shipper_name} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                            {wb.shipper_name || '—'}
+                          </td>
+                          <td title={wb.cargo_names} style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                            {wb.cargo_names || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
     </div>
   );

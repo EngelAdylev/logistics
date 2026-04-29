@@ -1393,18 +1393,4 @@ body { margin: 0; font-family: sans-serif; background: #f8fafc; }
   height: 3px;
   background: linear-gradient(90deg, transparent 0%, #d1d5db 50%, transparent 100%);
   margin: 32px 0 28px 0;
-  position: relative;
-}
-.unbound-waybills-separator::after {
-  content: 'Несвязанные накладные';
-  position: absolute;
-  left: 16px;
-  top: -14px;
-  background: #ffffff;
-  padding: 0 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
