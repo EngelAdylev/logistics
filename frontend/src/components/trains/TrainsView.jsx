@@ -1586,6 +1586,7 @@ export default function TrainsView({ refreshKey }) {
   // Несвязанные накладные (глобально)
   const [unboundWaybills, setUnboundWaybills] = useState([]);
   const [unboundLoading, setUnboundLoading] = useState(false);
+  const [expandedWaybillGroups, setExpandedWaybillGroups] = useState(new Set());
 
   const fetchUnboundWaybills = useCallback(async () => {
     setUnboundLoading(true);
@@ -1836,15 +1837,12 @@ export default function TrainsView({ refreshKey }) {
           Все накладные связаны с вагонами
         </div>
       ) : (() => {
-        // Группировка по станции отправления
         const grouped = unboundWaybills.reduce((acc, wb) => {
           const key = wb.departure_station_name || '—';
           if (!acc[key]) acc[key] = [];
           acc[key].push(wb);
           return acc;
         }, {});
-
-        const [expandedGroups, setExpandedGroups] = React.useState(new Set(Object.keys(grouped)));
 
         return (
           <div className="h-table-scroll">
@@ -1860,15 +1858,15 @@ export default function TrainsView({ refreshKey }) {
               </thead>
               <tbody>
                 {Object.entries(grouped).map(([station, items]) => {
-                  const isExpanded = expandedGroups.has(station);
+                  const isExpanded = expandedWaybillGroups.has(station);
                   return (
                     <React.Fragment key={station}>
                       <tr
                         onClick={() => {
-                          const next = new Set(expandedGroups);
+                          const next = new Set(expandedWaybillGroups);
                           if (next.has(station)) next.delete(station);
                           else next.add(station);
-                          setExpandedGroups(next);
+                          setExpandedWaybillGroups(next);
                         }}
                         style={{
                           cursor: 'pointer',
