@@ -1,0 +1,71 @@
+/* ==========================================
+   ДИЗАЙН-ТОКЕНЫ КОРПОРАТИВНОГО СТИЛЯ
+   ========================================== */
+
+:root {
+  /* ACCENTS */
+  --accent: #2A6FDB;
+  --accent-hover: #1E5BC0;
+  --accent-soft: #E7F0FF;
+
+  /* SURFACES */
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-alt: #FAFBFD;
+
+  /* BORDERS */
+  --border: #E6EAF0;
+  --border-soft: #EEF1F5;
+
+  /* TEXT */
+  --text: #0F172A;
+  --text-2: #475569;
+  --text-3: #94A3B8;
+
+  /* MISC */
+  --row-hover: #F4F8FF;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1);
+
+  /* RADIUS */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* SPACING */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 28px;
+  --spacing-4xl: 32px;
+
+  /* LAYOUT */
+  --sidebar-collapsed: 64px;
+  --sidebar-expanded: 232px;
+  --topbar-height: 56px;
+
+  /* STATUS COLORS */
+  --status-green-bg: #E7F6EE;
+  --status-green-fg: #177245;
+  --status-green-border: #C6EBD3;
+
+  --status-amber-bg: #FDEFD8;
+  --status-amber-fg: #9A5B12;
+  --status-amber-border: #F6D9A8;
+
+  --status-blue-bg: #E7F0FF;
+  --status-blue-fg: #1E4FB8;
+  --status-blue-border: #CFDDF8;
+
+  --status-purple-bg: #EFE9FE;
+  --status-purple-fg: #5933C2;
+  --status-purple-border: #DDD2F9;
+
+  --status-gray-bg: #EEF1F5;
+  --status-gray-fg: #475569;
+  --status-gray-border: #E1E7EE;
+}

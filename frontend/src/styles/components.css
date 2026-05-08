@@ -1,0 +1,461 @@
+/* ==========================================
+   КОМПОНЕНТЫ — Логистика Corporate Design
+   ========================================== */
+
+/* ─── BUTTONS ─── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  height: 36px;
+  padding: 0 var(--spacing-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:active {
+  opacity: 0.9;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  box-shadow: 0 1px 2px rgba(42, 111, 219, 0.3);
+}
+
+.btn.primary:hover {
+  filter: brightness(1.05);
+  border-color: var(--accent-hover);
+  color: white;
+}
+
+.btn.primary svg {
+  color: white;
+}
+
+/* Icon button */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.icon-btn:active {
+  opacity: 0.9;
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn.light {
+  border: 1px solid var(--border);
+}
+
+.icon-btn.light:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Pagination button */
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+.page-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── INPUTS ─── */
+
+.input-field {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.input-field:hover {
+  border-color: var(--border-soft);
+}
+
+.input-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input-field input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  outline: none;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.input-field input::placeholder {
+  color: var(--text-3);
+}
+
+.input-field svg {
+  color: var(--text-2);
+  flex-shrink: 0;
+  margin-right: var(--spacing-sm);
+}
+
+.input-field.with-icon-left {
+  padding-left: var(--spacing-md);
+}
+
+/* ─── TABS ─── */
+
+.tabs-container {
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  height: 40px;
+  padding: 0 var(--spacing-lg);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  position: relative;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab svg {
+  flex-shrink: 0;
+}
+
+/* ─── BADGES / STATUS PILLS ─── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge.soft {
+  padding: 2px 9px;
+}
+
+/* Green — Открыт, Выполнена */
+.badge.status-green {
+  background: var(--status-green-bg);
+  color: var(--status-green-fg);
+  border-color: var(--status-green-border);
+}
+
+/* Amber — Мониторинг, остаток >0 */
+.badge.status-amber {
+  background: var(--status-amber-bg);
+  color: var(--status-amber-fg);
+  border-color: var(--status-amber-border);
+}
+
+/* Blue — Подтверждена, Новая */
+.badge.status-blue {
+  background: var(--status-blue-bg);
+  color: var(--status-blue-fg);
+  border-color: var(--status-blue-border);
+}
+
+/* Purple — В работе */
+.badge.status-purple {
+  background: var(--status-purple-bg);
+  color: var(--status-purple-fg);
+  border-color: var(--status-purple-border);
+}
+
+/* Gray — Черновик, нейтрально */
+.badge.status-gray {
+  background: var(--status-gray-bg);
+  color: var(--status-gray-fg);
+  border-color: var(--status-gray-border);
+}
+
+/* ─── TABLES ─── */
+
+.data-table {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.data-table thead {
+  background: var(--surface-alt);
+}
+
+.data-table th {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.data-table th-with-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.data-table th-filter-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.data-table th:hover .th-filter-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 0.15s ease;
+}
+
+.data-table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.data-table tbody tr.expanded {
+  background: var(--accent-soft);
+}
+
+.data-table td {
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: top;
+}
+
+.data-table td.expandable-cell {
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+
+/* Expanded row panel */
+.expand-panel {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--surface-alt);
+  border-left: 3px solid var(--accent);
+}
+
+/* ID column */
+.table-cell-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Index / Code column */
+.table-cell-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+
+/* Clickable cell (client, number > 0) */
+.table-cell-clickable {
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-offset: 3px;
+  transition: all 0.15s ease;
+}
+
+.table-cell-clickable:hover {
+  filter: brightness(0.9);
+}
+
+/* Expand arrow icon */
+.expand-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--text-2);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.expand-arrow.open {
+  transform: rotate(90deg);
+}
+
+/* Empty state */
+.table-empty {
+  padding: var(--spacing-3xl);
+  text-align: center;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+/* ─── FORM LABELS ─── */
+
+.form-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-bottom: var(--spacing-sm);
+}
+
+.form-label-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  margin-bottom: var(--spacing-md);
+}
+
+/* ─── UTILITIES ─── */
+
+.text-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.text-mono-bold {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--spacing-lg) 0;
+}
+
+.divider.soft {
+  background: var(--border-soft);
+}
